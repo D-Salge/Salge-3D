@@ -22,6 +22,7 @@ import {
 interface SidebarProps {
   pedidosEmProducao?: number
   faturamentoMes?: number
+  metaMensal?: number
 }
 
 function NavItem({
@@ -57,11 +58,10 @@ function NavItem({
   )
 }
 
-export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0 }: SidebarProps) {
+export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal = 2000 }: SidebarProps) {
   const pathname = usePathname()
   
-  const META_MENSAL = 2000
-  const percentual = Math.min((faturamentoMes / META_MENSAL) * 100, 100)
+  const percentual = Math.min((faturamentoMes / metaMensal) * 100, 100)
   
   const fmtBRL = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
 
@@ -151,7 +151,7 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0 }: SidebarPr
           />
         </div>
         <p className="mt-2 text-[11px] text-white/35">
-          {fmtBRL(faturamentoMes)} de {fmtBRL(META_MENSAL)}
+          {fmtBRL(faturamentoMes)} de {fmtBRL(metaMensal)}
         </p>
       </div>
     </aside>

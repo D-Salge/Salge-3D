@@ -21,9 +21,7 @@ import { criarPedido, type Cliente, type Filamento, type ActionResult } from '@/
 import type { PedidoResumo } from '@/app/actions/pedidos'
 import { TabelaPedidos } from './TabelaPedidos'
 
-// ── Constantes de negócio ─────────────────────────────────────────────────────
-const CUSTO_HORA_MAQUINA = 8.5
-const TAXA_OPERACIONAL   = 18.00
+// ── Constantes de negócio removidas (agora via props/banco) ──────────────
 
 type Material = { id: number; filamento_id: string; peso: string }
 
@@ -69,9 +67,17 @@ interface OrcamentoPageProps {
   clientes: Cliente[]
   filamentos: Filamento[]
   pedidosRecentes: PedidoResumo[]
+  taxaOperacional?: number
+  custoHoraMaquina?: number
 }
 
-export function OrcamentoPage({ clientes, filamentos, pedidosRecentes }: OrcamentoPageProps) {
+export function OrcamentoPage({ 
+  clientes, 
+  filamentos, 
+  pedidosRecentes,
+  taxaOperacional = 18.00,
+  custoHoraMaquina = 8.5
+}: OrcamentoPageProps) {
   const primeiroFilamento = filamentos[0]?.id.toString() ?? ''
   const primeiroCliente   = clientes[0]?.id.toString() ?? ''
 
@@ -94,9 +100,9 @@ export function OrcamentoPage({ clientes, filamentos, pedidosRecentes }: Orcamen
       const rate  = fil ? fil.preco_rolo / fil.peso_rolo_gramas : 0
       return sum + grams * rate
     }, 0)
-    const machineReserve = (Number(horas) || 0) * CUSTO_HORA_MAQUINA
-    return { materialCost, machineReserve, total: materialCost + machineReserve + TAXA_OPERACIONAL }
-  }, [materials, horas, filamentos])
+    const machineReserve = (Number(horas) || 0) * custoHoraMaquina
+    return { materialCost, machineReserve, total: materialCost + machineReserve + taxaOperacional }
+  }, [materials, horas, filamentos, custoHoraMaquina, taxaOperacional])
 
   // ── Materiais ────────────────────────────────────────────────────────────
   function addMaterial() {
@@ -133,7 +139,7 @@ export function OrcamentoPage({ clientes, filamentos, pedidosRecentes }: Orcamen
         materials:             materialsValidos,
         custo_filamento:       totals.materialCost,
         valor_reserva_maquina: totals.machineReserve,
-        taxa_operacional:      TAXA_OPERACIONAL,
+        taxa_operacional:      taxaOperacional,
         valor_total_cobrado:   totals.total,
       })
       setResult(res)
@@ -314,7 +320,7 @@ export function OrcamentoPage({ clientes, filamentos, pedidosRecentes }: Orcamen
               <button
                 type="button"
                 onClick={handleCriar}
-                disabled={isPending || totals.total === TAXA_OPERACIONAL}
+                disabled={isPending || totals.total === taxaOperacional}
                 className="rounded-lg bg-[#d8f45a] px-5 py-2.5 text-xs font-semibold text-[#15180d] transition hover:bg-[#e4ff76] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPending ? 'Salvando…' : result?.success ? 'Orçamento criado ✓' : 'Criar orçamento'}
@@ -352,7 +358,7 @@ export function OrcamentoPage({ clientes, filamentos, pedidosRecentes }: Orcamen
             <div className="flex flex-col gap-4">
               <SummaryRow label="Custo de material"  value={fmtBRL(totals.materialCost)} />
               <SummaryRow label="Reserva de máquina" value={fmtBRL(totals.machineReserve)} />
-              <SummaryRow label="Taxa operacional"   value={fmtBRL(TAXA_OPERACIONAL)} />
+              <SummaryRow label="Taxa operacional"   value={fmtBRL(taxaOperacional)} />
             </div>
 
             <div className="my-6 h-px bg-white/[0.08]" />

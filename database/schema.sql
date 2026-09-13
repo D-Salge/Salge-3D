@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS tenants (
     nome                TEXT        NOT NULL,
     plano               TEXT        NOT NULL DEFAULT 'free'
                                     CHECK (plano IN ('free', 'pro', 'enterprise')),
+    meta_mensal         REAL        NOT NULL DEFAULT 2000.0,
+    taxa_operacional    REAL        NOT NULL DEFAULT 18.0,
+    custo_hora_maquina  REAL        NOT NULL DEFAULT 8.5,
     ativo               INTEGER     NOT NULL DEFAULT 1
                                     CHECK (ativo IN (0, 1)),
     criado_em           TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),

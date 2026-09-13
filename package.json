@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:init": "node scripts/init-db.mjs",
     "db:reset": "node scripts/init-db.mjs --reset",
-    "db:seed": "node scripts/seed-demo.mjs"
+    "db:seed": "node scripts/seed-demo.mjs",
+    "db:clear": "node scripts/db-clear.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

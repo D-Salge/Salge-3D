@@ -5,6 +5,7 @@
 
 import type { Metadata } from 'next'
 import { getClientes, getFilamentos, getPedidosRecentes } from '@/app/actions/pedidos'
+import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
 
 export const metadata: Metadata = {
@@ -13,10 +14,11 @@ export const metadata: Metadata = {
 }
 
 export default async function OrcamentosPage() {
-  const [clientes, filamentos, pedidosRecentes] = await Promise.all([
+  const [clientes, filamentos, pedidosRecentes, config] = await Promise.all([
     getClientes(),
     getFilamentos(),
     getPedidosRecentes(20),
+    getConfiguracoes(),
   ])
 
   return (
@@ -24,6 +26,8 @@ export default async function OrcamentosPage() {
       clientes={clientes}
       filamentos={filamentos}
       pedidosRecentes={pedidosRecentes}
+      taxaOperacional={config.taxa_operacional}
+      custoHoraMaquina={config.custo_hora_maquina}
     />
   )
 }

@@ -37,6 +37,7 @@ export interface PedidoResumo {
   id: number
   nome_da_peca: string
   cliente_nome: string
+  cliente_telefone: string | null
   materiais: string
   peso_total_gramas: number
   tempo_impressao_horas: number
@@ -127,6 +128,7 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
          p.id,
          p.nome_da_peca,
          c.nome AS cliente_nome,
+         c.telefone AS cliente_telefone,
          COALESCE(
            (SELECT GROUP_CONCAT(f.material || ' ' || f.cor, ' · ')
             FROM pedido_filamentos pf
@@ -287,6 +289,7 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
          p.id,
          p.nome_da_peca,
          c.nome AS cliente_nome,
+         c.telefone AS cliente_telefone,
          COALESCE(
            (SELECT GROUP_CONCAT(
               f.material || ' ' || f.cor || '|' || 
