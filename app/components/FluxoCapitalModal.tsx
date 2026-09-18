@@ -5,12 +5,26 @@ import { salvarFluxoCapital, type FluxoCapital } from '@/app/actions/despesas'
 
 export function FluxoCapitalModal({ fluxo, onClose }: { fluxo: FluxoCapital | null, onClose: () => void }) {
   const [isPending, startTransition] = useTransition()
-  const [form, setForm] = useState(fluxo || { tipo: 'Aporte', descricao: '', valor: 0, data_movimentacao: new Date().toISOString().substring(0,10) })
+  const [form, setForm] = useState<Omit<FluxoCapital, 'id'>>(
+    fluxo
+      ? {
+          tipo: fluxo.tipo,
+          descricao: fluxo.descricao,
+          valor: fluxo.valor,
+          data_movimentacao: fluxo.data_movimentacao,
+        }
+      : {
+          tipo: 'Aporte',
+          descricao: '',
+          valor: 0,
+          data_movimentacao: new Date().toISOString().substring(0, 10),
+        },
+  )
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault()
     startTransition(async () => {
-      await salvarFluxoCapital({ ...form, valor: Number(form.valor) } as any)
+      await salvarFluxoCapital({ ...form, valor: Number(form.valor) })
       onClose()
     })
   }
@@ -23,7 +37,7 @@ export function FluxoCapitalModal({ fluxo, onClose }: { fluxo: FluxoCapital | nu
           <button onClick={onClose} className="text-white/40"><X size={20}/></button>
         </div>
         <form onSubmit={handleSave} className="flex flex-col gap-4">
-          <select value={form.tipo} onChange={e=>setForm({...form, tipo: e.target.value as any})}
+          <select value={form.tipo} onChange={e=>setForm({...form, tipo: e.target.value as FluxoCapital['tipo']})}
             className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" disabled={!!fluxo}>
             <option>Aporte</option><option>Retirada</option>
           </select>

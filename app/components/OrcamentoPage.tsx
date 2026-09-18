@@ -1,85 +1,13 @@
 'use client'
 
-<<<<<<< HEAD
-import { useState, useTransition } from 'react'
-import { Plus, Trash2, CheckCircle2, ChevronRight, Package, Zap } from 'lucide-react'
+import { useMemo, useState, useTransition } from 'react'
+import { Plus, Trash2, CheckCircle2, ChevronRight, Zap } from 'lucide-react'
 import { criarPedido } from '@/app/actions/pedidos'
 import { useRouter } from 'next/navigation'
 import type { Cliente } from '@/app/actions/clientes'
 import type { FilamentoCompleto } from '@/app/actions/filamentos'
 import type { Insumo } from '@/app/actions/insumos'
-=======
-/**
- * app/components/OrcamentoPage.tsx  —  v3
- *
- * Formulário de orçamento (Client Component).
- * A Sidebar e o DashboardHeader NÃO estão mais aqui —
- * eles são injetados pelo layout app/(dashboard)/layout.tsx.
- */
-
-import { useMemo, useState, useTransition } from 'react'
-import {
-  Clock3,
-  FileText,
-  Plus,
-  ReceiptText,
-  Trash2,
-} from 'lucide-react'
-import { criarPedido, type Cliente, type Filamento, type ActionResult } from '@/app/actions/pedidos'
-import type { PedidoResumo } from '@/app/actions/pedidos'
-import { calcularOrcamento } from '@/lib/orcamento.mjs'
-import { TabelaPedidos } from './TabelaPedidos'
-
-// ── Constantes de negócio removidas (agora via props/banco) ──────────────
-
-type Material = { id: number; filamento_id: string; peso: string }
-
-// ── Sub-componentes locais ────────────────────────────────────────────────────
-function Field({
-  label, placeholder, suffix, value, onChange, type = 'text',
-}: {
-  label: string; placeholder: string; suffix?: string
-  value?: string; onChange?: (v: string) => void; type?: string
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-white/55">{label}</span>
-      <div className="relative">
-        <input
-          value={value}
-          onChange={(e) => onChange?.(e.target.value)}
-          type={type}
-          placeholder={placeholder}
-          className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none placeholder:text-white/20 transition focus:border-[#d8f45a]/60"
-        />
-        {suffix && (
-          <span className="pointer-events-none absolute right-3 top-3 text-xs text-white/30">
-            {suffix}
-          </span>
-        )}
-      </div>
-    </label>
-  )
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-white/45">{label}</span>
-      <span className="font-medium text-white/75">{value}</span>
-    </div>
-  )
-}
-
-// ── Componente principal ──────────────────────────────────────────────────────
-interface OrcamentoPageProps {
-  clientes: Cliente[]
-  filamentos: Filamento[]
-  pedidosRecentes: PedidoResumo[]
-  taxaOperacional?: number
-  custoHoraMaquina?: number
-}
->>>>>>> main
+import { arredondarMoeda, calcularOrcamento } from '@/lib/orcamento.mjs'
 
 export function OrcamentoPage({ 
   clientes, 
@@ -117,29 +45,9 @@ export function OrcamentoPage({
   const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>('')
   const [dataEntrega, setDataEntrega] = useState('')
 
-<<<<<<< HEAD
   // UI state
   const [sucesso, setSucesso] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-=======
-  // ── Cálculo em tempo real ────────────────────────────────────────────────
-  const totals = useMemo(() => {
-    const tempo = Number(horas)
-    return calcularOrcamento({
-      tempoImpressaoHoras: Number.isFinite(tempo) && tempo >= 0 ? tempo : 0,
-      custoHoraMaquina,
-      taxaOperacional,
-      materiais: materials.map((mat) => {
-        const peso = Number(mat.peso)
-        const filamento = filamentos.find((f) => f.id.toString() === mat.filamento_id)
-        return {
-          pesoGramas: Number.isFinite(peso) && peso >= 0 ? peso : 0,
-          custoPorGrama: filamento ? filamento.preco_rolo / filamento.peso_rolo_gramas : 0,
-        }
-      }),
-    })
-  }, [materials, horas, filamentos, custoHoraMaquina, taxaOperacional])
->>>>>>> main
 
   // ─── ADD ITEMS ──────────────────────────────────────────────────
   function addMaterial() {
@@ -155,60 +63,57 @@ export function OrcamentoPage({
     setInsumos(insumos.filter(i => i.id !== id))
   }
 
-<<<<<<< HEAD
   // ─── CALCULATIONS ────────────────────────────────────────────────
   const th = Number(tempoHoras) || 0
-  const reservaMaquina = th * custoHoraMaquina
-  
-  // Filamentos
-  const custoFilamento = materiais.reduce((acc, m) => {
-    if (!m.filamentoId || !m.pesoGasto) return acc
-    const fil = filamentos.find(f => f.id === Number(m.filamentoId))
-    if (!fil) return acc
-    return acc + (Number(m.pesoGasto) * (fil.preco_rolo / fil.peso_rolo_gramas))
-  }, 0)
-=======
-  function resetForm() {
-    setNomePeca('')
-    setHoras('6.5')
-    setClienteId(primeiroCliente)
-    setMaterials([{ id: Date.now(), filamento_id: primeiroFilamento, peso: '180' }])
-    setResult(null)
-  }
-
-  // ── Submit ────────────────────────────────────────────────────────────────
-  function handleCriar() {
-    setResult(null)
-    if (!nomePeca.trim()) { setResult({ success: false, message: 'Informe o nome da peça.' }); return }
-    if (!clienteId)       { setResult({ success: false, message: 'Selecione um cliente.' });  return }
->>>>>>> main
+  const totaisBasicos = useMemo(() => calcularOrcamento({
+    tempoImpressaoHoras: th >= 0 ? th : 0,
+    custoHoraMaquina,
+    taxaOperacional,
+    materiais: materiais.map((material) => {
+      const filamento = filamentos.find(f => f.id === Number(material.filamentoId))
+      const peso = Number(material.pesoGasto)
+      return {
+        pesoGramas: Number.isFinite(peso) && peso >= 0 ? peso : 0,
+        custoPorGrama: filamento ? filamento.preco_rolo / filamento.peso_rolo_gramas : 0,
+      }
+    }),
+  }), [th, custoHoraMaquina, taxaOperacional, materiais, filamentos])
+  const custoFilamento = totaisBasicos.materialCost
+  const reservaMaquina = totaisBasicos.machineReserve
 
   // Insumos
-  const custoInsumos = insumos.reduce((acc, ins) => {
+  const custoInsumos = arredondarMoeda(insumos.reduce((acc, ins) => {
     if (!ins.insumoId || !ins.quantidade) return acc
     const item = insumosList.find(i => i.id === Number(ins.insumoId))
     if (!item) return acc
     return acc + (Number(ins.quantidade) * item.custo_unitario)
-  }, 0)
+  }, 0))
 
   // Energia: (Potência Watts / 1000) * Horas * Tarifa(R$/kWh)
-  const custoEnergia = (potenciaW / 1000) * th * tarifaEnergia
+  const custoEnergia = arredondarMoeda((potenciaW / 1000) * th * tarifaEnergia)
 
   // Base
-  const custoBase = custoFilamento + custoInsumos + custoEnergia + reservaMaquina + taxaOperacional + (Number(custoEmbalagem) || 0)
+  const custoBase = arredondarMoeda(
+    custoFilamento + custoInsumos + custoEnergia + reservaMaquina +
+    totaisBasicos.operationalFee + (Number(custoEmbalagem) || 0),
+  )
   
   // Total = Base - Desconto + FreteCobrado
   const desc = Number(desconto) || 0
   const freteC = Number(freteCobrado) || 0
-  const valorFinal = custoBase - desc + freteC
+  const valorFinal = arredondarMoeda(Math.max(0, custoBase - desc + freteC))
 
   // ─── SUBMIT ──────────────────────────────────────────────────────
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function handleSubmit(e?: React.SyntheticEvent) {
+    e?.preventDefault()
     setErrorMsg('')
     
     if (!nomeDaPeca || !clienteId || th <= 0) {
       setErrorMsg('Preencha os dados básicos corretamente.')
+      return
+    }
+    if (desc > custoBase + freteC) {
+      setErrorMsg('O desconto não pode ser maior que o valor do orçamento.')
       return
     }
 
@@ -222,31 +127,16 @@ export function OrcamentoPage({
 
     startTransition(async () => {
       const res = await criarPedido({
-<<<<<<< HEAD
         nome_da_peca: nomeDaPeca,
         cliente_id: Number(clienteId),
         tempo_impressao_horas: th,
         materials: payloadMateriais,
         insumos: payloadInsumos,
-        
-        custo_filamento: custoFilamento,
-        custo_insumos: custoInsumos,
-        custo_energia: custoEnergia,
-        valor_reserva_maquina: reservaMaquina,
-        taxa_operacional: taxaOperacional,
         custo_embalagem: Number(custoEmbalagem) || 0,
-        
         desconto: desc,
         frete_cobrado: freteC,
         frete_pago: Number(fretePago) || 0,
-        valor_total_cobrado: valorFinal,
         data_entrega: dataEntrega || undefined
-=======
-        nome_da_peca:          nomePeca.trim(),
-        cliente_id:            parseInt(clienteId, 10),
-        tempo_impressao_horas: Number(horas) || 0,
-        materials:             materialsValidos,
->>>>>>> main
       })
 
       if (res.success) {
@@ -328,7 +218,6 @@ export function OrcamentoPage({
                   <Trash2 size={16} />
                 </button>
               </div>
-<<<<<<< HEAD
             ))}
             <button type="button" onClick={addMaterial} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.15] py-3 text-xs font-medium text-white/50 hover:border-[#d8f45a]/50 hover:text-[#d8f45a] hover:bg-[#d8f45a]/5 transition">
               <Plus size={14} /> Adicionar filamento
@@ -423,7 +312,7 @@ export function OrcamentoPage({
             <span>Reserva Máquina</span><span className="font-mono text-white/80">{fmt(reservaMaquina)}</span>
           </div>
           <div className="flex justify-between text-white/60">
-            <span>Taxa Operacional</span><span className="font-mono text-white/80">{fmt(taxaOperacional)}</span>
+            <span>Taxa Operacional</span><span className="font-mono text-white/80">{fmt(totaisBasicos.operationalFee)}</span>
           </div>
           {Number(custoEmbalagem) > 0 && (
             <div className="flex justify-between text-white/60">
@@ -448,88 +337,10 @@ export function OrcamentoPage({
             <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Valor Final Sugerido</span>
             <div className="mt-1 text-3xl font-bold tracking-tight text-[#d8f45a]">
               {fmt(valorFinal)}
-=======
-
-              <div className="flex flex-col gap-3">
-                {materials.map((mat, index) => {
-                  const filSel = filamentos.find((f) => f.id.toString() === mat.filamento_id)
-                  const custoItem = filSel && Number(mat.peso) > 0
-                    ? (Number(mat.peso) * filSel.preco_rolo) / filSel.peso_rolo_gramas
-                    : 0
-
-                  return (
-                    <div key={mat.id} className="grid grid-cols-[1fr_150px_36px] items-end gap-3">
-                      <label className="flex flex-col gap-2">
-                        <span className="text-[11px] text-white/35">
-                          {index === 0 ? 'Tipo de filamento' : `Material ${index + 1}`}
-                        </span>
-                        <select
-                          value={mat.filamento_id}
-                          onChange={(e) => updateMaterial(mat.id, 'filamento_id', e.target.value)}
-                          className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60"
-                        >
-                          {filamentos.length === 0 && <option value="">Nenhum filamento</option>}
-                          {filamentos.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.material} — {f.cor} · R${' '}
-                              {(f.preco_rolo / f.peso_rolo_gramas).toFixed(2).replace('.', ',')}/g
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="flex flex-col gap-2">
-                        <span className="text-[11px] text-white/35">
-                          {custoItem > 0 ? `Peso · ${fmtBRL(custoItem)}` : 'Peso (gramas)'}
-                        </span>
-                        <div className="relative">
-                          <input
-                            value={mat.peso}
-                            onChange={(e) => updateMaterial(mat.id, 'peso', e.target.value)}
-                            type="number" min="0" step="0.1"
-                            className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pr-9 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
-                            placeholder="0"
-                          />
-                          <span className="pointer-events-none absolute right-3 top-3 text-xs text-white/30">g</span>
-                        </div>
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={() => removeMaterial(mat.id)}
-                        disabled={materials.length === 1}
-                        aria-label={`Remover material ${index + 1}`}
-                        className="mb-0.5 flex size-11 items-center justify-center rounded-lg text-white/25 transition hover:bg-red-400/10 hover:text-red-300 disabled:opacity-20 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-white/[0.07] px-6 py-5 sm:px-8">
-            <button type="button" onClick={resetForm} className="text-xs text-white/40 transition hover:text-white">
-              Cancelar
-            </button>
-            <div>
-              <button
-                type="button"
-                onClick={handleCriar}
-                disabled={isPending || materials.every((material) => Number(material.peso) <= 0)}
-                className="rounded-lg bg-[#d8f45a] px-5 py-2.5 text-xs font-semibold text-[#15180d] transition hover:bg-[#e4ff76] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isPending ? 'Salvando…' : result?.success ? 'Orçamento criado ✓' : 'Criar orçamento'}
-              </button>
->>>>>>> main
             </div>
           </div>
         </div>
 
-<<<<<<< HEAD
         {errorMsg && <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-red-400">{errorMsg}</div>}
 
         <button onClick={handleSubmit} disabled={isPending}
@@ -538,94 +349,6 @@ export function OrcamentoPage({
           <ChevronRight size={16} />
         </button>
       </aside>
-=======
-        {/* ── Card: Resumo ──────────────────────────────────────────────────── */}
-        <aside className="sticky top-6 rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
-          <div className="border-b border-white/[0.07] px-6 py-5">
-            <div>
-              <h2 className="text-sm font-semibold">Resumo do orçamento</h2>
-              <p className="mt-1 text-xs text-white/35">Estimativa em tempo real</p>
-            </div>
-          </div>
-
-          <div className="p-6">
-            <div className="mb-7 rounded-xl border border-white/[0.07] bg-[#101114] p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-white/40">{nomePeca.trim() || 'Peça sem nome'}</span>
-                <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] text-white/40">Rascunho</span>
-              </div>
-              <p className="mt-3 text-sm font-medium text-white/80">{clienteSelecionado?.nome ?? '—'}</p>
-              <div className="mt-3 flex items-center gap-2 text-xs text-white/35">
-                <Clock3 size={13} /> {horas || '0'} horas de impressão
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <SummaryRow label="Custo de material"  value={fmtBRL(totals.materialCost)} />
-              <SummaryRow label="Reserva de máquina" value={fmtBRL(totals.machineReserve)} />
-              <SummaryRow label="Taxa operacional"   value={fmtBRL(totals.operationalFee)} />
-            </div>
-
-            <div className="my-6 h-px bg-white/[0.08]" />
-
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xs text-white/45">Valor final sugerido</p>
-                <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#d8f45a]">
-                  {fmtBRL(totals.total)}
-                </p>
-              </div>
-              <span className="mb-1 rounded-md bg-[#d8f45a]/10 px-2 py-1 text-[10px] font-medium text-[#d8f45a]">
-                + taxa op.
-              </span>
-            </div>
-
-            {/* Discriminação por material */}
-            {materials.some((m) => Number(m.peso) > 0) && (
-              <div className="mt-5 flex flex-col gap-1.5">
-                {materials.map((mat) => {
-                  const fil = filamentos.find((f) => f.id.toString() === mat.filamento_id)
-                  const custo = fil && Number(mat.peso) > 0
-                    ? (Number(mat.peso) * fil.preco_rolo) / fil.peso_rolo_gramas
-                    : 0
-                  if (!fil || custo === 0) return null
-                  return (
-                    <div key={mat.id} className="flex justify-between text-[11px] text-white/30">
-                      <span>{fil.material} {fil.cor} · {mat.peso}g</span>
-                      <span>{fmtBRL(custo)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            <div className="mt-7 rounded-lg border border-[#d8f45a]/15 bg-[#d8f45a]/[0.04] p-3 text-xs leading-relaxed text-white/45">
-              Este valor considera material, tempo de máquina e taxa operacional.
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      {/* Pedidos recentes */}
-      {pedidosRecentes.length > 0 && (
-        <div className="mt-8 rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
-          <div className="border-b border-white/[0.07] px-6 py-5 sm:px-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-white/[0.06] text-[#d8f45a]">
-                <ReceiptText size={18} />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold">Orçamentos recentes</h2>
-                <p className="mt-0.5 text-xs text-white/35">{pedidosRecentes.length} registro(s)</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-6 sm:p-8">
-            <TabelaPedidos pedidos={pedidosRecentes} />
-          </div>
-        </div>
-      )}
->>>>>>> main
     </div>
   )
 }
