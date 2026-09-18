@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, CheckCircle2, TrendingUp, TrendingDown, DollarSign, Wallet, FileText, Download } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react'
 import type { RecebimentoResumo } from '@/app/actions/recebimentos'
 import type { Despesa, FluxoCapital } from '@/app/actions/despesas'
 import { RecebimentoModal } from './RecebimentoModal'
