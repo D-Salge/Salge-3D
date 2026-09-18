@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, Pencil, Users, X, Phone,  MapPin } from 'lucide-react'
+import { AtSign, MapPin, Pencil, Phone, Plus, Trash2, Users, X } from 'lucide-react'
 import { salvarCliente, deletarCliente, type Cliente } from '@/app/actions/clientes'
 
 const ORIGEM_COLORS: Record<string, string> = {
@@ -209,7 +209,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
                       className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pl-9 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
                       placeholder="@usuario"
                     />
-                    <Instagram size={14} className="absolute left-3 top-3.5 text-white/30" />
+                    <AtSign size={14} className="absolute left-3 top-3.5 text-white/30" />
                   </div>
                 </label>
 
