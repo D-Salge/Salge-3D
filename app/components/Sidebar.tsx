@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Box,
-  CircleHelp,
   LayoutDashboard,
   ReceiptText,
   Settings2,
@@ -13,7 +12,6 @@ import {
   Database,
   Package,
   Layers,
-  Settings,
   DollarSign
 } from 'lucide-react'
 
