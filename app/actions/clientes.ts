@@ -71,8 +71,13 @@ export async function deletarCliente(id: number): Promise<ActionResult> {
     revalidatePath('/clientes')
     revalidatePath('/orcamentos')
     return { success: true, message: 'Cliente excluído!' }
-  } catch (error: any) {
-    if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+  } catch (error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY'
+    ) {
       return { success: false, message: 'Este cliente possui orçamentos/pedidos e não pode ser excluído.' }
     }
     console.error('[deletarCliente]', error)

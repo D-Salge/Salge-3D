@@ -9,7 +9,6 @@ import {
   getDashboardStats,
   getPedidosRecentes,
   type PedidoResumo,
-  type DashboardStats,
 } from '@/app/actions/pedidos'
 import {
   TrendingUp,
@@ -167,15 +166,6 @@ export default async function VisaoGeralPage() {
     getPedidosRecentes(10),
   ])
 
-  const taxaConversao =
-    stats.pedidosTotal > 0
-      ? Math.round(
-          (pedidos.filter((p) => p.status === 'concluido').length /
-            Math.max(stats.pedidosTotal, 1)) *
-            100
-        )
-      : 0
-
   return (
     <div className="mx-auto max-w-[1320px] px-6 py-9 lg:px-10">
 
@@ -216,14 +206,14 @@ export default async function VisaoGeralPage() {
           icon={<DollarSign size={17} />}
           label="Faturamento bruto"
           value={fmtBRL(stats.faturamentoBruto)}
-          sub="Soma dos valores cobrados neste mês"
+          sub="Pedidos finalizados neste mês"
           accent
         />
         <MetricCard
           icon={<Wrench size={17} />}
           label="Custos totais"
           value={fmtBRL(stats.custosTotais)}
-          sub="Material + máquina neste mês"
+          sub="Material + máquina dos finalizados"
         />
       </div>
 
@@ -274,8 +264,8 @@ export default async function VisaoGeralPage() {
             <p className="text-xs text-white/25">
               Ticket médio:{' '}
               <span className="text-white/50 font-medium">
-                {stats.pedidosMes > 0
-                  ? fmtBRL(stats.faturamentoBruto / stats.pedidosMes)
+                {stats.pedidosFinalizadosMes > 0
+                  ? fmtBRL(stats.faturamentoBruto / stats.pedidosFinalizadosMes)
                   : '—'}
               </span>
             </p>
