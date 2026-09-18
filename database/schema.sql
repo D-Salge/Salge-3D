@@ -215,9 +215,20 @@ CREATE TRIGGER IF NOT EXISTS trg_pedidos_atualizado_em
 --  DADOS DE SEED — MVP
 -- =============================================================================
 
-INSERT INTO tenants (nome, plano) VALUES ('Salge 3D', 'pro');
+INSERT INTO tenants (nome, plano)
+SELECT 'Salge 3D', 'pro'
+WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE nome = 'Salge 3D');
+
 INSERT INTO usuarios (tenant_id, nome, email, senha_hash, perfil)
-    VALUES (1, 'Daniel', 'daniel@salge3d.com', 'SUBSTITUA_POR_HASH_BCRYPT', 'admin');
+SELECT t.id, 'Daniel', 'daniel@salge3d.com', 'SUBSTITUA_POR_HASH_BCRYPT', 'admin'
+FROM tenants t
+WHERE t.nome = 'Salge 3D'
+  AND NOT EXISTS (
+      SELECT 1 FROM usuarios u
+      WHERE u.tenant_id = t.id AND u.email = 'daniel@salge3d.com'
+  )
+ORDER BY t.id
+LIMIT 1;
 
 
 -- =============================================================================

@@ -25,9 +25,14 @@ const SCHEMA_PATH = join(ROOT, 'database', 'schema.sql');
 const args  = process.argv.slice(2);
 const reset = args.includes('--reset');
 
-if (reset && existsSync(DB_PATH)) {
-  unlinkSync(DB_PATH);
-  console.log('🗑️  Banco anterior removido.');
+if (reset) {
+  const arquivosDoBanco = [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`];
+  const removidos = arquivosDoBanco.filter((arquivo) => {
+    if (!existsSync(arquivo)) return false;
+    unlinkSync(arquivo);
+    return true;
+  });
+  if (removidos.length > 0) console.log('🗑️  Banco anterior removido.');
 }
 
 // ── Lê o schema ────────────────────────────────────────────────────────────

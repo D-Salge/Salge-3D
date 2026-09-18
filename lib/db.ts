@@ -17,7 +17,6 @@ const DB_PATH = path.join(process.cwd(), 'database', 'salge3d.sqlite');
 
 // Tipo estendido para guardar a instância no objeto global do Node
 declare global {
-  // eslint-disable-next-line no-var
   var __db: Database.Database | undefined;
 }
 

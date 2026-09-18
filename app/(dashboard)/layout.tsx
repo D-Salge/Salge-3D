@@ -16,6 +16,9 @@ import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { Sidebar } from '@/app/components/Sidebar'
 import { DashboardHeader } from '@/app/components/DashboardHeader'
 
+// O dashboard depende de dados operacionais do SQLite em cada requisição.
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardLayout({
   children,
 }: {
