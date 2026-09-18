@@ -17,20 +17,35 @@ db.pragma('foreign_keys = ON')
 try {
   const clearDatabase = db.transaction(() => {
     // 1. Apaga os dados operacionais em ordem (filhos -> pais)
+    db.prepare('DELETE FROM pedido_insumos').run()
     db.prepare('DELETE FROM pedido_filamentos').run()
+    db.prepare('DELETE FROM recebimentos').run()
     db.prepare('DELETE FROM pedidos').run()
     db.prepare('DELETE FROM clientes').run()
+    db.prepare('DELETE FROM insumos').run()
     db.prepare('DELETE FROM filamentos').run()
+    db.prepare('DELETE FROM despesas').run()
+    db.prepare('DELETE FROM fluxo_capital').run()
 
     // 2. Reseta a contagem de IDs automáticos para essas tabelas
     const resetStmt = db.prepare(`
       UPDATE sqlite_sequence 
       SET seq = 0 
-      WHERE name IN ('pedido_filamentos', 'pedidos', 'clientes', 'filamentos')
+      WHERE name IN (
+        'pedido_insumos',
+        'pedido_filamentos',
+        'recebimentos',
+        'pedidos',
+        'clientes',
+        'insumos',
+        'filamentos',
+        'despesas',
+        'fluxo_capital'
+      )
     `)
     resetStmt.run()
 
-    console.log(`✅ Registros de teste (pedidos, clientes, estoque) removidos com sucesso.`)
+    console.log(`✅ Registros de teste (pedidos, clientes, filamentos, insumos, despesas, fluxo) removidos com sucesso.`)
     console.log(`✅ Sequências de ID resetadas (próximos cadastros receberão ID #1).`)
     console.log(`🛡️ Estrutura do banco, tenants e usuários preservados.\n`)
   })

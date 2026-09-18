@@ -1,27 +1,54 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, Trash2, Pencil, Users, X, Phone } from 'lucide-react'
+import { Plus, Trash2, Pencil, Users, X, Phone,  MapPin } from 'lucide-react'
 import { salvarCliente, deletarCliente, type Cliente } from '@/app/actions/clientes'
+
+const ORIGEM_COLORS: Record<string, string> = {
+  Instagram: 'bg-pink-500/15 text-pink-400',
+  Indicacao: 'bg-purple-500/15 text-purple-400',
+  Google: 'bg-blue-500/15 text-blue-400',
+  WhatsApp: 'bg-emerald-500/15 text-emerald-400',
+  Presencial: 'bg-amber-500/15 text-amber-400',
+  Outro: 'bg-white/[0.06] text-white/40',
+}
+
+const ORIGENS = ['', 'Instagram', 'Indicacao', 'Google', 'WhatsApp', 'Presencial', 'Outro'] as const
+
+type FormState = {
+  id: number | null
+  nome: string
+  telefone: string
+  instagram: string
+  cidade: string
+  origem: string
+}
 
 export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
   const [isPending, startTransition] = useTransition()
   
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState<{ id: number | null; nome: string; telefone: string }>({
-    id: null, nome: '', telefone: ''
+  const [form, setForm] = useState<FormState>({
+    id: null, nome: '', telefone: '', instagram: '', cidade: '', origem: ''
   })
   const [errorMsg, setErrorMsg] = useState('')
 
   function openNew() {
-    setForm({ id: null, nome: '', telefone: '' })
+    setForm({ id: null, nome: '', telefone: '', instagram: '', cidade: '', origem: '' })
     setErrorMsg('')
     setModalOpen(true)
   }
 
   function openEdit(c: Cliente) {
-    setForm({ id: c.id, nome: c.nome, telefone: c.telefone || '' })
+    setForm({
+      id: c.id,
+      nome: c.nome,
+      telefone: c.telefone || '',
+      instagram: c.instagram || '',
+      cidade: c.cidade || '',
+      origem: c.origem || '',
+    })
     setErrorMsg('')
     setModalOpen(true)
   }
@@ -30,7 +57,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
     e.preventDefault()
     setErrorMsg('')
     startTransition(async () => {
-      const res = await salvarCliente(form.id, form.nome, form.telefone)
+      const res = await salvarCliente(form.id, form.nome, form.telefone, form.instagram, form.cidade, form.origem)
       if (res.success) {
         setModalOpen(false)
       } else {
@@ -88,7 +115,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
-                {['ID', 'Nome', 'Telefone', 'Orçamentos', 'Ações'].map((h) => (
+                {['ID', 'Nome', 'Telefone', 'Origem', 'Orçamentos', 'Ações'].map((h) => (
                   <th key={h} className="pb-3.5 px-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25 first:pl-0 last:pr-0 last:text-right">
                     {h}
                   </th>
@@ -98,7 +125,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
             <tbody className="divide-y divide-white/[0.04]">
               {clientes.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-xs text-white/30">Nenhum cliente cadastrado.</td>
+                  <td colSpan={6} className="py-8 text-center text-xs text-white/30">Nenhum cliente cadastrado.</td>
                 </tr>
               )}
               {clientes.map((c) => (
@@ -106,6 +133,15 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
                   <td className="py-4 pl-0 pr-3 font-mono text-white/20 text-xs">#{c.id}</td>
                   <td className="py-4 px-3 font-medium text-white/90">{c.nome}</td>
                   <td className="py-4 px-3 text-white/50">{c.telefone || '—'}</td>
+                  <td className="py-4 px-3">
+                    {c.origem ? (
+                      <span className={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-medium ${ORIGEM_COLORS[c.origem] ?? ORIGEM_COLORS['Outro']}`}>
+                        {c.origem}
+                      </span>
+                    ) : (
+                      <span className="text-white/20">—</span>
+                    )}
+                  </td>
                   <td className="py-4 px-3 text-white/40">
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1 text-xs">
                       {c.total_pedidos}
@@ -161,6 +197,49 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
                   />
                   <Phone size={14} className="absolute left-3 top-3.5 text-white/30" />
                 </div>
+              </label>
+
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-white/55">Instagram</span>
+                  <div className="relative">
+                    <input
+                      value={form.instagram}
+                      onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))}
+                      className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pl-9 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                      placeholder="@usuario"
+                    />
+                    <Instagram size={14} className="absolute left-3 top-3.5 text-white/30" />
+                  </div>
+                </label>
+
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-white/55">Cidade</span>
+                  <div className="relative">
+                    <input
+                      value={form.cidade}
+                      onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))}
+                      className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pl-9 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                      placeholder="São Paulo"
+                    />
+                    <MapPin size={14} className="absolute left-3 top-3.5 text-white/30" />
+                  </div>
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-white/55">Como nos conheceu?</span>
+                <select
+                  value={form.origem}
+                  onChange={e => setForm(f => ({ ...f, origem: e.target.value }))}
+                  className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60 appearance-none"
+                >
+                  {ORIGENS.map(o => (
+                    <option key={o} value={o} className="bg-[#101114]">
+                      {o === '' ? 'Selecione...' : o}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}

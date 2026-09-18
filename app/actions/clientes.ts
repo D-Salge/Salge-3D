@@ -9,6 +9,9 @@ export interface Cliente {
   id: number
   nome: string
   telefone: string | null
+  instagram: string | null
+  cidade: string | null
+  origem: string | null
   criado_em?: string
   total_pedidos?: number
 }
@@ -21,7 +24,7 @@ export interface ActionResult {
 export async function getClientesLista(): Promise<Cliente[]> {
   return db
     .prepare(
-      `SELECT c.id, c.nome, c.telefone, c.criado_em,
+      `SELECT c.id, c.nome, c.telefone, c.instagram, c.cidade, c.origem, c.criado_em,
          (SELECT COUNT(*) FROM pedidos p WHERE p.cliente_id = c.id) as total_pedidos
        FROM clientes c
        WHERE c.tenant_id = ? AND c.ativo = 1
@@ -30,16 +33,25 @@ export async function getClientesLista(): Promise<Cliente[]> {
     .all(TENANT_ID) as Cliente[]
 }
 
-export async function salvarCliente(id: number | null, nome: string, telefone: string): Promise<ActionResult> {
+export async function salvarCliente(
+  id: number | null,
+  nome: string,
+  telefone: string,
+  instagram: string,
+  cidade: string,
+  origem: string,
+): Promise<ActionResult> {
   try {
     if (!nome.trim()) return { success: false, message: 'O nome é obrigatório.' }
 
     if (id) {
-      db.prepare('UPDATE clientes SET nome = ?, telefone = ? WHERE id = ? AND tenant_id = ?')
-        .run(nome.trim(), telefone.trim(), id, TENANT_ID)
+      db.prepare(
+        'UPDATE clientes SET nome = ?, telefone = ?, instagram = ?, cidade = ?, origem = ? WHERE id = ? AND tenant_id = ?'
+      ).run(nome.trim(), telefone.trim(), instagram.trim() || null, cidade.trim() || null, origem || null, id, TENANT_ID)
     } else {
-      db.prepare('INSERT INTO clientes (tenant_id, usuario_id, nome, telefone) VALUES (?, 1, ?, ?)')
-        .run(TENANT_ID, nome.trim(), telefone.trim())
+      db.prepare(
+        'INSERT INTO clientes (tenant_id, usuario_id, nome, telefone, instagram, cidade, origem) VALUES (?, 1, ?, ?, ?, ?, ?)'
+      ).run(TENANT_ID, nome.trim(), telefone.trim(), instagram.trim() || null, cidade.trim() || null, origem || null)
     }
 
     revalidatePath('/clientes')

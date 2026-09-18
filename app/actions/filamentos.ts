@@ -12,6 +12,8 @@ export interface FilamentoCompleto {
   peso_rolo_gramas: number
   preco_rolo: number
   estoque_gramas: number | null
+  marca: string | null
+  fornecedor: string | null
 }
 
 export interface ActionResult {
@@ -22,7 +24,7 @@ export interface ActionResult {
 export async function getFilamentosLista(): Promise<FilamentoCompleto[]> {
   return db
     .prepare(
-      `SELECT id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas
+      `SELECT id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas, marca, fornecedor
        FROM filamentos
        WHERE tenant_id = ? AND ativo = 1
        ORDER BY material ASC, cor ASC`
@@ -41,7 +43,7 @@ export async function salvarFilamento(
     if (id) {
       db.prepare(`
         UPDATE filamentos 
-        SET material = ?, cor = ?, peso_rolo_gramas = ?, preco_rolo = ?, estoque_gramas = ?
+        SET material = ?, cor = ?, peso_rolo_gramas = ?, preco_rolo = ?, estoque_gramas = ?, marca = ?, fornecedor = ?
         WHERE id = ? AND tenant_id = ?
       `).run(
         data.material.trim(),
@@ -49,20 +51,24 @@ export async function salvarFilamento(
         data.peso_rolo_gramas,
         data.preco_rolo,
         data.estoque_gramas,
+        data.marca?.trim() || null,
+        data.fornecedor?.trim() || null,
         id,
         TENANT_ID
       )
     } else {
       db.prepare(`
-        INSERT INTO filamentos (tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas)
-        VALUES (?, 1, ?, ?, ?, ?, ?)
+        INSERT INTO filamentos (tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas, marca, fornecedor)
+        VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         TENANT_ID,
         data.material.trim(),
         data.cor.trim(),
         data.peso_rolo_gramas,
         data.preco_rolo,
-        data.estoque_gramas
+        data.estoque_gramas,
+        data.marca?.trim() || null,
+        data.fornecedor?.trim() || null,
       )
     }
 

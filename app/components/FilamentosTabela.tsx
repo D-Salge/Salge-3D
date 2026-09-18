@@ -10,12 +10,12 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState<FilamentoCompleto>({
-    id: 0, material: '', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000
+    id: 0, material: '', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000, marca: null, fornecedor: null
   })
   const [errorMsg, setErrorMsg] = useState('')
 
   function openNew() {
-    setForm({ id: 0, material: 'PLA', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000 })
+    setForm({ id: 0, material: 'PLA', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000, marca: null, fornecedor: null })
     setErrorMsg('')
     setModalOpen(true)
   }
@@ -35,7 +35,9 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
         cor: form.cor,
         peso_rolo_gramas: Number(form.peso_rolo_gramas),
         preco_rolo: Number(form.preco_rolo),
-        estoque_gramas: Number(form.estoque_gramas)
+        estoque_gramas: Number(form.estoque_gramas),
+        marca: form.marca,
+        fornecedor: form.fornecedor,
       })
       if (res.success) {
         setModalOpen(false)
@@ -118,7 +120,10 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
                   <tr key={f.id} className="group hover:bg-white/[0.02] transition-colors">
                     <td className="py-4 pl-0 pr-3 font-mono text-white/20 text-xs">#{f.id}</td>
                     <td className="py-4 px-3 font-medium text-white/90">
-                      {f.material} <span className="text-white/50 font-normal ml-1">{f.cor}</span>
+                      <div>
+                        <span>{f.material}</span> <span className="text-white/50 font-normal ml-1">{f.cor}</span>
+                        {f.marca && <p className="mt-0.5 text-[10px] text-white/30">{f.marca}</p>}
+                      </div>
                     </td>
                     <td className="py-4 px-3 text-white/50">{f.peso_rolo_gramas}g</td>
                     <td className="py-4 px-3 text-[#d8f45a] font-mono">{fmtBRL(f.preco_rolo)}</td>

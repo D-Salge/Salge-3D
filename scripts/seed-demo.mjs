@@ -1,7 +1,7 @@
 /**
  * scripts/seed-demo.mjs
  *
- * Adiciona dados de demonstração: clientes e filamentos.
+ * Adiciona dados de demonstração: clientes, filamentos e insumos.
  * Execute APÓS o db:init.
  *
  * Uso: node scripts/seed-demo.mjs
@@ -22,40 +22,60 @@ const USUARIO_ID = 1;
 
 // ── Clientes ──────────────────────────────────────────────────────────────────
 const clientes = [
-  { nome: 'João Silva',    telefone: '(11) 99999-1111' },
-  { nome: 'Maria Santos',  telefone: '(21) 98888-2222' },
-  { nome: 'Pedro Alves',   telefone: '(31) 97777-3333' },
-  { nome: 'Ana Ferreira',  telefone: '(41) 96666-4444' },
+  { nome: 'João Silva',   telefone: '(11) 99999-1111', instagram: '@joaosilva',   cidade: 'São Paulo',       origem: 'Instagram' },
+  { nome: 'Maria Santos', telefone: '(21) 98888-2222', instagram: '@mariasantos', cidade: 'Rio de Janeiro',  origem: 'Indicação'  },
+  { nome: 'Pedro Alves',  telefone: '(31) 97777-3333', instagram: null,            cidade: 'Belo Horizonte',  origem: 'WhatsApp'   },
+  { nome: 'Ana Ferreira', telefone: '(41) 96666-4444', instagram: '@anaferreira', cidade: 'Curitiba',        origem: 'Instagram'  },
 ];
 
 // ── Filamentos ────────────────────────────────────────────────────────────────
 const filamentos = [
-  { material: 'PLA',  cor: 'Branco',    peso_rolo_gramas: 1000, preco_rolo: 89.90,  estoque: 1000 },
-  { material: 'PLA',  cor: 'Preto',     peso_rolo_gramas: 1000, preco_rolo: 89.90,  estoque: 1000 },
-  { material: 'PLA',  cor: 'Vermelho',  peso_rolo_gramas: 1000, preco_rolo: 94.90,  estoque: 50 }, // Pouco estoque
-  { material: 'PETG', cor: 'Transparente', peso_rolo_gramas: 1000, preco_rolo: 109.90, estoque: 1000 },
-  { material: 'PETG', cor: 'Azul',      peso_rolo_gramas: 1000, preco_rolo: 114.90, estoque: 1000 },
-  { material: 'TPU',  cor: 'Preto',     peso_rolo_gramas: 500,  preco_rolo: 79.90,  estoque: 500 },
+  { material: 'PLA',  cor: 'Branco',       marca: 'Bambu Lab', fornecedor: 'AliExpress', peso_rolo_gramas: 1000, preco_rolo:  89.90, estoque_gramas: 1000 },
+  { material: 'PLA',  cor: 'Preto',        marca: 'Bambu Lab', fornecedor: 'AliExpress', peso_rolo_gramas: 1000, preco_rolo:  89.90, estoque_gramas: 1000 },
+  { material: 'PLA',  cor: 'Vermelho',     marca: 'Bambu Lab', fornecedor: 'AliExpress', peso_rolo_gramas: 1000, preco_rolo:  94.90, estoque_gramas:   50 }, // Pouco estoque → alerta
+  { material: 'PETG', cor: 'Transparente', marca: 'eSUN',      fornecedor: 'Mercado Livre', peso_rolo_gramas: 1000, preco_rolo: 109.90, estoque_gramas: 1000 },
+  { material: 'PETG', cor: 'Azul',         marca: 'eSUN',      fornecedor: 'Mercado Livre', peso_rolo_gramas: 1000, preco_rolo: 114.90, estoque_gramas: 1000 },
+  { material: 'TPU',  cor: 'Preto',        marca: 'Polymaker', fornecedor: 'Amazon',    peso_rolo_gramas:  500, preco_rolo:  79.90, estoque_gramas:  500 },
 ];
 
-const insertCliente = db.prepare(
-  `INSERT OR IGNORE INTO clientes (tenant_id, usuario_id, nome, telefone)
-   VALUES (?, ?, ?, ?)`
-);
+// ── Insumos ───────────────────────────────────────────────────────────────────
+const insumos = [
+  { nome: 'Suporte de impressão', unidade: 'g',    custo_unitario:  0.08, estoque_atual: 500, estoque_minimo:  50 },
+  { nome: 'Lixa 400',             unidade: 'unid', custo_unitario:  1.50, estoque_atual:  20, estoque_minimo:   5 },
+  { nome: 'Cola Super Bonder',    unidade: 'unid', custo_unitario:  8.90, estoque_atual:   3, estoque_minimo:   2 },
+];
 
-const insertFilamento = db.prepare(
-  `INSERT OR IGNORE INTO filamentos (tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas)
+// ── Prepared statements ───────────────────────────────────────────────────────
+const insertCliente = db.prepare(
+  `INSERT OR IGNORE INTO clientes (tenant_id, usuario_id, nome, telefone, instagram, cidade, origem)
    VALUES (?, ?, ?, ?, ?, ?, ?)`
 );
 
+const insertFilamento = db.prepare(
+  `INSERT OR IGNORE INTO filamentos (tenant_id, usuario_id, material, cor, marca, fornecedor, peso_rolo_gramas, preco_rolo, estoque_gramas)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+
+const insertInsumo = db.prepare(
+  `INSERT OR IGNORE INTO insumos (tenant_id, usuario_id, nome, unidade, custo_unitario, estoque_atual, estoque_minimo)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+
+// ── Seed transaction ──────────────────────────────────────────────────────────
 const insertMany = db.transaction(() => {
   for (const c of clientes) {
-    insertCliente.run(TENANT_ID, USUARIO_ID, c.nome, c.telefone);
-    console.log(`  ✅ Cliente: ${c.nome}`);
+    insertCliente.run(TENANT_ID, USUARIO_ID, c.nome, c.telefone, c.instagram ?? null, c.cidade ?? null, c.origem ?? null);
+    console.log(`  ✅ Cliente: ${c.nome} (${c.cidade ?? '—'}, via ${c.origem ?? '—'})`);
   }
+
   for (const f of filamentos) {
-    insertFilamento.run(TENANT_ID, USUARIO_ID, f.material, f.cor, f.peso_rolo_gramas, f.preco_rolo, f.estoque);
-    console.log(`  ✅ Filamento: ${f.material} ${f.cor} — R$ ${f.preco_rolo}`);
+    insertFilamento.run(TENANT_ID, USUARIO_ID, f.material, f.cor, f.marca, f.fornecedor, f.peso_rolo_gramas, f.preco_rolo, f.estoque_gramas);
+    console.log(`  ✅ Filamento: ${f.material} ${f.cor} [${f.marca}] — R$ ${f.preco_rolo} | ${f.estoque_gramas}g em estoque`);
+  }
+
+  for (const i of insumos) {
+    insertInsumo.run(TENANT_ID, USUARIO_ID, i.nome, i.unidade, i.custo_unitario, i.estoque_atual, i.estoque_minimo);
+    console.log(`  ✅ Insumo: ${i.nome} (${i.estoque_atual} ${i.unidade} em estoque)`);
   }
 });
 
