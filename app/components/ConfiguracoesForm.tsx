@@ -16,9 +16,11 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
     
     startTransition(async () => {
       const res = await salvarConfiguracoes({
-        meta_mensal: Number(form.meta_mensal),
-        taxa_operacional: Number(form.taxa_operacional),
-        custo_hora_maquina: Number(form.custo_hora_maquina),
+        meta_mensal:           Number(form.meta_mensal),
+        taxa_operacional:      Number(form.taxa_operacional),
+        custo_hora_maquina:    Number(form.custo_hora_maquina),
+        tarifa_energia_kwh:    Number(form.tarifa_energia_kwh),
+        potencia_impressora_w: Number(form.potencia_impressora_w),
       })
       
       setMsg({ type: res.success ? 'success' : 'error', text: res.message })

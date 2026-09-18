@@ -1,5 +1,14 @@
 'use client'
 
+<<<<<<< HEAD
+import { useState, useTransition } from 'react'
+import { Plus, Trash2, CheckCircle2, ChevronRight, Package, Zap } from 'lucide-react'
+import { criarPedido } from '@/app/actions/pedidos'
+import { useRouter } from 'next/navigation'
+import type { Cliente } from '@/app/actions/clientes'
+import type { FilamentoCompleto } from '@/app/actions/filamentos'
+import type { Insumo } from '@/app/actions/insumos'
+=======
 /**
  * app/components/OrcamentoPage.tsx  —  v3
  *
@@ -70,28 +79,49 @@ interface OrcamentoPageProps {
   taxaOperacional?: number
   custoHoraMaquina?: number
 }
+>>>>>>> main
 
 export function OrcamentoPage({ 
   clientes, 
   filamentos, 
-  pedidosRecentes,
-  taxaOperacional = 18.00,
-  custoHoraMaquina = 8.5
-}: OrcamentoPageProps) {
-  const primeiroFilamento = filamentos[0]?.id.toString() ?? ''
-  const primeiroCliente   = clientes[0]?.id.toString() ?? ''
-
-  const [nomePeca, setNomePeca]   = useState('')
-  const [horas, setHoras]         = useState('6.5')
-  const [clienteId, setClienteId] = useState(primeiroCliente)
-  const [materials, setMaterials] = useState<Material[]>([
-    { id: 1, filamento_id: primeiroFilamento, peso: '180' },
-  ])
+  insumosList,
+  taxaOperacional, 
+  custoHoraMaquina,
+  tarifaEnergia,
+  potenciaW
+}: { 
+  clientes: Cliente[]
+  filamentos: FilamentoCompleto[]
+  insumosList: Insumo[]
+  taxaOperacional: number
+  custoHoraMaquina: number
+  tarifaEnergia: number
+  potenciaW: number
+}) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [result, setResult]          = useState<ActionResult | null>(null)
+  
+  // Basic info
+  const [nomeDaPeca, setNomeDaPeca] = useState('')
+  const [clienteId, setClienteId] = useState('')
+  const [tempoHoras, setTempoHoras] = useState<number | ''>('')
+  
+  // Arrays
+  const [materiais, setMateriais] = useState<{ id: string; filamentoId: string; pesoGasto: number | '' }[]>([])
+  const [insumos, setInsumos] = useState<{ id: string; insumoId: string; quantidade: number | '' }[]>([])
 
-  const clienteSelecionado = clientes.find((c) => c.id.toString() === clienteId)
+  // Faturamento e Custos Extras
+  const [desconto, setDesconto] = useState<number | ''>('')
+  const [freteCobrado, setFreteCobrado] = useState<number | ''>('')
+  const [fretePago, setFretePago] = useState<number | ''>('')
+  const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>('')
+  const [dataEntrega, setDataEntrega] = useState('')
 
+<<<<<<< HEAD
+  // UI state
+  const [sucesso, setSucesso] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+=======
   // ── Cálculo em tempo real ────────────────────────────────────────────────
   const totals = useMemo(() => {
     const tempo = Number(horas)
@@ -109,19 +139,35 @@ export function OrcamentoPage({
       }),
     })
   }, [materials, horas, filamentos, custoHoraMaquina, taxaOperacional])
+>>>>>>> main
 
-  // ── Materiais ────────────────────────────────────────────────────────────
+  // ─── ADD ITEMS ──────────────────────────────────────────────────
   function addMaterial() {
-    setMaterials((c) => [...c, { id: Date.now(), filamento_id: primeiroFilamento, peso: '' }])
+    setMateriais([...materiais, { id: crypto.randomUUID(), filamentoId: '', pesoGasto: '' }])
   }
-  function updateMaterial(id: number, field: 'filamento_id' | 'peso', value: string) {
-    setMaterials((c) => c.map((m) => (m.id === id ? { ...m, [field]: value } : m)))
+  function removeMaterial(id: string) {
+    setMateriais(materiais.filter(m => m.id !== id))
   }
-  function removeMaterial(id: number) {
-    if (materials.length === 1) return
-    setMaterials((c) => c.filter((m) => m.id !== id))
+  function addInsumo() {
+    setInsumos([...insumos, { id: crypto.randomUUID(), insumoId: '', quantidade: '' }])
+  }
+  function removeInsumo(id: string) {
+    setInsumos(insumos.filter(i => i.id !== id))
   }
 
+<<<<<<< HEAD
+  // ─── CALCULATIONS ────────────────────────────────────────────────
+  const th = Number(tempoHoras) || 0
+  const reservaMaquina = th * custoHoraMaquina
+  
+  // Filamentos
+  const custoFilamento = materiais.reduce((acc, m) => {
+    if (!m.filamentoId || !m.pesoGasto) return acc
+    const fil = filamentos.find(f => f.id === Number(m.filamentoId))
+    if (!fil) return acc
+    return acc + (Number(m.pesoGasto) * (fil.preco_rolo / fil.peso_rolo_gramas))
+  }, 0)
+=======
   function resetForm() {
     setNomePeca('')
     setHoras('6.5')
@@ -135,128 +181,274 @@ export function OrcamentoPage({
     setResult(null)
     if (!nomePeca.trim()) { setResult({ success: false, message: 'Informe o nome da peça.' }); return }
     if (!clienteId)       { setResult({ success: false, message: 'Selecione um cliente.' });  return }
+>>>>>>> main
 
-    const materialsValidos = materials
-      .filter((m) => m.filamento_id && Number(m.peso) > 0)
-      .map((m) => ({ filamento_id: parseInt(m.filamento_id, 10), peso_gasto_gramas: Number(m.peso) }))
+  // Insumos
+  const custoInsumos = insumos.reduce((acc, ins) => {
+    if (!ins.insumoId || !ins.quantidade) return acc
+    const item = insumosList.find(i => i.id === Number(ins.insumoId))
+    if (!item) return acc
+    return acc + (Number(ins.quantidade) * item.custo_unitario)
+  }, 0)
 
-    if (materialsValidos.length === 0) {
-      setResult({ success: false, message: 'Preencha o peso de pelo menos um material.' })
+  // Energia: (Potência Watts / 1000) * Horas * Tarifa(R$/kWh)
+  const custoEnergia = (potenciaW / 1000) * th * tarifaEnergia
+
+  // Base
+  const custoBase = custoFilamento + custoInsumos + custoEnergia + reservaMaquina + taxaOperacional + (Number(custoEmbalagem) || 0)
+  
+  // Total = Base - Desconto + FreteCobrado
+  const desc = Number(desconto) || 0
+  const freteC = Number(freteCobrado) || 0
+  const valorFinal = custoBase - desc + freteC
+
+  // ─── SUBMIT ──────────────────────────────────────────────────────
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setErrorMsg('')
+    
+    if (!nomeDaPeca || !clienteId || th <= 0) {
+      setErrorMsg('Preencha os dados básicos corretamente.')
       return
     }
 
+    const payloadMateriais = materiais
+      .filter(m => m.filamentoId && m.pesoGasto)
+      .map(m => ({ filamento_id: Number(m.filamentoId), peso_gasto_gramas: Number(m.pesoGasto) }))
+
+    const payloadInsumos = insumos
+      .filter(i => i.insumoId && i.quantidade)
+      .map(i => ({ insumo_id: Number(i.insumoId), quantidade: Number(i.quantidade) }))
+
     startTransition(async () => {
       const res = await criarPedido({
+<<<<<<< HEAD
+        nome_da_peca: nomeDaPeca,
+        cliente_id: Number(clienteId),
+        tempo_impressao_horas: th,
+        materials: payloadMateriais,
+        insumos: payloadInsumos,
+        
+        custo_filamento: custoFilamento,
+        custo_insumos: custoInsumos,
+        custo_energia: custoEnergia,
+        valor_reserva_maquina: reservaMaquina,
+        taxa_operacional: taxaOperacional,
+        custo_embalagem: Number(custoEmbalagem) || 0,
+        
+        desconto: desc,
+        frete_cobrado: freteC,
+        frete_pago: Number(fretePago) || 0,
+        valor_total_cobrado: valorFinal,
+        data_entrega: dataEntrega || undefined
+=======
         nome_da_peca:          nomePeca.trim(),
         cliente_id:            parseInt(clienteId, 10),
         tempo_impressao_horas: Number(horas) || 0,
         materials:             materialsValidos,
+>>>>>>> main
       })
-      setResult(res)
+
       if (res.success) {
-        setNomePeca('')
-        setHoras('6.5')
-        setClienteId(primeiroCliente)
-        setMaterials([{ id: Date.now(), filamento_id: primeiroFilamento, peso: '180' }])
+        setSucesso(true)
+        setTimeout(() => router.push('/'), 1500)
+      } else {
+        setErrorMsg(res.message)
       }
     })
   }
 
-  const fmtBRL = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
+  const fmt = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
 
-  // ─────────────────────────────────────────────────────────────────────────
-  return (
-    <div className="mx-auto max-w-[1320px] px-6 py-9 lg:px-10">
-
-      {/* Breadcrumb + título */}
-      <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
-            <span>Orçamentos</span>
-            <span>/</span>
-            <span className="text-white/65">Novo orçamento</span>
-          </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">
-            Novo orçamento de impressão 3D
-          </h1>
-          <p className="mt-2 text-sm text-white/40">
-            Preencha os detalhes para gerar uma estimativa precisa.
-          </p>
+  if (sucesso) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <div className="mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
+          <CheckCircle2 size={40} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-white/35">
-          <span className="size-2 rounded-full bg-[#d8f45a] shadow-[0_0_10px_#d8f45a]" />
-          {result?.success ? 'Orçamento salvo' : 'Rascunho'}
-        </div>
+        <h2 className="mb-2 text-2xl font-bold text-white">Orçamento Gerado!</h2>
+        <p className="text-sm text-white/50">O pedido foi salvo e está na fila de produção.</p>
       </div>
+    )
+  }
 
-      {/* Feedback */}
-      {result && (
-        <div
-          role="alert"
-          className={`mb-6 flex items-start gap-3 rounded-xl px-4 py-3 text-sm font-medium border ${
-            result.success
-              ? 'bg-[#d8f45a]/5 border-[#d8f45a]/20 text-[#d8f45a]'
-              : 'bg-red-500/10 border-red-500/30 text-red-300'
-          }`}
-        >
-          <span className="text-lg leading-none">{result.success ? '✅' : '❌'}</span>
-          <span>{result.message}</span>
-        </div>
-      )}
-
-      {/* Grid principal */}
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-
-        {/* ── Card: Formulário ──────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
-
-          <div className="border-b border-white/[0.07] px-6 py-5 sm:px-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-white/[0.06] text-[#d8f45a]">
-                <FileText size={18} />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold">Detalhes do projeto</h2>
-                <p className="mt-0.5 text-xs text-white/35">Informações básicas da peça</p>
-              </div>
-            </div>
+  return (
+    <div className="flex flex-col gap-8 lg:flex-row lg:items-start shrink-0">
+      <form onSubmit={handleSubmit} className="flex-1 space-y-8">
+        
+        {/* 1. Dados Básicos */}
+        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <h2 className="mb-5 text-sm font-semibold text-white">Dados do Pedido</h2>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <label className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-xs font-medium text-white/55">Nome da peça / Projeto</span>
+              <input required value={nomeDaPeca} onChange={e => setNomeDaPeca(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Cliente</span>
+              <select required value={clienteId} onChange={e => setClienteId(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                <option value="" disabled>Selecione...</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Tempo de Impressão (Horas)</span>
+              <input required type="number" step="0.1" min="0" value={tempoHoras} onChange={e => setTempoHoras(Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
           </div>
+        </section>
 
-          <div className="flex flex-col gap-8 p-6 sm:p-8">
-            {/* Nome + Tempo + Cliente */}
-            <div className="grid gap-5 sm:grid-cols-[1.5fr_1fr_1.25fr]">
-              <Field label="Nome da peça" placeholder="Ex: Suporte articulado" value={nomePeca} onChange={setNomePeca} />
-              <Field label="Tempo de impressão" placeholder="6.5" suffix="horas" value={horas} onChange={setHoras} type="number" />
-              <label className="flex flex-col gap-2">
-                <span className="text-xs font-medium text-white/55">Cliente</span>
-                <select
-                  value={clienteId}
-                  onChange={(e) => setClienteId(e.target.value)}
-                  className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none transition focus:border-[#d8f45a]/60"
-                >
-                  {clientes.length === 0 && <option value="">Nenhum cliente</option>}
-                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </label>
-            </div>
-
-            <div className="h-px bg-white/[0.06]" />
-
-            {/* Filamentos */}
-            <div>
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold">Filamentos</h3>
-                  <p className="mt-1 text-xs text-white/35">Adicione os materiais utilizados.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={addMaterial}
-                  className="flex items-center gap-2 rounded-lg border border-[#d8f45a]/25 bg-[#d8f45a]/[0.06] px-3 py-2 text-xs font-medium text-[#d8f45a] transition hover:bg-[#d8f45a]/[0.12]"
-                >
-                  <Plus size={14} /> Adicionar cor/material
+        {/* 2. Filamentos */}
+        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Materiais e Cores</h2>
+          </div>
+          <div className="space-y-4">
+            {materiais.map((m, idx) => (
+              <div key={m.id} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <label className="flex-1 flex flex-col gap-2">
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Filamento</span>}
+                  <select value={m.filamentoId} onChange={e => {
+                    const newM = [...materiais]; newM[idx].filamentoId = e.target.value; setMateriais(newM)
+                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                    <option value="" disabled>Selecione...</option>
+                    {filamentos.map(f => <option key={f.id} value={f.id}>{f.material} {f.cor}</option>)}
+                  </select>
+                </label>
+                <label className="flex w-full flex-col gap-2 sm:w-32">
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Gramas</span>}
+                  <input type="number" step="0.1" min="0" value={m.pesoGasto} onChange={e => {
+                    const newM = [...materiais]; newM[idx].pesoGasto = Number(e.target.value); setMateriais(newM)
+                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                </label>
+                <button type="button" onClick={() => removeMaterial(m.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/[0.1] text-white/30 hover:bg-white/[0.05] hover:text-red-400">
+                  <Trash2 size={16} />
                 </button>
               </div>
+<<<<<<< HEAD
+            ))}
+            <button type="button" onClick={addMaterial} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.15] py-3 text-xs font-medium text-white/50 hover:border-[#d8f45a]/50 hover:text-[#d8f45a] hover:bg-[#d8f45a]/5 transition">
+              <Plus size={14} /> Adicionar filamento
+            </button>
+          </div>
+        </section>
+
+        {/* 3. Insumos */}
+        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Insumos Extras</h2>
+          </div>
+          <div className="space-y-4">
+            {insumos.map((ins, idx) => (
+              <div key={ins.id} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <label className="flex-1 flex flex-col gap-2">
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Insumo</span>}
+                  <select value={ins.insumoId} onChange={e => {
+                    const newI = [...insumos]; newI[idx].insumoId = e.target.value; setInsumos(newI)
+                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                    <option value="" disabled>Selecione...</option>
+                    {insumosList.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+                  </select>
+                </label>
+                <label className="flex w-full flex-col gap-2 sm:w-32">
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Quantidade</span>}
+                  <input type="number" step="0.1" min="0" value={ins.quantidade} onChange={e => {
+                    const newI = [...insumos]; newI[idx].quantidade = Number(e.target.value); setInsumos(newI)
+                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                </label>
+                <button type="button" onClick={() => removeInsumo(ins.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/[0.1] text-white/30 hover:bg-white/[0.05] hover:text-red-400">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={addInsumo} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.15] py-3 text-xs font-medium text-white/50 hover:border-[#d8f45a]/50 hover:text-[#d8f45a] hover:bg-[#d8f45a]/5 transition">
+              <Plus size={14} /> Adicionar insumo (suporte, lixa, etc)
+            </button>
+          </div>
+        </section>
+
+        {/* 4. Logística e Faturamento */}
+        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <h2 className="mb-5 text-sm font-semibold text-white">Logística & Descontos</h2>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Data de Entrega</span>
+              <input type="date" value={dataEntrega} onChange={e => setDataEntrega(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-[#d8f45a]">Desconto (R$)</span>
+              <input type="number" step="0.01" min="0" value={desconto} onChange={e => setDesconto(Number(e.target.value))}
+                className="h-11 rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 text-sm text-white focus:border-[#d8f45a] outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Frete Cobrado do Cliente (R$)</span>
+              <input type="number" step="0.01" min="0" value={freteCobrado} onChange={e => setFreteCobrado(Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Frete Pago (Custo real) (R$)</span>
+              <input type="number" step="0.01" min="0" value={fretePago} onChange={e => setFretePago(Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-xs font-medium text-white/55">Custo com Embalagem (R$)</span>
+              <input type="number" step="0.01" min="0" value={custoEmbalagem} onChange={e => setCustoEmbalagem(Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+          </div>
+        </section>
+
+      </form>
+
+      {/* Painel Lateral - Resumo */}
+      <aside className="sticky top-6 w-full lg:w-[360px] rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+        <h2 className="mb-6 text-sm font-semibold text-white">Resumo do Orçamento</h2>
+        
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between text-white/60">
+            <span>Filamentos</span><span className="font-mono text-white/80">{fmt(custoFilamento)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
+            <span>Insumos extras</span><span className="font-mono text-white/80">{fmt(custoInsumos)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
+            <span className="flex items-center gap-1"><Zap size={13} className="text-amber-400"/> Energia ({(potenciaW/1000).toFixed(2)}kW)</span>
+            <span className="font-mono text-white/80">{fmt(custoEnergia)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
+            <span>Reserva Máquina</span><span className="font-mono text-white/80">{fmt(reservaMaquina)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
+            <span>Taxa Operacional</span><span className="font-mono text-white/80">{fmt(taxaOperacional)}</span>
+          </div>
+          {Number(custoEmbalagem) > 0 && (
+            <div className="flex justify-between text-white/60">
+              <span>Embalagem</span><span className="font-mono text-white/80">{fmt(Number(custoEmbalagem))}</span>
+            </div>
+          )}
+          
+          <div className="my-3 h-px w-full bg-white/[0.08]" />
+          
+          <div className="flex justify-between font-medium text-white/80">
+            <span>Custo Base</span><span className="font-mono">{fmt(custoBase)}</span>
+          </div>
+
+          {(desc > 0 || freteC > 0) && (
+            <div className="pt-2 space-y-2">
+              {desc > 0 && <div className="flex justify-between text-red-400"><span className="text-xs">Desconto</span><span className="font-mono">- {fmt(desc)}</span></div>}
+              {freteC > 0 && <div className="flex justify-between text-blue-400"><span className="text-xs">Frete Cobrado</span><span className="font-mono">+ {fmt(freteC)}</span></div>}
+            </div>
+          )}
+
+          <div className="mt-4 rounded-xl bg-white/[0.03] p-4 text-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Valor Final Sugerido</span>
+            <div className="mt-1 text-3xl font-bold tracking-tight text-[#d8f45a]">
+              {fmt(valorFinal)}
+=======
 
               <div className="flex flex-col gap-3">
                 {materials.map((mat, index) => {
@@ -332,10 +524,21 @@ export function OrcamentoPage({
               >
                 {isPending ? 'Salvando…' : result?.success ? 'Orçamento criado ✓' : 'Criar orçamento'}
               </button>
+>>>>>>> main
             </div>
           </div>
         </div>
 
+<<<<<<< HEAD
+        {errorMsg && <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-red-400">{errorMsg}</div>}
+
+        <button onClick={handleSubmit} disabled={isPending}
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#d8f45a] py-3.5 text-sm font-bold text-[#15180d] transition hover:bg-[#e4ff76] disabled:opacity-50">
+          {isPending ? 'Salvando...' : 'Gerar Orçamento'}
+          <ChevronRight size={16} />
+        </button>
+      </aside>
+=======
         {/* ── Card: Resumo ──────────────────────────────────────────────────── */}
         <aside className="sticky top-6 rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
           <div className="border-b border-white/[0.07] px-6 py-5">
@@ -422,6 +625,7 @@ export function OrcamentoPage({
           </div>
         </div>
       )}
+>>>>>>> main
     </div>
   )
 }

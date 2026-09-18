@@ -1,11 +1,5 @@
 'use client'
 
-/**
- * app/components/Sidebar.tsx
- * Sidebar compartilhada entre todas as páginas do dashboard.
- * Client Component — usa usePathname para marcar o item ativo.
- */
-
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -17,6 +11,10 @@ import {
   Sparkles,
   Users,
   Database,
+  Package,
+  Layers,
+  Settings,
+  DollarSign
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -63,10 +61,10 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
   
   const percentual = Math.min((faturamentoMes / metaMensal) * 100, 100)
   
-  const fmtBRL = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
+  const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
 
   return (
-    <aside className="hidden w-[248px] shrink-0 border-r border-white/[0.07] bg-[#0d0e10] px-5 py-6 lg:flex lg:flex-col">
+    <aside className="hidden w-[248px] shrink-0 border-r border-white/[0.07] bg-[#0d0e10] px-5 py-6 lg:flex lg:flex-col overflow-y-auto">
       {/* Logo */}
       <div className="flex items-center gap-3 px-2">
         <div className="flex size-9 items-center justify-center rounded-xl bg-[#d8f45a] text-[#16180f] shadow-[0_0_24px_rgba(216,244,90,0.18)]">
@@ -80,79 +78,48 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
         </div>
       </div>
 
-      {/* Nav principal */}
       <div className="mt-12 flex flex-col gap-1">
-        <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">
-          Workspace
-        </p>
-        <NavItem
-          href="/"
-          icon={<LayoutDashboard size={15} />}
-          label="Visão geral"
-          active={pathname === '/'}
-        />
-        <NavItem
-          href="/orcamentos"
-          icon={<ReceiptText size={15} />}
-          label="Orçamentos"
-          active={pathname === '/orcamentos'}
-        />
-        <NavItem
-          href="/producao"
-          icon={<Box size={15} />}
-          label="Produção"
-          active={pathname === '/producao'}
-          badge={pedidosEmProducao > 0 ? String(pedidosEmProducao) : undefined}
-        />
-        <NavItem
-          href="/clientes"
-          icon={<Users size={15} />}
-          label="Clientes"
-          active={pathname === '/clientes'}
-        />
-        <NavItem
-          href="/filamentos"
-          icon={<Database size={15} />}
-          label="Estoque / Filamentos"
-          active={pathname === '/filamentos'}
-        />
+        <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">Visão Geral</p>
+        <NavItem href="/" icon={<LayoutDashboard size={15} />} label="Dashboard" active={pathname === '/'} />
+        <NavItem href="/orcamentos" icon={<ReceiptText size={15} />} label="Novo Orçamento" active={pathname === '/orcamentos'} />
+        <NavItem href="/producao" icon={<Layers size={15} />} label="Produção" active={pathname === '/producao'} badge={pedidosEmProducao > 0 ? String(pedidosEmProducao) : undefined} />
       </div>
 
-      {/* Nav sistema */}
       <div className="mt-9 flex flex-col gap-1">
-        <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">
-          Sistema
-        </p>
-        <NavItem
-          href="/configuracoes"
-          icon={<Settings2 size={15} />}
-          label="Configurações"
-          active={pathname === '/configuracoes'}
-        />
-        <NavItem
-          href="/ajuda"
-          icon={<CircleHelp size={15} />}
-          label="Central de ajuda"
-          active={pathname === '/ajuda'}
-        />
+        <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">Cadastros</p>
+        <NavItem href="/clientes" icon={<Users size={15} />} label="Clientes" active={pathname === '/clientes'} />
+        <NavItem href="/filamentos" icon={<Database size={15} />} label="Filamentos" active={pathname === '/filamentos'} />
+        <NavItem href="/insumos" icon={<Package size={15} />} label="Insumos" active={pathname === '/insumos'} />
+      </div>
+
+      <div className="mt-9 flex flex-col gap-1">
+        <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">Financeiro</p>
+        <NavItem href="/financeiro" icon={<DollarSign size={15} />} label="Painel Financeiro" active={pathname === '/financeiro'} />
+      </div>
+
+      <div className="mt-9 flex flex-col gap-1">
+        <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">Sistema</p>
+        <NavItem href="/configuracoes" icon={<Settings2 size={15} />} label="Configurações" active={pathname === '/configuracoes'} />
       </div>
 
       {/* Meta de Faturamento */}
-      <div className="mt-auto rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs text-white/50">Progresso mensal</span>
-          <Sparkles size={15} className="text-[#d8f45a]" />
+      <div className="mt-auto pt-8">
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs text-white/50">Progresso mensal</span>
+            <Sparkles size={15} className="text-[#d8f45a]" />
+          </div>
+          <p className="text-sm font-medium">Meta de Faturamento</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-[#d8f45a] transition-all duration-500"
+              style={{ width: `${Math.max(percentual, 2)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-[11px] text-white/35">
+            {fmtBRL(faturamentoMes)} de {fmtBRL(metaMensal)}
+          </p>
         </div>
-        <p className="text-sm font-medium">Meta de Faturamento</p>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-[#d8f45a] transition-all duration-500"
-            style={{ width: `${Math.max(percentual, 2)}%` }}
-          />
-        </div>
-        <p className="mt-2 text-[11px] text-white/35">
-          {fmtBRL(faturamentoMes)} de {fmtBRL(metaMensal)}
-        </p>
       </div>
     </aside>
   )
