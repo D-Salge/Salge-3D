@@ -83,8 +83,13 @@ export async function deletarFilamento(id: number): Promise<ActionResult> {
     revalidatePath('/filamentos')
     revalidatePath('/orcamentos')
     return { success: true, message: 'Filamento excluído!' }
-  } catch (error: any) {
-    if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+  } catch (error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY'
+    ) {
       return { success: false, message: 'Este filamento já foi usado em pedidos e não pode ser excluído.' }
     }
     console.error('[deletarFilamento]', error)
