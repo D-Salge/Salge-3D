@@ -205,7 +205,6 @@ CREATE INDEX IF NOT EXISTS idx_recebimentos_data   ON recebimentos (tenant_id, d
 -- =============================================================================
 --  TABELA: despesas
 -- =============================================================================
-<<<<<<< HEAD
 CREATE TABLE IF NOT EXISTS despesas (
     id                  INTEGER     PRIMARY KEY AUTOINCREMENT,
     tenant_id           INTEGER     NOT NULL,
@@ -222,24 +221,6 @@ CREATE TABLE IF NOT EXISTS despesas (
 CREATE INDEX IF NOT EXISTS idx_despesas_tenant    ON despesas (tenant_id);
 CREATE INDEX IF NOT EXISTS idx_despesas_categoria ON despesas (tenant_id, categoria);
 CREATE INDEX IF NOT EXISTS idx_despesas_data      ON despesas (tenant_id, data_despesa);
-=======
-
-INSERT INTO tenants (nome, plano)
-SELECT 'Salge 3D', 'pro'
-WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE nome = 'Salge 3D');
-
-INSERT INTO usuarios (tenant_id, nome, email, senha_hash, perfil)
-SELECT t.id, 'Daniel', 'daniel@salge3d.com', 'SUBSTITUA_POR_HASH_BCRYPT', 'admin'
-FROM tenants t
-WHERE t.nome = 'Salge 3D'
-  AND NOT EXISTS (
-      SELECT 1 FROM usuarios u
-      WHERE u.tenant_id = t.id AND u.email = 'daniel@salge3d.com'
-  )
-ORDER BY t.id
-LIMIT 1;
-
->>>>>>> main
 
 -- =============================================================================
 --  TABELA: fluxo_capital
@@ -301,6 +282,16 @@ JOIN clientes c ON c.id = p.cliente_id;
 --  SEED
 -- =============================================================================
 INSERT INTO tenants (nome, plano, tarifa_energia_kwh, potencia_impressora_w)
-    VALUES ('Salge 3D', 'pro', 0.92, 300.0);
+SELECT 'Salge 3D', 'pro', 0.92, 300.0
+WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE nome = 'Salge 3D');
+
 INSERT INTO usuarios (tenant_id, nome, email, senha_hash, perfil)
-    VALUES (1, 'Daniel', 'daniel@salge3d.com', 'HASH', 'admin');
+SELECT t.id, 'Daniel', 'daniel@salge3d.com', 'SUBSTITUA_POR_HASH_BCRYPT', 'admin'
+FROM tenants t
+WHERE t.nome = 'Salge 3D'
+  AND NOT EXISTS (
+      SELECT 1 FROM usuarios u
+      WHERE u.tenant_id = t.id AND u.email = 'daniel@salge3d.com'
+  )
+ORDER BY t.id
+LIMIT 1;
