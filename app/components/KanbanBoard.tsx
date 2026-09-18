@@ -9,6 +9,7 @@ import { useTransition } from 'react'
 import { Clock3, Play, CheckCircle2, PackageCheck } from 'lucide-react'
 import type { PedidoResumo } from '@/app/actions/pedidos'
 import { atualizarStatusPedido } from '@/app/actions/pedidos'
+import Link from 'next/link'
 
 interface KanbanBoardProps {
   pedidos: PedidoResumo[]
@@ -33,7 +34,8 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
     if (!proximo) return
 
     startTransition(async () => {
-      await atualizarStatusPedido(pedidoId, proximo)
+      const result = await atualizarStatusPedido(pedidoId, proximo)
+      if (!result.success) alert(result.message)
     })
   }
 
@@ -79,10 +81,11 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
                         {pedido.tempo_impressao_horas}h
                       </div>
                     </div>
-                    <h3 className="text-sm font-semibold text-white/90 leading-tight">
+                    <Link href={`/pedidos/${pedido.id}`} className="text-sm font-semibold text-white/90 leading-tight hover:text-[#d8f45a]">
                       {pedido.nome_da_peca}
-                    </h3>
+                    </Link>
                     <p className="mt-0.5 text-xs text-white/50">{pedido.cliente_nome}</p>
+                    <p className="mt-1 text-[10px] text-white/30">{pedido.impressora_nome || 'Impressora não atribuída'}</p>
                   </div>
 
                   {/* Materiais - Badges com verificação de estoque */}
@@ -116,7 +119,8 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
 
                   {/* Ação (Avançar status) */}
                   {col.id !== 'Finalizado' && (
-                    <div className="mt-1 flex justify-end">
+                    <div className="mt-1 flex items-center justify-between">
+                      <Link href={`/pedidos/${pedido.id}`} className="text-[10px] text-white/35 hover:text-[#d8f45a]">Detalhes</Link>
                       <button
                         onClick={() => handleAvancarStatus(pedido.id, pedido.status)}
                         disabled={isPending}

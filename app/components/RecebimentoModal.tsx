@@ -28,7 +28,7 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
   }
 
   function handleDel(id: number) {
-    if(!confirm('Excluir pagamento?')) return
+    if(!confirm('Estornar este pagamento? O histórico será preservado.')) return
     startTransition(async () => {
       await deletarRecebimento(id)
       onClose()
@@ -52,7 +52,7 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
                   <span className="text-white/70">{h.forma_pagamento}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[#d8f45a] font-mono">R$ {h.valor.toFixed(2)}</span>
-                    <button onClick={() => handleDel(h.id)} className="text-red-400 hover:text-red-300 text-xs">Excluir</button>
+                    <button onClick={() => handleDel(h.id)} className="text-red-400 hover:text-red-300 text-xs">Estornar</button>
                   </div>
                 </div>
               ))}

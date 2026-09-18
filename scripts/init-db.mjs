@@ -14,6 +14,7 @@ import Database from 'better-sqlite3';
 import { readFileSync, existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { applyMigrations } from '../lib/migrations.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -62,6 +63,9 @@ try {
     .join('\n');
 
   db.exec(schemaWithoutPragmas);
+
+  // Atualiza bancos novos e existentes sem apagar dados.
+  applyMigrations(db);
 
   console.log('✅ Schema aplicado com sucesso!');
 

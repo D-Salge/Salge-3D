@@ -12,7 +12,9 @@ import {
   Database,
   Package,
   Layers,
-  DollarSign
+  DollarSign,
+  Boxes,
+  Printer,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -88,6 +90,8 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
         <NavItem href="/clientes" icon={<Users size={15} />} label="Clientes" active={pathname === '/clientes'} />
         <NavItem href="/filamentos" icon={<Database size={15} />} label="Filamentos" active={pathname === '/filamentos'} />
         <NavItem href="/insumos" icon={<Package size={15} />} label="Insumos" active={pathname === '/insumos'} />
+        <NavItem href="/estoque" icon={<Boxes size={15} />} label="Movimentações" active={pathname === '/estoque'} badge={undefined} />
+        <NavItem href="/impressoras" icon={<Printer size={15} />} label="Impressoras" active={pathname === '/impressoras'} />
       </div>
 
       <div className="mt-9 flex flex-col gap-1">

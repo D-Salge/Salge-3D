@@ -48,38 +48,57 @@ export async function salvarInsumo(
 ): Promise<ActionResult> {
   try {
     if (!data.nome?.trim()) return { success: false, message: 'Informe o nome do insumo.' }
-    if (data.custo_unitario < 0) return { success: false, message: 'Custo unitario nao pode ser negativo.' }
-    if (data.estoque_atual < 0) return { success: false, message: 'Estoque atual nao pode ser negativo.' }
-
-    if (id === null) {
-      db.prepare(
-        `INSERT INTO insumos (tenant_id, usuario_id, nome, unidade, custo_unitario, estoque_atual, estoque_minimo)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        TENANT_ID,
-        USUARIO_ID,
-        data.nome.trim(),
-        data.unidade,
-        data.custo_unitario,
-        data.estoque_atual,
-        data.estoque_minimo,
-      )
-    } else {
-      const res = db.prepare(
-        `UPDATE insumos
-         SET nome = ?, unidade = ?, custo_unitario = ?, estoque_atual = ?, estoque_minimo = ?
-         WHERE id = ? AND tenant_id = ?`
-      ).run(
-        data.nome.trim(),
-        data.unidade,
-        data.custo_unitario,
-        data.estoque_atual,
-        data.estoque_minimo,
-        id,
-        TENANT_ID,
-      )
-      if (res.changes === 0) return { success: false, message: 'Insumo nao encontrado.' }
+    if (!['unid', 'g', 'ml', 'cm', 'm'].includes(data.unidade)) {
+      return { success: false, message: 'Unidade invalida.' }
     }
+    if (![data.custo_unitario, data.estoque_atual, data.estoque_minimo].every(Number.isFinite) ||
+        data.custo_unitario < 0 || data.estoque_atual < 0 || data.estoque_minimo < 0) {
+      return { success: false, message: 'Custo e estoques devem ser valores nao negativos.' }
+    }
+
+    const salvar = db.transaction(() => {
+      let insumoId = id
+      let saldoAnterior = 0
+      if (id === null) {
+        const result = db.prepare(
+          `INSERT INTO insumos (tenant_id, usuario_id, nome, unidade, custo_unitario, estoque_atual, estoque_minimo)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          TENANT_ID, USUARIO_ID, data.nome.trim(), data.unidade,
+          data.custo_unitario, data.estoque_atual, data.estoque_minimo,
+        )
+        insumoId = Number(result.lastInsertRowid)
+      } else {
+        const atual = db.prepare(
+          'SELECT estoque_atual FROM insumos WHERE id = ? AND tenant_id = ? AND ativo = 1',
+        ).get(id, TENANT_ID) as { estoque_atual: number } | undefined
+        if (!atual) throw new Error('NOT_FOUND')
+        saldoAnterior = atual.estoque_atual
+
+        db.prepare(
+          `UPDATE insumos
+           SET nome = ?, unidade = ?, custo_unitario = ?, estoque_atual = ?, estoque_minimo = ?
+           WHERE id = ? AND tenant_id = ?`
+        ).run(
+          data.nome.trim(), data.unidade, data.custo_unitario,
+          data.estoque_atual, data.estoque_minimo, id, TENANT_ID,
+        )
+      }
+
+      if (insumoId && data.estoque_atual !== saldoAnterior) {
+        db.prepare(`
+          INSERT INTO movimentos_estoque (
+            tenant_id, usuario_id, tipo_item, item_id, tipo, quantidade,
+            saldo_anterior, saldo_posterior, motivo
+          ) VALUES (?, ?, 'Insumo', ?, ?, ?, ?, ?, ?)
+        `).run(
+          TENANT_ID, USUARIO_ID, insumoId, id === null ? 'Entrada' : 'Ajuste',
+          Math.abs(data.estoque_atual - saldoAnterior), saldoAnterior, data.estoque_atual,
+          id === null ? 'Estoque inicial' : 'Saldo atualizado no cadastro',
+        )
+      }
+    })
+    salvar()
 
     revalidatePath('/insumos')
     revalidatePath('/orcamentos')
@@ -89,6 +108,9 @@ export async function salvarInsumo(
       message: id === null ? 'Insumo criado com sucesso!' : 'Insumo atualizado com sucesso!',
     }
   } catch (error) {
+    if (error instanceof Error && error.message === 'NOT_FOUND') {
+      return { success: false, message: 'Insumo nao encontrado.' }
+    }
     console.error('[salvarInsumo]', error)
     return { success: false, message: 'Erro interno ao salvar insumo.' }
   }

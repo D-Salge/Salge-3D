@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Salge 3D ERP
 
-## Getting Started
+ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 
-First, run the development server:
+## Módulos
+
+- Dashboard com faturamento, lucro, margem, pendências e alertas de estoque.
+- Orçamentos com validade, PDF, aprovação e conversão para produção.
+- Produção em Kanban, planejamento por impressora e registro de falhas.
+- Custos estimados e consumo real de filamentos e insumos.
+- Histórico de movimentações com baixa e estorno automáticos.
+- Clientes, filamentos, insumos e equipamentos.
+- Contas a receber, pagamentos parciais, despesas e fluxo de capital.
+- Detalhe do pedido com arquivos por link e histórico de alterações.
+- Backup SQLite e exportação CSV.
+
+## Instalação
 
 ```bash
+npm install
+npm run db:init
+npm run db:seed # opcional: dados de demonstração
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Atualização de uma instalação existente
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+As migrações também são aplicadas automaticamente quando o ERP abre, mas é recomendado executá-las explicitamente após atualizar o código:
 
-## Learn More
+```bash
+npm install
+npm run db:migrate
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+O comando `db:migrate` preserva os registros existentes. Não use `db:reset` em um banco com dados reais.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Banco de dados
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+O arquivo local fica em `database/salge3d.sqlite` e não deve ser versionado. Antes de atualizações importantes, use **Configurações → Backup completo**.
 
-## Deploy on Vercel
+Comandos disponíveis:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run db:init      # cria o banco se necessário
+npm run db:migrate   # aplica migrações pendentes
+npm run db:seed      # insere dados de demonstração sem duplicar cadastros
+npm run db:clear     # limpa dados operacionais conforme o script
+npm run db:reset     # apaga e recria o banco (destrutivo)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Validação
+
+```bash
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```

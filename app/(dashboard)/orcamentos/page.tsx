@@ -4,15 +4,18 @@ import { getFilamentosLista } from '@/app/actions/filamentos'
 import { getInsumosLista } from '@/app/actions/insumos'
 import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
+import { getPedidosRecentes } from '@/app/actions/pedidos'
+import { TabelaPedidos } from '@/app/components/TabelaPedidos'
 
 export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
 
 export default async function Page() {
-  const [clientes, filamentos, insumos, config] = await Promise.all([
+  const [clientes, filamentos, insumos, config, pedidos] = await Promise.all([
     getClientesLista(),
     getFilamentosLista(),
     getInsumosLista(),
-    getConfiguracoes()
+    getConfiguracoes(),
+    getPedidosRecentes(100),
   ])
 
   return (
@@ -35,6 +38,14 @@ export default async function Page() {
         tarifaEnergia={config.tarifa_energia_kwh}
         potenciaW={config.potencia_impressora_w}
       />
+
+      <div className="mt-10 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 sm:p-8">
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold">Gestão de orçamentos</h2>
+          <p className="mt-1 text-xs text-white/35">Rascunhos, aprovações, pagamentos e pedidos.</p>
+        </div>
+        <TabelaPedidos pedidos={pedidos} />
+      </div>
     </div>
   )
 }

@@ -17,6 +17,8 @@ import {
   Wrench,
   Plus,
   ArrowRight,
+  AlertTriangle,
+  PackageSearch,
 } from 'lucide-react'
 
 export const metadata: Metadata = {
@@ -78,6 +80,10 @@ const STATUS_CFG: Record<string, { label: string; dot: string; text: string }> =
   'Acabamento':  { label: 'Acabamento', dot: 'bg-violet-400', text: 'text-violet-400/80' },
   'Finalizado':  { label: 'Finalizado', dot: 'bg-[#d8f45a]',  text: 'text-[#d8f45a]/80' },
   'Cancelado':   { label: 'Cancelado',  dot: 'bg-red-400',    text: 'text-red-400/80' },
+  'Rascunho':    { label: 'Rascunho',   dot: 'bg-slate-400',  text: 'text-slate-400/80' },
+  'Enviado':     { label: 'Enviado',    dot: 'bg-cyan-400',   text: 'text-cyan-400/80' },
+  'Recusado':    { label: 'Recusado',   dot: 'bg-red-400',    text: 'text-red-400/80' },
+  'Expirado':    { label: 'Expirado',   dot: 'bg-orange-400', text: 'text-orange-400/80' },
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -129,7 +135,7 @@ function TabelaHistorico({ pedidos }: { pedidos: PedidoResumo[] }) {
           {pedidos.map((p) => (
             <tr key={p.id} className="group hover:bg-white/[0.02] transition-colors">
               <td className="py-4 pl-0 pr-3 font-mono text-white/20 text-xs">
-                #{p.id}
+                <Link href={`/pedidos/${p.id}`} className="hover:text-[#d8f45a]">{p.numero_orcamento ?? `#${p.id}`}</Link>
               </td>
               <td className="py-4 px-3 font-medium text-white/90 max-w-[160px] truncate">
                 {p.nome_da_peca}
@@ -139,7 +145,7 @@ function TabelaHistorico({ pedidos }: { pedidos: PedidoResumo[] }) {
                 {p.materiais}
               </td>
               <td className="py-4 px-3">
-                <StatusDot status={p.status} />
+                <StatusDot status={p.orcamento_status === 'Aprovado' ? p.status : p.orcamento_status} />
               </td>
               <td className="py-4 px-3 text-white/25 text-xs whitespace-nowrap">
                 {new Date(p.data_pedido).toLocaleDateString('pt-BR', {
@@ -195,7 +201,7 @@ export default async function VisaoGeralPage() {
       </div>
 
       {/* ── Cards de métricas ───────────────────────────────────────────────── */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           icon={<ReceiptText size={17} />}
           label="Pedidos do mês"
@@ -214,6 +220,25 @@ export default async function VisaoGeralPage() {
           label="Custos totais"
           value={fmtBRL(stats.custosTotais)}
           sub="Material + máquina dos finalizados"
+        />
+        <MetricCard
+          icon={<TrendingUp size={17} />}
+          label="Lucro líquido"
+          value={fmtBRL(stats.lucroLiquido)}
+          sub={`Margem média de ${stats.margemMedia.toFixed(1)}%`}
+          accent
+        />
+        <MetricCard
+          icon={<PackageSearch size={17} />}
+          label="Reposição de estoque"
+          value={String(stats.estoqueBaixo)}
+          sub="Filamentos e insumos abaixo do mínimo"
+        />
+        <MetricCard
+          icon={<AlertTriangle size={17} />}
+          label="Pendências"
+          value={String(stats.orcamentosPendentes + stats.pedidosAtrasados)}
+          sub={`${stats.orcamentosPendentes} orçamentos · ${stats.pedidosAtrasados} atrasados`}
         />
       </div>
 

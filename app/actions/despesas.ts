@@ -43,6 +43,7 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
         `SELECT id, categoria, descricao, valor, data_despesa
          FROM despesas
          WHERE tenant_id = ?
+           AND estornada_em IS NULL
            AND strftime('%Y-%m', data_despesa) = ?
          ORDER BY data_despesa DESC`
       )
@@ -53,7 +54,7 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
     .prepare(
       `SELECT id, categoria, descricao, valor, data_despesa
        FROM despesas
-       WHERE tenant_id = ?
+       WHERE tenant_id = ? AND estornada_em IS NULL
        ORDER BY data_despesa DESC`
     )
     .all(TENANT_ID) as Despesa[]
@@ -80,6 +81,7 @@ export async function getResumoDespesas(): Promise<{
       `SELECT COALESCE(SUM(valor), 0) AS total
        FROM despesas
        WHERE tenant_id = ?
+         AND estornada_em IS NULL
          AND strftime('%Y-%m', data_despesa) = strftime('%Y-%m', 'now')`
     )
     .get(TENANT_ID) as { total: number }
@@ -115,7 +117,12 @@ export async function salvarDespesa(
 ): Promise<ActionResult> {
   try {
     if (!data.descricao?.trim()) return { success: false, message: 'Informe a descricao da despesa.' }
-    if (data.valor <= 0) return { success: false, message: 'O valor deve ser maior que zero.' }
+    if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
+      return { success: false, message: 'O valor deve ser maior que zero.' }
+    }
+    const categorias = ['Filamentos', 'Insumos', 'Equipamento', 'Energia', 'Marketing', 'Software', 'Manutencao', 'Embalagens', 'Frete', 'Outros']
+    if (!categorias.includes(data.categoria)) return { success: false, message: 'Categoria invalida.' }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.data_despesa)) return { success: false, message: 'Data invalida.' }
 
     if (id === null) {
       db.prepare(
@@ -133,7 +140,7 @@ export async function salvarDespesa(
       const res = db.prepare(
         `UPDATE despesas
          SET categoria = ?, descricao = ?, valor = ?, data_despesa = ?
-         WHERE id = ? AND tenant_id = ?`
+         WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`
       ).run(
         data.categoria,
         data.descricao.trim(),
@@ -161,7 +168,10 @@ export async function salvarDespesa(
 export async function deletarDespesa(id: number): Promise<ActionResult> {
   try {
     const res = db
-      .prepare('DELETE FROM despesas WHERE id = ? AND tenant_id = ?')
+      .prepare(`UPDATE despesas
+        SET estornada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+            estorno_motivo = 'Estornada pelo usuário'
+        WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`)
       .run(id, TENANT_ID)
 
     if (res.changes === 0) return { success: false, message: 'Despesa nao encontrada.' }
@@ -169,7 +179,7 @@ export async function deletarDespesa(id: number): Promise<ActionResult> {
     revalidatePath('/financeiro')
     revalidatePath('/despesas')
 
-    return { success: true, message: 'Despesa removida com sucesso.' }
+    return { success: true, message: 'Despesa estornada com segurança.' }
   } catch (error) {
     console.error('[deletarDespesa]', error)
     return { success: false, message: 'Erro interno ao remover despesa.' }
@@ -182,9 +192,14 @@ export async function salvarFluxoCapital(
   data: Omit<FluxoCapital, 'id'>,
 ): Promise<ActionResult> {
   try {
-    if (data.valor <= 0) return { success: false, message: 'O valor deve ser maior que zero.' }
+    if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
+      return { success: false, message: 'O valor deve ser maior que zero.' }
+    }
     if (!['Aporte', 'Retirada'].includes(data.tipo)) {
       return { success: false, message: 'Tipo de movimentacao invalido.' }
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.data_movimentacao)) {
+      return { success: false, message: 'Data invalida.' }
     }
 
     db.prepare(
@@ -195,7 +210,7 @@ export async function salvarFluxoCapital(
       USUARIO_ID,
       data.tipo,
       data.valor,
-      data.descricao ?? null,
+      data.descricao?.trim() || null,
       data.data_movimentacao,
     )
 

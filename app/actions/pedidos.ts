@@ -13,6 +13,28 @@ import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
 
+function expirarOrcamentosVencidos() {
+  const vencidos = db.prepare(`
+    SELECT id FROM pedidos
+    WHERE tenant_id = ? AND orcamento_status IN ('Rascunho', 'Enviado')
+      AND validade_orcamento IS NOT NULL AND date(validade_orcamento) < date('now')
+  `).all(TENANT_ID) as { id: number }[]
+  if (vencidos.length === 0) return
+  db.transaction(() => {
+    const atualizar = db.prepare(`
+      UPDATE pedidos SET orcamento_status = 'Expirado'
+      WHERE id = ? AND tenant_id = ? AND orcamento_status IN ('Rascunho', 'Enviado')
+    `)
+    const historico = db.prepare(`
+      INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
+      VALUES (?, ?, 1, 'Status do orçamento', 'Validade encerrada automaticamente')
+    `)
+    for (const item of vencidos) {
+      if (atualizar.run(item.id, TENANT_ID).changes === 1) historico.run(TENANT_ID, item.id)
+    }
+  })()
+}
+
 // --- Tipos publicos ---
 
 export interface Cliente {
@@ -58,6 +80,16 @@ export interface PedidoResumo {
   data_pedido: string
   data_entrega: string | null
   total_recebido: number
+  numero_orcamento: string | null
+  orcamento_status: string
+  validade_orcamento: string | null
+  vencimento_em: string | null
+  parcelas: number
+  impressora_nome: string | null
+  inicio_previsto: string | null
+  fim_previsto: string | null
+  lucro_liquido: number
+  margem_percentual: number
 }
 
 export interface DashboardStats {
@@ -69,17 +101,25 @@ export interface DashboardStats {
   pedidosTotal: number
   totalRecebidoMes: number
   inadimplenciaTotal: number
+  lucroLiquido: number
+  margemMedia: number
+  ticketMedio: number
+  estoqueBaixo: number
+  orcamentosPendentes: number
+  pedidosAtrasados: number
 }
 
 // --- Dashboard stats ---
 
 export async function getDashboardStats(): Promise<DashboardStats> {
+  expirarOrcamentosVencidos()
   const pedidosMesRow = db
     .prepare(
       `SELECT COUNT(*) AS pedidos_mes
        FROM pedidos
        WHERE tenant_id = ?
          AND status != 'Cancelado'
+         AND orcamento_status = 'Aprovado'
          AND strftime('%Y-%m', data_pedido) = strftime('%Y-%m', 'now')`
     )
     .get(TENANT_ID) as { pedidos_mes: number }
@@ -96,6 +136,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
        FROM pedidos
        WHERE tenant_id = ?
          AND status = 'Finalizado'
+         AND orcamento_status = 'Aprovado'
          AND strftime('%Y-%m', COALESCE(data_conclusao, data_pedido)) = strftime('%Y-%m', 'now')`
     )
     .get(TENANT_ID) as {
@@ -108,7 +149,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .prepare(
       `SELECT COUNT(*) AS cnt
        FROM pedidos
-       WHERE tenant_id = ? AND status IN ('Fila', 'Imprimindo', 'Acabamento')`
+       WHERE tenant_id = ? AND orcamento_status = 'Aprovado'
+         AND status IN ('Fila', 'Imprimindo', 'Acabamento')`
     )
     .get(TENANT_ID) as { cnt: number }
 
@@ -121,6 +163,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       `SELECT COALESCE(SUM(r.valor), 0) AS total
        FROM recebimentos r
        WHERE r.tenant_id = ?
+         AND r.estornado_em IS NULL
          AND strftime('%Y-%m', r.data_recebimento) = strftime('%Y-%m', 'now')`
     )
     .get(TENANT_ID) as { total: number }
@@ -129,15 +172,51 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .prepare(
       `SELECT COALESCE(SUM(
          p.valor_total_cobrado -
-         COALESCE((SELECT SUM(r.valor) FROM recebimentos r WHERE r.pedido_id = p.id), 0)
+         COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+           WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)
        ), 0) AS total
        FROM pedidos p
        WHERE p.tenant_id = ?
-         AND p.status = 'Finalizado'
+         AND p.status != 'Cancelado'
+         AND p.orcamento_status = 'Aprovado'
          AND p.valor_total_cobrado >
-               COALESCE((SELECT SUM(r.valor) FROM recebimentos r WHERE r.pedido_id = p.id), 0)`
+               COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+                 WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)`
     )
     .get(TENANT_ID) as { total: number }
+
+  const operacaoRow = db.prepare(`
+    SELECT
+      COALESCE(SUM(valor_total_cobrado - (
+        custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
+        custo_embalagem + frete_pago + custo_extra_real
+      )), 0) AS lucro_liquido,
+      COALESCE(AVG(CASE WHEN valor_total_cobrado > 0 THEN
+        ((valor_total_cobrado - (
+          custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
+          custo_embalagem + frete_pago + custo_extra_real
+        )) / valor_total_cobrado) * 100 END), 0) AS margem_media
+    FROM pedidos
+    WHERE tenant_id = ? AND status = 'Finalizado'
+      AND strftime('%Y-%m', COALESCE(data_conclusao, data_pedido)) = strftime('%Y-%m', 'now')
+  `).get(TENANT_ID) as { lucro_liquido: number; margem_media: number }
+
+  const alertasRow = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM filamentos WHERE tenant_id = ? AND ativo = 1
+        AND COALESCE(estoque_gramas, peso_rolo_gramas) <= 150) +
+      (SELECT COUNT(*) FROM insumos WHERE tenant_id = ? AND ativo = 1
+        AND estoque_minimo > 0 AND estoque_atual <= estoque_minimo) AS estoque_baixo,
+      (SELECT COUNT(*) FROM pedidos WHERE tenant_id = ?
+        AND orcamento_status IN ('Rascunho', 'Enviado')) AS orcamentos_pendentes,
+      (SELECT COUNT(*) FROM pedidos WHERE tenant_id = ? AND status != 'Finalizado'
+        AND status != 'Cancelado' AND data_entrega IS NOT NULL
+        AND date(data_entrega) < date('now')) AS pedidos_atrasados
+  `).get(TENANT_ID, TENANT_ID, TENANT_ID, TENANT_ID) as {
+    estoque_baixo: number
+    orcamentos_pendentes: number
+    pedidos_atrasados: number
+  }
 
   return {
     pedidosMes:        pedidosMesRow.pedidos_mes,
@@ -148,6 +227,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     pedidosTotal:      totalRow.cnt,
     totalRecebidoMes:  recebidoMesRow.total,
     inadimplenciaTotal: inadimplenciaRow.total,
+    lucroLiquido: operacaoRow.lucro_liquido,
+    margemMedia: operacaoRow.margem_media,
+    ticketMedio: financeiroMes.pedidos_finalizados > 0
+      ? financeiroMes.faturamento_bruto / financeiroMes.pedidos_finalizados
+      : 0,
+    estoqueBaixo: alertasRow.estoque_baixo,
+    orcamentosPendentes: alertasRow.orcamentos_pendentes,
+    pedidosAtrasados: alertasRow.pedidos_atrasados,
   }
 }
 
@@ -176,6 +263,7 @@ export async function getFilamentos(): Promise<Filamento[]> {
 }
 
 export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
+  expirarOrcamentosVencidos()
   return db
     .prepare(
       `SELECT
@@ -208,11 +296,30 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
          p.status,
          p.data_pedido,
          p.data_entrega,
+         p.numero_orcamento,
+         p.orcamento_status,
+         p.validade_orcamento,
+         p.vencimento_em,
+         p.parcelas,
+         imp.nome AS impressora_nome,
+         p.inicio_previsto,
+         p.fim_previsto,
+         p.valor_total_cobrado - (
+           p.custo_filamento + p.custo_insumos + p.custo_energia +
+           p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+         ) AS lucro_liquido,
+         CASE WHEN p.valor_total_cobrado > 0 THEN
+           ((p.valor_total_cobrado - (
+             p.custo_filamento + p.custo_insumos + p.custo_energia +
+             p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+           )) / p.valor_total_cobrado) * 100 ELSE 0 END AS margem_percentual,
          COALESCE(
-           (SELECT SUM(r.valor) FROM recebimentos r WHERE r.pedido_id = p.id), 0
+           (SELECT SUM(r.valor) FROM recebimentos r
+            WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0
          ) AS total_recebido
        FROM pedidos p
        JOIN clientes c ON c.id = p.cliente_id
+       LEFT JOIN impressoras imp ON imp.id = p.impressora_id
        WHERE p.tenant_id = ?
        ORDER BY p.data_pedido DESC
        LIMIT ?`
@@ -243,6 +350,10 @@ export interface CriarPedidoInput {
   frete_cobrado: number
   frete_pago: number
   data_entrega?: string
+  validade_orcamento?: string
+  vencimento_em?: string
+  parcelas?: number
+  condicao_pagamento?: string
 }
 
 // --- Mutation: criar pedido ---
@@ -260,6 +371,10 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       frete_cobrado,
       frete_pago,
       data_entrega,
+      validade_orcamento,
+      vencimento_em,
+      parcelas = 1,
+      condicao_pagamento,
     } = data
 
     if (typeof nome_da_peca !== 'string' || !nome_da_peca.trim())
@@ -282,6 +397,14 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
     }
     if (data_entrega && !/^\d{4}-\d{2}-\d{2}$/.test(data_entrega)) {
       return { success: false, message: 'Data de entrega inválida.' }
+    }
+    for (const dataOpcional of [validade_orcamento, vencimento_em]) {
+      if (dataOpcional && !/^\d{4}-\d{2}-\d{2}$/.test(dataOpcional)) {
+        return { success: false, message: 'Data financeira ou validade inválida.' }
+      }
+    }
+    if (!Number.isSafeInteger(parcelas) || parcelas < 1 || parcelas > 120) {
+      return { success: false, message: 'Quantidade de parcelas inválida.' }
     }
 
     const pesosPorFilamento = new Map<number, number>()
@@ -408,9 +531,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             custo_filamento, custo_insumos, custo_energia,
             valor_reserva_maquina, taxa_operacional, custo_embalagem,
             desconto, frete_cobrado, frete_pago,
-            valor_total_cobrado, data_entrega,
-            status
-          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Fila')`
+            valor_total_cobrado, data_entrega, validade_orcamento, vencimento_em,
+            parcelas, condicao_pagamento, orcamento_status, status
+          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           TENANT_ID,
@@ -428,9 +551,24 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           fretePago,
           valorTotal,
           data_entrega ?? null,
+          validade_orcamento ?? null,
+          vencimento_em ?? null,
+          parcelas,
+          condicao_pagamento?.trim() || null,
         )
 
       const pedidoId = pedidoResult.lastInsertRowid as number
+
+      db.prepare(`
+        UPDATE pedidos
+        SET numero_orcamento = 'ORC-' || strftime('%Y', data_pedido) || '-' || printf('%06d', id)
+        WHERE id = ? AND tenant_id = ?
+      `).run(pedidoId, TENANT_ID)
+
+      db.prepare(`
+        INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
+        VALUES (?, ?, 1, 'Orcamento criado', 'Orçamento salvo como rascunho')
+      `).run(TENANT_ID, pedidoId)
 
       // 2. Insere cada filamento
       const stmtPF = db.prepare(
@@ -467,7 +605,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
 
     return {
       success: true,
-      message: `Orçamento "${nome_da_peca.trim()}" criado com sucesso!`,
+      message: `Orçamento "${nome_da_peca.trim()}" salvo como rascunho!`,
       pedidoId,
       valorTotal,
     }
@@ -517,12 +655,33 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
          p.status,
          p.data_pedido,
          p.data_entrega,
+         p.numero_orcamento,
+         p.orcamento_status,
+         p.validade_orcamento,
+         p.vencimento_em,
+         p.parcelas,
+         imp.nome AS impressora_nome,
+         p.inicio_previsto,
+         p.fim_previsto,
+         p.valor_total_cobrado - (
+           p.custo_filamento + p.custo_insumos + p.custo_energia +
+           p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+         ) AS lucro_liquido,
+         CASE WHEN p.valor_total_cobrado > 0 THEN
+           ((p.valor_total_cobrado - (
+             p.custo_filamento + p.custo_insumos + p.custo_energia +
+             p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+           )) / p.valor_total_cobrado) * 100 ELSE 0 END AS margem_percentual,
          COALESCE(
-           (SELECT SUM(r.valor) FROM recebimentos r WHERE r.pedido_id = p.id), 0
+           (SELECT SUM(r.valor) FROM recebimentos r
+            WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0
          ) AS total_recebido
        FROM pedidos p
        JOIN clientes c ON c.id = p.cliente_id
-       WHERE p.tenant_id = ? AND p.status IN ('Fila', 'Imprimindo', 'Acabamento', 'Finalizado')
+       LEFT JOIN impressoras imp ON imp.id = p.impressora_id
+       WHERE p.tenant_id = ?
+         AND p.orcamento_status = 'Aprovado'
+         AND p.status IN ('Fila', 'Imprimindo', 'Acabamento', 'Finalizado')
        ORDER BY p.data_pedido ASC`
     )
     .all(TENANT_ID) as PedidoResumo[]
@@ -534,7 +693,7 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       Fila: ['Imprimindo', 'Cancelado'],
       Imprimindo: ['Acabamento', 'Cancelado'],
       Acabamento: ['Finalizado', 'Cancelado'],
-      Finalizado: [],
+      Finalizado: ['Cancelado'],
       Cancelado: [],
     }
     if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
@@ -546,10 +705,11 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
 
     const atualizar = db.transaction(() => {
       const pedido = db
-        .prepare('SELECT status FROM pedidos WHERE id = ? AND tenant_id = ?')
-        .get(pedidoId, TENANT_ID) as { status: string } | undefined
+        .prepare('SELECT status, orcamento_status FROM pedidos WHERE id = ? AND tenant_id = ?')
+        .get(pedidoId, TENANT_ID) as { status: string; orcamento_status: string } | undefined
 
       if (!pedido) throw new Error('NOT_FOUND')
+      if (pedido.orcamento_status !== 'Aprovado') throw new Error('NOT_APPROVED')
       if (pedido.status === novoStatus) return 'UNCHANGED'
       if (!transicoesPermitidas[pedido.status]?.includes(novoStatus)) {
         throw new Error('INVALID_TRANSITION')
@@ -560,7 +720,7 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
           .prepare(
             `SELECT
                pf.filamento_id,
-               SUM(pf.peso_gasto_gramas) AS quantidade,
+               SUM(COALESCE(pf.consumo_real_gramas, pf.peso_gasto_gramas)) AS quantidade,
                f.material || ' ' || f.cor AS nome,
                COALESCE(f.estoque_gramas, f.peso_rolo_gramas) AS estoque
              FROM pedido_filamentos pf
@@ -579,7 +739,7 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
           .prepare(
             `SELECT
                pi.insumo_id,
-               SUM(pi.quantidade) AS quantidade,
+               SUM(COALESCE(pi.consumo_real, pi.quantidade)) AS quantidade,
                i.nome,
                i.estoque_atual AS estoque
              FROM pedido_insumos pi
@@ -608,6 +768,8 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         )
 
         for (const item of filamentosDoPedido) {
+          if (item.quantidade <= 0) continue
+          const saldoAnterior = item.estoque
           const baixa = baixarFilamento.run(
             item.quantidade,
             item.filamento_id,
@@ -615,6 +777,15 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
             item.quantidade,
           )
           if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
+          db.prepare(`
+            INSERT INTO movimentos_estoque (
+              tenant_id, usuario_id, tipo_item, item_id, pedido_id, tipo, quantidade,
+              saldo_anterior, saldo_posterior, motivo
+            ) VALUES (?, 1, 'Filamento', ?, ?, 'Saida', ?, ?, ?, 'Consumo do pedido finalizado')
+          `).run(
+            TENANT_ID, item.filamento_id, pedidoId, item.quantidade,
+            saldoAnterior, saldoAnterior - item.quantidade,
+          )
         }
 
         const baixarInsumo = db.prepare(
@@ -624,6 +795,8 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         )
 
         for (const item of insumosDoPedido) {
+          if (item.quantidade <= 0) continue
+          const saldoAnterior = item.estoque
           const baixa = baixarInsumo.run(
             item.quantidade,
             item.insumo_id,
@@ -631,6 +804,47 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
             item.quantidade,
           )
           if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
+          db.prepare(`
+            INSERT INTO movimentos_estoque (
+              tenant_id, usuario_id, tipo_item, item_id, pedido_id, tipo, quantidade,
+              saldo_anterior, saldo_posterior, motivo
+            ) VALUES (?, 1, 'Insumo', ?, ?, 'Saida', ?, ?, ?, 'Consumo do pedido finalizado')
+          `).run(
+            TENANT_ID, item.insumo_id, pedidoId, item.quantidade,
+            saldoAnterior, saldoAnterior - item.quantidade,
+          )
+        }
+      }
+
+      if (pedido.status === 'Finalizado' && novoStatus === 'Cancelado') {
+        const movimentos = db.prepare(`
+          SELECT tipo_item, item_id, SUM(quantidade) AS quantidade
+          FROM movimentos_estoque
+          WHERE pedido_id = ? AND tipo = 'Saida'
+          GROUP BY tipo_item, item_id
+        `).all(pedidoId) as { tipo_item: 'Filamento' | 'Insumo'; item_id: number; quantidade: number }[]
+
+        for (const movimento of movimentos) {
+          const tabela = movimento.tipo_item === 'Filamento' ? 'filamentos' : 'insumos'
+          const campo = movimento.tipo_item === 'Filamento' ? 'estoque_gramas' : 'estoque_atual'
+          const fallback = movimento.tipo_item === 'Filamento'
+            ? 'COALESCE(estoque_gramas, peso_rolo_gramas)'
+            : 'estoque_atual'
+          const row = db.prepare(`SELECT ${fallback} AS saldo FROM ${tabela} WHERE id = ? AND tenant_id = ?`)
+            .get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
+          if (!row) throw new Error('STOCK_CHANGED')
+          const saldoPosterior = row.saldo + movimento.quantidade
+          db.prepare(`UPDATE ${tabela} SET ${campo} = ? WHERE id = ? AND tenant_id = ?`)
+            .run(saldoPosterior, movimento.item_id, TENANT_ID)
+          db.prepare(`
+            INSERT INTO movimentos_estoque (
+              tenant_id, usuario_id, tipo_item, item_id, pedido_id, tipo, quantidade,
+              saldo_anterior, saldo_posterior, motivo
+            ) VALUES (?, 1, ?, ?, ?, 'Reversao', ?, ?, ?, 'Estorno por cancelamento do pedido')
+          `).run(
+            TENANT_ID, movimento.tipo_item, movimento.item_id, pedidoId,
+            movimento.quantidade, row.saldo, saldoPosterior,
+          )
         }
       }
 
@@ -647,6 +861,10 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         .run(novoStatus, novoStatus, pedidoId, TENANT_ID, pedido.status)
 
       if (res.changes !== 1) throw new Error('STATUS_CHANGED')
+      db.prepare(`
+        INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
+        VALUES (?, ?, 1, 'Status de produção', ?)
+      `).run(TENANT_ID, pedidoId, `${pedido.status} → ${novoStatus}`)
       return 'UPDATED'
     })
 
@@ -663,6 +881,9 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       if (message === 'INVALID_TRANSITION') {
         return { success: false, message: 'Essa mudança de status não é permitida.' }
       }
+      if (message === 'NOT_APPROVED') {
+        return { success: false, message: 'Aprove o orçamento antes de iniciar a produção.' }
+      }
       if (message.startsWith('INSUFFICIENT_STOCK:')) {
         return {
           success: false,
@@ -678,6 +899,8 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
     revalidatePath('/producao')
     revalidatePath('/')
     revalidatePath('/orcamentos')
+    revalidatePath('/estoque')
+    revalidatePath(`/pedidos/${pedidoId}`)
     return { success: true, message: `Status alterado para ${novoStatus}` }
   } catch (err) {
     console.error('[atualizarStatusPedido]', err)

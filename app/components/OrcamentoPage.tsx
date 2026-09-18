@@ -44,6 +44,10 @@ export function OrcamentoPage({
   const [fretePago, setFretePago] = useState<number | ''>('')
   const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>('')
   const [dataEntrega, setDataEntrega] = useState('')
+  const [validadeOrcamento, setValidadeOrcamento] = useState('')
+  const [vencimentoEm, setVencimentoEm] = useState('')
+  const [parcelas, setParcelas] = useState(1)
+  const [condicaoPagamento, setCondicaoPagamento] = useState('Pix')
 
   // UI state
   const [sucesso, setSucesso] = useState(false)
@@ -136,7 +140,11 @@ export function OrcamentoPage({
         desconto: desc,
         frete_cobrado: freteC,
         frete_pago: Number(fretePago) || 0,
-        data_entrega: dataEntrega || undefined
+        data_entrega: dataEntrega || undefined,
+        validade_orcamento: validadeOrcamento || undefined,
+        vencimento_em: vencimentoEm || undefined,
+        parcelas,
+        condicao_pagamento: condicaoPagamento,
       })
 
       if (res.success) {
@@ -157,7 +165,7 @@ export function OrcamentoPage({
           <CheckCircle2 size={40} />
         </div>
         <h2 className="mb-2 text-2xl font-bold text-white">Orçamento Gerado!</h2>
-        <p className="text-sm text-white/50">O pedido foi salvo e está na fila de produção.</p>
+        <p className="text-sm text-white/50">O orçamento foi salvo como rascunho. Aprove-o antes de iniciar a produção.</p>
       </div>
     )
   }
@@ -266,6 +274,28 @@ export function OrcamentoPage({
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-white/55">Data de Entrega</span>
               <input type="date" value={dataEntrega} onChange={e => setDataEntrega(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Validade do Orçamento</span>
+              <input type="date" value={validadeOrcamento} onChange={e => setValidadeOrcamento(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Vencimento do Pagamento</span>
+              <input type="date" value={vencimentoEm} onChange={e => setVencimentoEm(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Forma / Condição</span>
+              <select value={condicaoPagamento} onChange={e => setCondicaoPagamento(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                {['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência', 'Outro'].map(item => <option key={item}>{item}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Parcelas</span>
+              <input type="number" min="1" max="120" step="1" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">

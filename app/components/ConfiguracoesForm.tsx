@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Settings2, Save } from 'lucide-react'
+import { Settings2, Save, Download, FileSpreadsheet } from 'lucide-react'
 import { salvarConfiguracoes, type ConfiguracoesTenant } from '@/app/actions/configuracoes'
 
 export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesTenant }) {
@@ -110,6 +110,19 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 sm:p-8">
+        <h2 className="text-sm font-semibold">Dados e segurança</h2>
+        <p className="mt-1 text-xs text-white/35">Baixe cópias locais antes de atualizações importantes.</p>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <a href="/api/backup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]">
+            <Download size={14} /> Backup completo
+          </a>
+          <a href="/api/exportacao/pedidos" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70">
+            <FileSpreadsheet size={14} /> Exportar pedidos CSV
+          </a>
+        </div>
       </div>
     </div>
   )

@@ -65,12 +65,14 @@ export async function salvarCliente(
 
 export async function deletarCliente(id: number): Promise<ActionResult> {
   try {
-    const res = db.prepare('DELETE FROM clientes WHERE id = ? AND tenant_id = ?').run(id, TENANT_ID)
+    const res = db.prepare(
+      'UPDATE clientes SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1',
+    ).run(id, TENANT_ID)
     if (res.changes === 0) return { success: false, message: 'Cliente não encontrado.' }
 
     revalidatePath('/clientes')
     revalidatePath('/orcamentos')
-    return { success: true, message: 'Cliente excluído!' }
+    return { success: true, message: 'Cliente arquivado com segurança!' }
   } catch (error: unknown) {
     if (
       typeof error === 'object' &&
