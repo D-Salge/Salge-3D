@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "next typegen --webpack && tsc --noEmit",
+    "test": "node --test",
     "db:init": "node scripts/init-db.mjs",
     "db:reset": "node scripts/init-db.mjs --reset",
     "db:seed": "node scripts/seed-demo.mjs",
