@@ -12,13 +12,13 @@ import { useMemo, useState, useTransition } from 'react'
 import {
   Clock3,
   FileText,
-  MoreHorizontal,
   Plus,
   ReceiptText,
   Trash2,
 } from 'lucide-react'
 import { criarPedido, type Cliente, type Filamento, type ActionResult } from '@/app/actions/pedidos'
 import type { PedidoResumo } from '@/app/actions/pedidos'
+import { calcularOrcamento } from '@/lib/orcamento.mjs'
 import { TabelaPedidos } from './TabelaPedidos'
 
 // ── Constantes de negócio removidas (agora via props/banco) ──────────────
@@ -94,14 +94,20 @@ export function OrcamentoPage({
 
   // ── Cálculo em tempo real ────────────────────────────────────────────────
   const totals = useMemo(() => {
-    const materialCost = materials.reduce((sum, mat) => {
-      const grams = Number(mat.peso) || 0
-      const fil   = filamentos.find((f) => f.id.toString() === mat.filamento_id)
-      const rate  = fil ? fil.preco_rolo / fil.peso_rolo_gramas : 0
-      return sum + grams * rate
-    }, 0)
-    const machineReserve = (Number(horas) || 0) * custoHoraMaquina
-    return { materialCost, machineReserve, total: materialCost + machineReserve + taxaOperacional }
+    const tempo = Number(horas)
+    return calcularOrcamento({
+      tempoImpressaoHoras: Number.isFinite(tempo) && tempo >= 0 ? tempo : 0,
+      custoHoraMaquina,
+      taxaOperacional,
+      materiais: materials.map((mat) => {
+        const peso = Number(mat.peso)
+        const filamento = filamentos.find((f) => f.id.toString() === mat.filamento_id)
+        return {
+          pesoGramas: Number.isFinite(peso) && peso >= 0 ? peso : 0,
+          custoPorGrama: filamento ? filamento.preco_rolo / filamento.peso_rolo_gramas : 0,
+        }
+      }),
+    })
   }, [materials, horas, filamentos, custoHoraMaquina, taxaOperacional])
 
   // ── Materiais ────────────────────────────────────────────────────────────
@@ -114,6 +120,14 @@ export function OrcamentoPage({
   function removeMaterial(id: number) {
     if (materials.length === 1) return
     setMaterials((c) => c.filter((m) => m.id !== id))
+  }
+
+  function resetForm() {
+    setNomePeca('')
+    setHoras('6.5')
+    setClienteId(primeiroCliente)
+    setMaterials([{ id: Date.now(), filamento_id: primeiroFilamento, peso: '180' }])
+    setResult(null)
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -137,10 +151,6 @@ export function OrcamentoPage({
         cliente_id:            parseInt(clienteId, 10),
         tempo_impressao_horas: Number(horas) || 0,
         materials:             materialsValidos,
-        custo_filamento:       totals.materialCost,
-        valor_reserva_maquina: totals.machineReserve,
-        taxa_operacional:      taxaOperacional,
-        valor_total_cobrado:   totals.total,
       })
       setResult(res)
       if (res.success) {
@@ -310,17 +320,14 @@ export function OrcamentoPage({
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-white/[0.07] px-6 py-5 sm:px-8">
-            <button type="button" onClick={() => setResult(null)} className="text-xs text-white/40 transition hover:text-white">
+            <button type="button" onClick={resetForm} className="text-xs text-white/40 transition hover:text-white">
               Cancelar
             </button>
-            <div className="flex items-center gap-3">
-              <button type="button" disabled={isPending} className="rounded-lg border border-white/[0.1] px-4 py-2.5 text-xs font-medium text-white/65 transition hover:bg-white/[0.05] disabled:opacity-50">
-                Salvar rascunho
-              </button>
+            <div>
               <button
                 type="button"
                 onClick={handleCriar}
-                disabled={isPending || totals.total === taxaOperacional}
+                disabled={isPending || materials.every((material) => Number(material.peso) <= 0)}
                 className="rounded-lg bg-[#d8f45a] px-5 py-2.5 text-xs font-semibold text-[#15180d] transition hover:bg-[#e4ff76] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPending ? 'Salvando…' : result?.success ? 'Orçamento criado ✓' : 'Criar orçamento'}
@@ -332,14 +339,9 @@ export function OrcamentoPage({
         {/* ── Card: Resumo ──────────────────────────────────────────────────── */}
         <aside className="sticky top-6 rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
           <div className="border-b border-white/[0.07] px-6 py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold">Resumo do orçamento</h2>
-                <p className="mt-1 text-xs text-white/35">Estimativa em tempo real</p>
-              </div>
-              <button aria-label="Mais opções" className="text-white/30 hover:text-white">
-                <MoreHorizontal size={18} />
-              </button>
+            <div>
+              <h2 className="text-sm font-semibold">Resumo do orçamento</h2>
+              <p className="mt-1 text-xs text-white/35">Estimativa em tempo real</p>
             </div>
           </div>
 
@@ -358,7 +360,7 @@ export function OrcamentoPage({
             <div className="flex flex-col gap-4">
               <SummaryRow label="Custo de material"  value={fmtBRL(totals.materialCost)} />
               <SummaryRow label="Reserva de máquina" value={fmtBRL(totals.machineReserve)} />
-              <SummaryRow label="Taxa operacional"   value={fmtBRL(taxaOperacional)} />
+              <SummaryRow label="Taxa operacional"   value={fmtBRL(totals.operationalFee)} />
             </div>
 
             <div className="my-6 h-px bg-white/[0.08]" />
