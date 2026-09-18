@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 /**
  * app/actions/pedidos.ts  -  v3
@@ -62,33 +62,18 @@ export interface PedidoResumo {
 
 export interface DashboardStats {
   pedidosMes: number
-<<<<<<< HEAD
   faturamentoBruto: number
   custosTotais: number
+  pedidosFinalizadosMes: number
   pedidosEmProducao: number
   pedidosTotal: number
   totalRecebidoMes: number
   inadimplenciaTotal: number
-=======
-  faturamentoBruto: number   // pedidos finalizados no mês atual
-  custosTotais: number       // custos dos pedidos finalizados no mês atual
-  pedidosFinalizadosMes: number
-  pedidosEmProducao: number  // status aprovado ou em_producao (para badge da sidebar)
-  pedidosTotal: number       // total histórico
->>>>>>> main
 }
 
 // --- Dashboard stats ---
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-<<<<<<< HEAD
-  const mesStat = db
-    .prepare(
-      `SELECT
-         COUNT(*) AS pedidos_mes,
-         COALESCE(SUM(valor_total_cobrado), 0) AS faturamento_bruto,
-         COALESCE(SUM(custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina + custo_embalagem), 0) AS custos_totais
-=======
   const pedidosMesRow = db
     .prepare(
       `SELECT COUNT(*) AS pedidos_mes
@@ -103,9 +88,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .prepare(
       `SELECT
          COUNT(*) AS pedidos_finalizados,
-         COALESCE(SUM(valor_total_cobrado), 0)                   AS faturamento_bruto,
-         COALESCE(SUM(custo_filamento + valor_reserva_maquina), 0) AS custos_totais
->>>>>>> main
+         COALESCE(SUM(valor_total_cobrado), 0) AS faturamento_bruto,
+         COALESCE(SUM(
+           custo_filamento + custo_insumos + custo_energia +
+           valor_reserva_maquina + custo_embalagem + frete_pago
+         ), 0) AS custos_totais
        FROM pedidos
        WHERE tenant_id = ?
          AND status = 'Finalizado'
@@ -250,59 +237,30 @@ export interface CriarPedidoInput {
   cliente_id: number
   tempo_impressao_horas: number
   materials: MaterialInput[]
-<<<<<<< HEAD
   insumos: InsumoInput[]
-  custo_filamento: number
-  custo_insumos: number
-  custo_energia: number
-  valor_reserva_maquina: number
-  taxa_operacional: number
   custo_embalagem: number
   desconto: number
   frete_cobrado: number
   frete_pago: number
-  valor_total_cobrado: number
   data_entrega?: string
-=======
->>>>>>> main
 }
 
 // --- Mutation: criar pedido ---
 
 export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult> {
   try {
-<<<<<<< HEAD
     const {
       nome_da_peca,
       cliente_id,
       tempo_impressao_horas,
       materials,
       insumos,
-      custo_filamento,
-      custo_insumos,
-      custo_energia,
-      valor_reserva_maquina,
-      taxa_operacional,
       custo_embalagem,
       desconto,
       frete_cobrado,
       frete_pago,
-      valor_total_cobrado,
       data_entrega,
     } = data
-
-    // Validacoes basicas
-    if (!nome_da_peca?.trim())      return { success: false, message: 'Informe o nome da peca.' }
-    if (!cliente_id)                return { success: false, message: 'Selecione um cliente.' }
-    if (tempo_impressao_horas <= 0) return { success: false, message: 'Tempo de impressao invalido.' }
-    if (!materials || materials.length === 0)
-                                    return { success: false, message: 'Adicione pelo menos um material.' }
-
-    const materialsValidos = materials.filter(m => m.filamento_id && m.peso_gasto_gramas > 0)
-    if (materialsValidos.length === 0)
-                                    return { success: false, message: 'Preencha o peso de pelo menos um material.' }
-=======
-    const { nome_da_peca, cliente_id, tempo_impressao_horas, materials } = data
 
     if (typeof nome_da_peca !== 'string' || !nome_da_peca.trim())
       return { success: false, message: 'Informe o nome da peça.' }
@@ -314,6 +272,17 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       return { success: false, message: 'Tempo de impressão inválido.' }
     if (!Array.isArray(materials) || materials.length === 0 || materials.length > 8)
       return { success: false, message: 'Adicione de um a oito materiais.' }
+    if (!Array.isArray(insumos) || insumos.length > 20)
+      return { success: false, message: 'Lista de insumos inválida.' }
+
+    for (const valor of [custo_embalagem, desconto, frete_cobrado, frete_pago]) {
+      if (!Number.isFinite(valor) || valor < 0 || valor > 1_000_000) {
+        return { success: false, message: 'Custos, desconto ou frete inválidos.' }
+      }
+    }
+    if (data_entrega && !/^\d{4}-\d{2}-\d{2}$/.test(data_entrega)) {
+      return { success: false, message: 'Data de entrega inválida.' }
+    }
 
     const pesosPorFilamento = new Map<number, number>()
     for (const material of materials) {
@@ -335,28 +304,33 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       filamento_id,
       peso_gasto_gramas,
     }))
->>>>>>> main
 
-    const insumosValidos = (insumos ?? []).filter(i => i.insumo_id && i.quantidade > 0)
+    const quantidadesPorInsumo = new Map<number, number>()
+    for (const insumo of insumos) {
+      if (
+        !Number.isSafeInteger(insumo.insumo_id) ||
+        insumo.insumo_id <= 0 ||
+        !Number.isFinite(insumo.quantidade) ||
+        insumo.quantidade <= 0 ||
+        insumo.quantidade > 100_000
+      ) {
+        return { success: false, message: 'Insumo ou quantidade inválida.' }
+      }
+      quantidadesPorInsumo.set(
+        insumo.insumo_id,
+        (quantidadesPorInsumo.get(insumo.insumo_id) ?? 0) + insumo.quantidade,
+      )
+    }
+    const insumosValidos = Array.from(quantidadesPorInsumo, ([insumo_id, quantidade]) => ({
+      insumo_id,
+      quantidade,
+    }))
 
-    // Verifica cliente
     const clienteOk = db
       .prepare('SELECT id FROM clientes WHERE id = ? AND tenant_id = ? AND ativo = 1')
       .get(cliente_id, TENANT_ID)
-    if (!clienteOk) return { success: false, message: 'Cliente invalido.' }
+    if (!clienteOk) return { success: false, message: 'Cliente inválido.' }
 
-<<<<<<< HEAD
-    // Verifica filamentos
-    for (const m of materialsValidos) {
-      const filOk = db
-        .prepare('SELECT id FROM filamentos WHERE id = ? AND tenant_id = ?')
-        .get(m.filamento_id, TENANT_ID)
-      if (!filOk) return { success: false, message: `Filamento ID ${m.filamento_id} invalido.` }
-    }
-
-    // Busca filamentos para snapshot de custo
-=======
->>>>>>> main
     const filamentosMap = new Map<number, Filamento>()
     for (const m of materialsValidos) {
       const fil = db
@@ -370,27 +344,29 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       filamentosMap.set(m.filamento_id, fil)
     }
 
-<<<<<<< HEAD
-    // Busca insumos para snapshot de custo unitario
-    const insumosMap = new Map<number, { custo_unitario: number }>()
+    const insumosMap = new Map<number, { nome: string; custo_unitario: number }>()
     for (const i of insumosValidos) {
-      if (!insumosMap.has(i.insumo_id)) {
-        const ins = db
-          .prepare('SELECT custo_unitario FROM insumos WHERE id = ? AND tenant_id = ?')
-          .get(i.insumo_id, TENANT_ID) as { custo_unitario: number } | undefined
-        if (!ins) return { success: false, message: `Insumo ID ${i.insumo_id} invalido.` }
-        insumosMap.set(i.insumo_id, ins)
-      }
+      const ins = db
+        .prepare('SELECT nome, custo_unitario FROM insumos WHERE id = ? AND tenant_id = ? AND ativo = 1')
+        .get(i.insumo_id, TENANT_ID) as { nome: string; custo_unitario: number } | undefined
+      if (!ins) return { success: false, message: `Insumo ID ${i.insumo_id} inválido.` }
+      insumosMap.set(i.insumo_id, ins)
     }
 
-    // Transacao atomica
-=======
     const configuracao = db
-      .prepare('SELECT taxa_operacional, custo_hora_maquina FROM tenants WHERE id = ? AND ativo = 1')
-      .get(TENANT_ID) as { taxa_operacional: number; custo_hora_maquina: number } | undefined
+      .prepare(
+        `SELECT taxa_operacional, custo_hora_maquina, tarifa_energia_kwh, potencia_impressora_w
+         FROM tenants WHERE id = ? AND ativo = 1`,
+      )
+      .get(TENANT_ID) as {
+        taxa_operacional: number
+        custo_hora_maquina: number
+        tarifa_energia_kwh: number
+        potencia_impressora_w: number
+      } | undefined
     if (!configuracao) return { success: false, message: 'Configuração da empresa não encontrada.' }
 
-    const totais = calcularOrcamento({
+    const totaisBasicos = calcularOrcamento({
       tempoImpressaoHoras: tempo_impressao_horas,
       custoHoraMaquina: configuracao.custo_hora_maquina,
       taxaOperacional: configuracao.taxa_operacional,
@@ -402,9 +378,26 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
         }
       }),
     })
+    const custoInsumos = arredondarMoeda(insumosValidos.reduce((total, item) => {
+      return total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario
+    }, 0))
+    const custoEnergia = arredondarMoeda(
+      (configuracao.potencia_impressora_w / 1000) *
+      tempo_impressao_horas *
+      configuracao.tarifa_energia_kwh,
+    )
+    const embalagem = arredondarMoeda(custo_embalagem)
+    const descontoValidado = arredondarMoeda(desconto)
+    const freteCobrado = arredondarMoeda(frete_cobrado)
+    const fretePago = arredondarMoeda(frete_pago)
+    const subtotal = arredondarMoeda(
+      totaisBasicos.total + custoInsumos + custoEnergia + embalagem + freteCobrado,
+    )
+    if (descontoValidado > subtotal) {
+      return { success: false, message: 'O desconto não pode ser maior que o valor do orçamento.' }
+    }
+    const valorTotal = arredondarMoeda(subtotal - descontoValidado)
 
-    // Transação: insere pedido + todos os filamentos atomicamente
->>>>>>> main
     const inserir = db.transaction(() => {
       // 1. Insere o pedido
       const pedidoResult = db
@@ -424,24 +417,17 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           cliente_id,
           nome_da_peca.trim(),
           tempo_impressao_horas,
-<<<<<<< HEAD
-          custo_filamento,
-          custo_insumos,
-          custo_energia,
-          valor_reserva_maquina,
-          taxa_operacional,
-          custo_embalagem,
-          desconto,
-          frete_cobrado,
-          frete_pago,
-          valor_total_cobrado,
+          totaisBasicos.materialCost,
+          custoInsumos,
+          custoEnergia,
+          totaisBasicos.machineReserve,
+          totaisBasicos.operationalFee,
+          embalagem,
+          descontoValidado,
+          freteCobrado,
+          fretePago,
+          valorTotal,
           data_entrega ?? null,
-=======
-          totais.materialCost,
-          totais.machineReserve,
-          totais.operationalFee,
-          totais.total
->>>>>>> main
         )
 
       const pedidoId = pedidoResult.lastInsertRowid as number
@@ -466,7 +452,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
 
       for (const i of insumosValidos) {
         const ins = insumosMap.get(i.insumo_id)!
-        const custoCalc = i.quantidade * ins.custo_unitario
+        const custoCalc = arredondarMoeda(i.quantidade * ins.custo_unitario)
         stmtPI.run(pedidoId, i.insumo_id, i.quantidade, ins.custo_unitario, custoCalc)
       }
 
@@ -481,9 +467,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
 
     return {
       success: true,
-      message: `Orcamento "${nome_da_peca.trim()}" criado com sucesso!`,
+      message: `Orçamento "${nome_da_peca.trim()}" criado com sucesso!`,
       pedidoId,
-      valorTotal: totais.total,
+      valorTotal,
     }
   } catch (err) {
     console.error('[criarPedido]', err)
@@ -544,11 +530,6 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
 
 export async function atualizarStatusPedido(pedidoId: number, novoStatus: string): Promise<ActionResult> {
   try {
-<<<<<<< HEAD
-    const validStatuses = ['Fila', 'Imprimindo', 'Acabamento', 'Finalizado', 'Cancelado']
-    if (!validStatuses.includes(novoStatus)) {
-      return { success: false, message: 'Status invalido.' }
-=======
     const transicoesPermitidas: Record<string, string[]> = {
       Fila: ['Imprimindo', 'Cancelado'],
       Imprimindo: ['Acabamento', 'Cancelado'],
@@ -561,7 +542,6 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
     }
     if (!(novoStatus in transicoesPermitidas)) {
       return { success: false, message: 'Status inválido.' }
->>>>>>> main
     }
 
     const atualizar = db.transaction(() => {
@@ -575,20 +555,14 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         throw new Error('INVALID_TRANSITION')
       }
 
-<<<<<<< HEAD
-      // 2. Se finalizado, baixa estoques
-=======
->>>>>>> main
       if (novoStatus === 'Finalizado') {
-        // Baixa estoque de filamentos
         const filamentosDoPedido = db
           .prepare(
             `SELECT
                pf.filamento_id,
-               SUM(pf.peso_gasto_gramas) AS peso_gasto_gramas,
-               f.material,
-               f.cor,
-               COALESCE(f.estoque_gramas, f.peso_rolo_gramas) AS estoque_gramas
+               SUM(pf.peso_gasto_gramas) AS quantidade,
+               f.material || ' ' || f.cor AS nome,
+               COALESCE(f.estoque_gramas, f.peso_rolo_gramas) AS estoque
              FROM pedido_filamentos pf
              JOIN filamentos f ON f.id = pf.filamento_id AND f.tenant_id = ?
              WHERE pf.pedido_id = ?
@@ -596,60 +570,67 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
           )
           .all(TENANT_ID, pedidoId) as {
             filamento_id: number
-            peso_gasto_gramas: number
-            material: string
-            cor: string
-            estoque_gramas: number
+            quantidade: number
+            nome: string
+            estoque: number
           }[]
 
-<<<<<<< HEAD
-        const stmtFilEstoque = db.prepare(
-          `UPDATE filamentos
-           SET estoque_gramas = COALESCE(estoque_gramas, peso_rolo_gramas) - ?
-           WHERE id = ? AND tenant_id = ?`
-        )
-
-        for (const item of filamentosDoPedido) {
-          stmtFilEstoque.run(item.peso_gasto_gramas, item.filamento_id, TENANT_ID)
-        }
-
-        // Baixa estoque de insumos
         const insumosDoPedido = db
-          .prepare('SELECT insumo_id, quantidade FROM pedido_insumos WHERE pedido_id = ?')
-          .all(pedidoId) as { insumo_id: number; quantidade: number }[]
+          .prepare(
+            `SELECT
+               pi.insumo_id,
+               SUM(pi.quantidade) AS quantidade,
+               i.nome,
+               i.estoque_atual AS estoque
+             FROM pedido_insumos pi
+             JOIN insumos i ON i.id = pi.insumo_id AND i.tenant_id = ?
+             WHERE pi.pedido_id = ?
+             GROUP BY pi.insumo_id, i.nome, i.estoque_atual`,
+          )
+          .all(TENANT_ID, pedidoId) as {
+            insumo_id: number
+            quantidade: number
+            nome: string
+            estoque: number
+          }[]
 
-        const stmtInsEstoque = db.prepare(
-          `UPDATE insumos
-           SET estoque_atual = MAX(0, estoque_atual - ?)
-           WHERE id = ? AND tenant_id = ?`
-        )
-
-        for (const item of insumosDoPedido) {
-          stmtInsEstoque.run(item.quantidade, item.insumo_id, TENANT_ID)
-=======
-        for (const item of filamentosDoPedido) {
-          if (item.estoque_gramas < item.peso_gasto_gramas) {
-            throw new Error(`INSUFFICIENT_STOCK:${item.material} ${item.cor}`)
+        for (const item of [...filamentosDoPedido, ...insumosDoPedido]) {
+          if (item.estoque < item.quantidade) {
+            throw new Error(`INSUFFICIENT_STOCK:${item.nome}`)
           }
         }
 
-        const baixarEstoque = db.prepare(
+        const baixarFilamento = db.prepare(
           `UPDATE filamentos
            SET estoque_gramas = COALESCE(estoque_gramas, peso_rolo_gramas) - ?
-           WHERE id = ?
-             AND tenant_id = ?
+           WHERE id = ? AND tenant_id = ?
              AND COALESCE(estoque_gramas, peso_rolo_gramas) >= ?`,
         )
 
         for (const item of filamentosDoPedido) {
-          const baixa = baixarEstoque.run(
-            item.peso_gasto_gramas,
+          const baixa = baixarFilamento.run(
+            item.quantidade,
             item.filamento_id,
             TENANT_ID,
-            item.peso_gasto_gramas,
+            item.quantidade,
           )
           if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
->>>>>>> main
+        }
+
+        const baixarInsumo = db.prepare(
+          `UPDATE insumos
+           SET estoque_atual = estoque_atual - ?
+           WHERE id = ? AND tenant_id = ? AND estoque_atual >= ?`,
+        )
+
+        for (const item of insumosDoPedido) {
+          const baixa = baixarInsumo.run(
+            item.quantidade,
+            item.insumo_id,
+            TENANT_ID,
+            item.quantidade,
+          )
+          if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
         }
       }
 
@@ -670,12 +651,6 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
     })
 
     try {
-<<<<<<< HEAD
-      atualizar()
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message === 'NOT_FOUND') {
-        return { success: false, message: 'Pedido nao encontrado.' }
-=======
       const resultado = atualizar()
       if (resultado === 'UNCHANGED') {
         return { success: true, message: `O pedido já está em ${novoStatus}.` }
@@ -684,7 +659,6 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       const message = err instanceof Error ? err.message : ''
       if (message === 'NOT_FOUND') {
         return { success: false, message: 'Pedido não encontrado.' }
->>>>>>> main
       }
       if (message === 'INVALID_TRANSITION') {
         return { success: false, message: 'Essa mudança de status não é permitida.' }
