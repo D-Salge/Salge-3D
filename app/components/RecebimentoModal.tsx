@@ -2,10 +2,8 @@
 import { useState, useEffect, useTransition } from 'react'
 import { X } from 'lucide-react'
 import { getRecebimentosPorPedido, registrarRecebimento, deletarRecebimento, type Recebimento } from '@/app/actions/recebimentos'
-import { useRouter } from 'next/navigation'
 
 export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onClose: () => void }) {
-  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [historico, setHistorico] = useState<Recebimento[]>([])
   
@@ -67,6 +65,14 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
             <span className="text-xs font-medium text-white/55">Valor (R$)</span>
             <input required type="number" step="0.01" min="0.01" value={valor} onChange={e=>setValor(e.target.value)}
               className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" />
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-white/55">Observação</span>
+            <textarea
+              value={obs}
+              onChange={e => setObs(e.target.value)}
+              className="min-h-20 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 py-2 text-sm focus:border-[#d8f45a]/60"
+            />
           </label>
           <label className="flex flex-col gap-2">
             <span className="text-xs font-medium text-white/55">Forma de Pagamento</span>
