@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Settings2, Save, Download, FileSpreadsheet } from 'lucide-react'
+import { Settings2, Save, Download, FileSpreadsheet, Upload } from 'lucide-react'
+import Link from 'next/link'
 import { salvarConfiguracoes, type ConfiguracoesTenant } from '@/app/actions/configuracoes'
 
 export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesTenant }) {
@@ -16,11 +17,21 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
     
     startTransition(async () => {
       const res = await salvarConfiguracoes({
+        nome:                   form.nome,
         meta_mensal:           Number(form.meta_mensal),
         taxa_operacional:      Number(form.taxa_operacional),
         custo_hora_maquina:    Number(form.custo_hora_maquina),
         tarifa_energia_kwh:    Number(form.tarifa_energia_kwh),
         potencia_impressora_w: Number(form.potencia_impressora_w),
+        saldo_inicial_caixa:   Number(form.saldo_inicial_caixa),
+        margem_perdas_padrao:  Number(form.margem_perdas_padrao),
+        taxa_venda_padrao:     Number(form.taxa_venda_padrao),
+        valor_hora_trabalho:   Number(form.valor_hora_trabalho),
+        fator_b2c_personalizado: Number(form.fator_b2c_personalizado),
+        fator_b2c_lote:        Number(form.fator_b2c_lote),
+        fator_b2b_piloto:      Number(form.fator_b2b_piloto),
+        fator_b2b_recorrente:  Number(form.fator_b2b_recorrente),
+        pedido_minimo_b2b:     Number(form.pedido_minimo_b2b),
       })
       
       setMsg({ type: res.success ? 'success' : 'error', text: res.message })
@@ -55,6 +66,10 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
         </div>
 
         <form onSubmit={handleSave} className="flex flex-col gap-6 p-6 sm:p-8">
+          <label className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-white/55">Nome do negócio</span>
+            <input required value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60" />
+          </label>
           
           <label className="flex flex-col gap-2">
             <span className="text-xs font-medium text-white/55">Meta Mensal (R$)</span>
@@ -93,6 +108,32 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
             </label>
           </div>
 
+          <div className="h-px w-full bg-white/[0.06]" />
+          <div>
+            <h3 className="text-xs font-semibold text-white/70">Premissas de precificação</h3>
+            <p className="mt-1 text-[11px] text-white/30">Valores compatíveis com a Calculadora da planilha.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            {([
+              ['saldo_inicial_caixa', 'Saldo inicial de caixa (R$)', '0.01'],
+              ['valor_hora_trabalho', 'Valor da sua hora (R$)', '0.01'],
+              ['margem_perdas_padrao', 'Margem de perdas (0 a 1)', '0.01'],
+              ['taxa_venda_padrao', 'Taxa de venda (0 a 1)', '0.01'],
+              ['fator_b2c_personalizado', 'Fator B2C personalizado', '0.01'],
+              ['fator_b2c_lote', 'Fator B2C lote', '0.01'],
+              ['fator_b2b_piloto', 'Fator B2B piloto', '0.01'],
+              ['fator_b2b_recorrente', 'Fator B2B recorrente', '0.01'],
+              ['pedido_minimo_b2b', 'Pedido mínimo B2B (R$)', '0.01'],
+              ['potencia_impressora_w', 'Potência média (W)', '1'],
+              ['tarifa_energia_kwh', 'Tarifa de energia (R$/kWh)', '0.01'],
+            ] as const).map(([key, label, step]) => (
+              <label key={key} className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-white/55">{label}</span>
+                <input required type="number" step={step} min="0" max={key === 'margem_perdas_padrao' || key === 'taxa_venda_padrao' ? '1' : undefined} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: Number(e.target.value) }))} className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60" />
+              </label>
+            ))}
+          </div>
+
           {msg && (
             <div className={`mt-2 rounded-lg px-4 py-3 text-xs font-medium ${msg.type === 'success' ? 'bg-[#d8f45a]/10 text-[#d8f45a]' : 'bg-red-500/10 text-red-400'}`}>
               {msg.text}
@@ -116,6 +157,9 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
         <h2 className="text-sm font-semibold">Dados e segurança</h2>
         <p className="mt-1 text-xs text-white/35">Baixe cópias locais antes de atualizações importantes.</p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <Link href="/configuracoes/importar-planilha" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]">
+            <Upload size={14} /> Importar planilha
+          </Link>
           <a href="/api/backup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]">
             <Download size={14} /> Backup completo
           </a>
