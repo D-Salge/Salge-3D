@@ -27,6 +27,8 @@ export function FinanceiroPage({
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
   const saldoOperacional = resumoRecebimentos.totalRecebidoMes - resumoDespesas.totalDespesasMes
+  const saldoCaixa = saldoOperacional + resumoDespesas.totalAportes - resumoDespesas.totalRetiradas
+  const saldoProjetado = saldoCaixa + resumoRecebimentos.totalPendente
 
   return (
     <>
@@ -39,7 +41,7 @@ export function FinanceiroPage({
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-5">
         {/* Recebido */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
@@ -70,7 +72,7 @@ export function FinanceiroPage({
             </div>
             <span className="text-xs font-medium text-white/55">Saldo Operacional</span>
           </div>
-          <p className="text-2xl font-bold tracking-tight text-white">{fmtBRL(saldoOperacional)}</p>
+          <p className="text-2xl font-bold tracking-tight text-white">{fmtBRL(saldoCaixa)}</p>
         </div>
 
         {/* Inadimplência */}
@@ -82,6 +84,10 @@ export function FinanceiroPage({
             <span className="text-xs font-medium text-white/55">Inadimplência</span>
           </div>
           <p className="text-2xl font-bold tracking-tight text-amber-400">{fmtBRL(resumoRecebimentos.totalPendente)}</p>
+        </div>
+        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
+          <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-[#d8f45a]/10 text-[#d8f45a]"><TrendingUp size={18} /></div><span className="text-xs font-medium text-white/55">Saldo projetado</span></div>
+          <p className="text-2xl font-bold tracking-tight text-[#d8f45a]">{fmtBRL(saldoProjetado)}</p>
         </div>
       </div>
 
@@ -101,7 +107,7 @@ export function FinanceiroPage({
                   <tr key={p.pedido_id} className="group hover:bg-white/[0.02]">
                     <td className="p-4">
                       <p className="font-medium text-white">{p.nome_da_peca}</p>
-                      <p className="text-xs text-white/50">{p.cliente_nome}</p>
+                      <p className="text-xs text-white/50">{p.cliente_nome} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
                     </td>
                     <td className="p-4 font-mono text-[#d8f45a]">{fmtBRL(p.saldo_pendente)}</td>
                     <td className="p-4 text-right">

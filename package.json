@@ -10,6 +10,7 @@
     "typecheck": "next typegen --webpack && tsc --noEmit",
     "test": "node --test",
     "db:init": "node scripts/init-db.mjs",
+    "db:migrate": "node scripts/migrate-db.mjs",
     "db:reset": "node scripts/init-db.mjs --reset",
     "db:seed": "node scripts/seed-demo.mjs",
     "db:clear": "node scripts/db-clear.mjs"
@@ -18,6 +19,7 @@
     "better-sqlite3": "^13.0.3",
     "lucide-react": "^1.45.0",
     "next": "16.3.5",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

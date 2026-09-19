@@ -38,57 +38,79 @@ export async function salvarFilamento(
 ): Promise<ActionResult> {
   try {
     if (!data.material || !data.cor) return { success: false, message: 'Material e cor são obrigatórios.' }
-    if (data.peso_rolo_gramas <= 0 || data.preco_rolo < 0) return { success: false, message: 'Valores inválidos.' }
-
-    if (id) {
-      db.prepare(`
-        UPDATE filamentos 
-        SET material = ?, cor = ?, peso_rolo_gramas = ?, preco_rolo = ?, estoque_gramas = ?, marca = ?, fornecedor = ?
-        WHERE id = ? AND tenant_id = ?
-      `).run(
-        data.material.trim(),
-        data.cor.trim(),
-        data.peso_rolo_gramas,
-        data.preco_rolo,
-        data.estoque_gramas,
-        data.marca?.trim() || null,
-        data.fornecedor?.trim() || null,
-        id,
-        TENANT_ID
-      )
-    } else {
-      db.prepare(`
-        INSERT INTO filamentos (tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas, marca, fornecedor)
-        VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        TENANT_ID,
-        data.material.trim(),
-        data.cor.trim(),
-        data.peso_rolo_gramas,
-        data.preco_rolo,
-        data.estoque_gramas,
-        data.marca?.trim() || null,
-        data.fornecedor?.trim() || null,
-      )
+    const estoque = data.estoque_gramas ?? data.peso_rolo_gramas
+    if (![data.peso_rolo_gramas, data.preco_rolo, estoque].every(Number.isFinite) ||
+        data.peso_rolo_gramas <= 0 || data.preco_rolo < 0 || estoque < 0) {
+      return { success: false, message: 'Peso, preço ou estoque inválido.' }
     }
+
+    const salvar = db.transaction(() => {
+      const novoSaldo = estoque
+      let filamentoId = id
+      let saldoAnterior = 0
+
+      if (id) {
+        const atual = db.prepare(
+          `SELECT COALESCE(estoque_gramas, peso_rolo_gramas) AS saldo
+           FROM filamentos WHERE id = ? AND tenant_id = ? AND ativo = 1`,
+        ).get(id, TENANT_ID) as { saldo: number } | undefined
+        if (!atual) throw new Error('NOT_FOUND')
+        saldoAnterior = atual.saldo
+
+        db.prepare(`
+          UPDATE filamentos
+          SET material = ?, cor = ?, peso_rolo_gramas = ?, preco_rolo = ?, estoque_gramas = ?, marca = ?, fornecedor = ?
+          WHERE id = ? AND tenant_id = ?
+        `).run(
+          data.material.trim(), data.cor.trim(), data.peso_rolo_gramas, data.preco_rolo,
+          novoSaldo, data.marca?.trim() || null, data.fornecedor?.trim() || null, id, TENANT_ID,
+        )
+      } else {
+        const result = db.prepare(`
+          INSERT INTO filamentos (tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas, marca, fornecedor)
+          VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          TENANT_ID, data.material.trim(), data.cor.trim(), data.peso_rolo_gramas,
+          data.preco_rolo, novoSaldo, data.marca?.trim() || null, data.fornecedor?.trim() || null,
+        )
+        filamentoId = Number(result.lastInsertRowid)
+      }
+
+      if (filamentoId && novoSaldo !== saldoAnterior) {
+        db.prepare(`
+          INSERT INTO movimentos_estoque (
+            tenant_id, usuario_id, tipo_item, item_id, tipo, quantidade,
+            saldo_anterior, saldo_posterior, motivo
+          ) VALUES (?, 1, 'Filamento', ?, ?, ?, ?, ?, ?)
+        `).run(
+          TENANT_ID, filamentoId, id ? 'Ajuste' : 'Entrada',
+          Math.abs(novoSaldo - saldoAnterior), saldoAnterior, novoSaldo,
+          id ? 'Saldo atualizado no cadastro' : 'Estoque inicial',
+        )
+      }
+    })
+    salvar()
 
     revalidatePath('/filamentos')
     revalidatePath('/orcamentos')
     return { success: true, message: id ? 'Filamento atualizado!' : 'Filamento criado!' }
   } catch (error) {
     console.error('[salvarFilamento]', error)
+    if (error instanceof Error && error.message === 'NOT_FOUND') {
+      return { success: false, message: 'Filamento não encontrado.' }
+    }
     return { success: false, message: 'Erro interno ao salvar.' }
   }
 }
 
 export async function deletarFilamento(id: number): Promise<ActionResult> {
   try {
-    const res = db.prepare('DELETE FROM filamentos WHERE id = ? AND tenant_id = ?').run(id, TENANT_ID)
+    const res = db.prepare('UPDATE filamentos SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1').run(id, TENANT_ID)
     if (res.changes === 0) return { success: false, message: 'Filamento não encontrado.' }
 
     revalidatePath('/filamentos')
     revalidatePath('/orcamentos')
-    return { success: true, message: 'Filamento excluído!' }
+    return { success: true, message: 'Filamento arquivado com segurança!' }
   } catch (error: unknown) {
     if (
       typeof error === 'object' &&
