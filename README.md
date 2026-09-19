@@ -16,6 +16,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Parcelas com vencimentos individuais, caixa versus competência e despesas pendentes.
 - Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.
 - Restauração validada de backup e trilha de auditoria.
+- Importação validada da planilha Salge 3D, com prévia, backup e reconciliação de saldos.
 
 ## Instalação
 
@@ -60,6 +61,18 @@ npm run db:restore -- "C:\\caminho\\backup.sqlite" # restaura com validação e 
 
 Para restaurar, pare o `npm run dev`. O comando valida a integridade do arquivo,
 preserva automaticamente o banco atual em `database/backups/` e aplica as migrações pendentes.
+
+## Importar a planilha
+
+Abra **Configurações → Importar planilha**, selecione o arquivo `.xlsx`, revise a prévia e confirme. O ERP:
+
+- valida abas, cabeçalhos, IDs, referências, datas, valores e saldos;
+- bloqueia o mesmo arquivo e IDs externos já importados;
+- exige confirmação para mesclar com uma base que já contém dados;
+- cria um backup automático e grava tudo em uma única transação;
+- preserva o XLSX original e vincula cada linha ao registro criado.
+
+O mapeamento completo e as regras de reconciliação estão em [`docs/importacao-planilha.md`](docs/importacao-planilha.md).
 
 ## Validação
 
