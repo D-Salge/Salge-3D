@@ -4,7 +4,7 @@ import test from 'node:test'
 import Database from 'better-sqlite3'
 import ExcelJS from 'exceljs'
 import { applyMigrations } from '../lib/migrations.mjs'
-import { analisarPlanilha, DATA_HEADERS, importarPlanilha, REQUIRED_SHEETS } from '../lib/importacao-planilha.mjs'
+import { analisarPlanilha, DATA_HEADERS, importarPlanilha, mapearStatusPedido, REQUIRED_SHEETS } from '../lib/importacao-planilha.mjs'
 
 function addDataRow(sheet, headers, data) {
   sheet.getRow(5).values = headers
@@ -106,4 +106,11 @@ test('valida e importa a planilha de forma atômica, reconciliando saldos', asyn
   } finally {
     db.close()
   }
+})
+
+test('considera aguardando pagamento como produção já finalizada', () => {
+  assert.deepEqual(mapearStatusPedido('Aguardando pagamento'), {
+    status: 'Finalizado',
+    quote: 'Aprovado',
+  })
 })
