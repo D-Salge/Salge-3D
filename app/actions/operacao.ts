@@ -1,6 +1,8 @@
 'use server'
 
 import db from '@/lib/db'
+import { registrarAuditoria } from '@/lib/auditoria'
+import { adicionarMeses, dividirEmParcelas } from '@/lib/financeiro.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -50,6 +52,16 @@ export interface AnexoPedido {
   criado_em: string
 }
 
+export interface ParcelaPedido {
+  id: number
+  numero: number
+  valor: number
+  vencimento_em: string
+  recebido: number
+  saldo: number
+  situacao: 'Pago' | 'Parcial' | 'Atrasado' | 'Em aberto'
+}
+
 export interface PedidoDetalhes {
   id: number
   numero_orcamento: string
@@ -90,6 +102,7 @@ export interface PedidoDetalhes {
   insumos: PedidoInsumoDetalhe[]
   historico: HistoricoPedido[]
   anexos: AnexoPedido[]
+  parcelas_receber: ParcelaPedido[]
 }
 
 export async function getImpressoras(): Promise<Impressora[]> {
@@ -186,9 +199,16 @@ export async function atualizarStatusOrcamento(
     }
 
     const atualizar = db.transaction(() => {
-      const atual = db.prepare(
-        'SELECT orcamento_status FROM pedidos WHERE id = ? AND tenant_id = ?',
-      ).get(pedidoId, TENANT_ID) as { orcamento_status: string } | undefined
+      const atual = db.prepare(`
+        SELECT orcamento_status, valor_total_cobrado, parcelas,
+          COALESCE(vencimento_em, substr(data_pedido, 1, 10)) AS primeiro_vencimento
+        FROM pedidos WHERE id = ? AND tenant_id = ?
+      `).get(pedidoId, TENANT_ID) as {
+        orcamento_status: string
+        valor_total_cobrado: number
+        parcelas: number
+        primeiro_vencimento: string
+      } | undefined
       if (!atual) throw new Error('NOT_FOUND')
       if (atual.orcamento_status === novoStatus) return
       if (!transicoes[atual.orcamento_status]?.includes(novoStatus)) throw new Error('INVALID_TRANSITION')
@@ -206,6 +226,34 @@ export async function atualizarStatusOrcamento(
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Status do orçamento', ?)
       `).run(TENANT_ID, pedidoId, USUARIO_ID, `${atual.orcamento_status} → ${novoStatus}`)
+
+      if (novoStatus === 'Aprovado') {
+        const total = db.prepare(
+          'SELECT COUNT(*) AS total FROM parcelas_receber WHERE pedido_id = ?',
+        ).get(pedidoId) as { total: number }
+        if (total.total === 0) {
+          const inserir = db.prepare(`
+            INSERT INTO parcelas_receber (tenant_id, pedido_id, numero, valor, vencimento_em)
+            VALUES (?, ?, ?, ?, ?)
+          `)
+          dividirEmParcelas(atual.valor_total_cobrado, atual.parcelas).forEach((valor, index) => {
+            inserir.run(
+              TENANT_ID,
+              pedidoId,
+              index + 1,
+              valor,
+              adicionarMeses(atual.primeiro_vencimento, index),
+            )
+          })
+        }
+      }
+
+      registrarAuditoria(db, {
+        entidade: 'Pedido',
+        entidadeId: pedidoId,
+        acao: 'STATUS_ORCAMENTO',
+        descricao: `${atual.orcamento_status} → ${novoStatus}`,
+      })
     })
     atualizar()
     revalidatePath('/')
@@ -252,7 +300,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     JOIN tenants t ON t.id = p.tenant_id
     LEFT JOIN impressoras imp ON imp.id = p.impressora_id
     WHERE p.id = ? AND p.tenant_id = ?
-  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'lucro_liquido' | 'margem_percentual'> & {
+  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'parcelas_receber' | 'lucro_liquido' | 'margem_percentual'> & {
     custo_real: number
   }) | undefined
   if (!pedido) return null
@@ -278,6 +326,29 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     SELECT id, nome, url, criado_em FROM anexos_pedido
     WHERE pedido_id = ? ORDER BY criado_em DESC
   `).all(pedidoId) as AnexoPedido[]
+  const parcelasReceber = db.prepare(`
+    WITH dados AS (
+      SELECT pr.*,
+        COALESCE(SUM(pr.valor) OVER (
+          PARTITION BY pr.pedido_id ORDER BY pr.numero
+          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS valor_anterior,
+        COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+          WHERE r.pedido_id = pr.pedido_id AND r.estornado_em IS NULL), 0) AS total_recebido
+      FROM parcelas_receber pr
+      WHERE pr.pedido_id = ? AND pr.cancelada_em IS NULL
+    )
+    SELECT id, numero, valor, vencimento_em,
+      MAX(0, MIN(valor, total_recebido - valor_anterior)) AS recebido,
+      valor - MAX(0, MIN(valor, total_recebido - valor_anterior)) AS saldo,
+      CASE
+        WHEN valor <= MAX(0, MIN(valor, total_recebido - valor_anterior)) THEN 'Pago'
+        WHEN MAX(0, MIN(valor, total_recebido - valor_anterior)) > 0 THEN 'Parcial'
+        WHEN date(vencimento_em) < date('now') THEN 'Atrasado'
+        ELSE 'Em aberto'
+      END AS situacao
+    FROM dados ORDER BY numero
+  `).all(pedidoId) as ParcelaPedido[]
 
   const lucroLiquido = Math.round((pedido.valor_total_cobrado - pedido.custo_real) * 100) / 100
   const margemPercentual = pedido.valor_total_cobrado > 0
@@ -291,6 +362,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     insumos,
     historico,
     anexos,
+    parcelas_receber: parcelasReceber,
   }
 }
 

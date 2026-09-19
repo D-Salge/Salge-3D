@@ -13,6 +13,9 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Contas a receber, pagamentos parciais, despesas e fluxo de capital.
 - Detalhe do pedido com arquivos por link e histórico de alterações.
 - Backup SQLite e exportação CSV.
+- Parcelas com vencimentos individuais, caixa versus competência e despesas pendentes.
+- Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.
+- Restauração validada de backup e trilha de auditoria.
 
 ## Instalação
 
@@ -52,7 +55,11 @@ npm run db:migrate   # aplica migrações pendentes
 npm run db:seed      # insere dados de demonstração sem duplicar cadastros
 npm run db:clear     # limpa dados operacionais conforme o script
 npm run db:reset     # apaga e recria o banco (destrutivo)
+npm run db:restore -- "C:\\caminho\\backup.sqlite" # restaura com validação e cópia de segurança
 ```
+
+Para restaurar, pare o `npm run dev`. O comando valida a integridade do arquivo,
+preserva automaticamente o banco atual em `database/backups/` e aplica as migrações pendentes.
 
 ## Validação
 

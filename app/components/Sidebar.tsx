@@ -15,6 +15,7 @@ import {
   DollarSign,
   Boxes,
   Printer,
+  ShieldCheck,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -102,6 +103,7 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
       <div className="mt-9 flex flex-col gap-1">
         <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">Sistema</p>
         <NavItem href="/configuracoes" icon={<Settings2 size={15} />} label="Configurações" active={pathname === '/configuracoes'} />
+        <NavItem href="/auditoria" icon={<ShieldCheck size={15} />} label="Auditoria" active={pathname === '/auditoria'} />
       </div>
 
       {/* Meta de Faturamento */}

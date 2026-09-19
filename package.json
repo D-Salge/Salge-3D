@@ -11,8 +11,9 @@
     "test": "node --test",
     "db:init": "node scripts/init-db.mjs",
     "db:migrate": "node scripts/migrate-db.mjs",
+    "db:restore": "node scripts/restore-db.mjs",
     "db:reset": "node scripts/init-db.mjs --reset",
-    "db:seed": "node scripts/seed-demo.mjs",
+    "db:seed": "node scripts/seed-demo.mjs && node scripts/reconcile-lotes.mjs",
     "db:clear": "node scripts/db-clear.mjs"
   },
   "dependencies": {

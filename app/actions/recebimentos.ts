@@ -6,6 +6,8 @@
  */
 
 import db from '@/lib/db'
+import { registrarAuditoria } from '@/lib/auditoria'
+import { distribuirRecebimento } from '@/lib/financeiro.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -22,15 +24,17 @@ export interface Recebimento {
 }
 
 export interface RecebimentoResumo {
+  parcela_id: number
   pedido_id: number
   nome_da_peca: string
   cliente_nome: string
-  valor_total_cobrado: number
-  total_recebido: number
+  numero_parcela: number
+  total_parcelas: number
+  valor_parcela: number
+  recebido_parcela: number
   saldo_pendente: number
   status: string
   vencimento_em: string | null
-  parcelas: number
   situacao: 'Em aberto' | 'Parcial' | 'Atrasado'
 }
 
@@ -55,41 +59,57 @@ export async function getRecebimentosPorPedido(pedidoId: number): Promise<Recebi
 export async function getPedidosComSaldoPendente(): Promise<RecebimentoResumo[]> {
   return db
     .prepare(
-      `SELECT
-         p.id          AS pedido_id,
+      `WITH recebidos AS (
+         SELECT pedido_id, COALESCE(SUM(valor), 0) AS total
+         FROM recebimentos
+         WHERE tenant_id = ? AND estornado_em IS NULL
+         GROUP BY pedido_id
+       ), parcelas AS (
+         SELECT pr.*,
+           COALESCE(SUM(pr.valor) OVER (
+             PARTITION BY pr.pedido_id ORDER BY pr.numero
+             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+           ), 0) AS valor_anterior
+         FROM parcelas_receber pr
+         WHERE pr.tenant_id = ? AND pr.cancelada_em IS NULL
+       )
+       SELECT
+         pr.id AS parcela_id,
+         p.id AS pedido_id,
          p.nome_da_peca,
          c.nome        AS cliente_nome,
-         p.valor_total_cobrado,
-         COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-           WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
-         p.valor_total_cobrado -
-           COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-             WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS saldo_pendente,
+         pr.numero AS numero_parcela,
+         p.parcelas AS total_parcelas,
+         pr.valor AS valor_parcela,
+         MAX(0, MIN(pr.valor, COALESCE(rec.total, 0) - pr.valor_anterior)) AS recebido_parcela,
+         pr.valor - MAX(0, MIN(pr.valor, COALESCE(rec.total, 0) - pr.valor_anterior)) AS saldo_pendente,
          p.status,
-         p.vencimento_em,
-         p.parcelas,
+         pr.vencimento_em,
          CASE
-           WHEN p.vencimento_em IS NOT NULL AND date(p.vencimento_em) < date('now') THEN 'Atrasado'
-           WHEN COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-             WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) > 0 THEN 'Parcial'
+           WHEN date(pr.vencimento_em) < date('now') THEN 'Atrasado'
+           WHEN MAX(0, MIN(pr.valor, COALESCE(rec.total, 0) - pr.valor_anterior)) > 0 THEN 'Parcial'
            ELSE 'Em aberto'
          END AS situacao
-       FROM pedidos p
+       FROM parcelas pr
+       JOIN pedidos p ON p.id = pr.pedido_id
        JOIN clientes c ON c.id = p.cliente_id
+       LEFT JOIN recebidos rec ON rec.pedido_id = p.id
        WHERE p.tenant_id = ?
          AND p.status != 'Cancelado'
          AND p.orcamento_status = 'Aprovado'
-         AND p.valor_total_cobrado >
-               COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-                 WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)
-       ORDER BY CASE WHEN situacao = 'Atrasado' THEN 0 ELSE 1 END, saldo_pendente DESC`
+         AND pr.valor > MAX(0, MIN(pr.valor, COALESCE(rec.total, 0) - pr.valor_anterior))
+       ORDER BY CASE WHEN situacao = 'Atrasado' THEN 0 ELSE 1 END,
+         date(pr.vencimento_em), p.id, pr.numero`
     )
-    .all(TENANT_ID) as RecebimentoResumo[]
+    .all(TENANT_ID, TENANT_ID, TENANT_ID) as RecebimentoResumo[]
 }
 
 export async function getResumoRecebimentos(): Promise<{
   totalRecebidoMes: number
+  totalRecebido: number
   totalPendente: number
+  totalVencido: number
+  receitaCompetenciaMes: number
 }> {
   const mesRow = db
     .prepare(
@@ -117,9 +137,47 @@ export async function getResumoRecebimentos(): Promise<{
     )
     .get(TENANT_ID) as { total: number }
 
+  const recebidoTotalRow = db.prepare(`
+    SELECT COALESCE(SUM(valor), 0) AS total FROM recebimentos
+    WHERE tenant_id = ? AND estornado_em IS NULL
+  `).get(TENANT_ID) as { total: number }
+
+  const vencidoRow = db.prepare(`
+    WITH recebidos AS (
+      SELECT pedido_id, COALESCE(SUM(valor), 0) AS total
+      FROM recebimentos WHERE tenant_id = ? AND estornado_em IS NULL GROUP BY pedido_id
+    ), parcelas AS (
+      SELECT pr.*,
+        COALESCE(SUM(pr.valor) OVER (
+          PARTITION BY pr.pedido_id ORDER BY pr.numero
+          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS valor_anterior
+      FROM parcelas_receber pr
+      WHERE pr.tenant_id = ? AND pr.cancelada_em IS NULL
+    )
+    SELECT COALESCE(SUM(
+      pr.valor - MAX(0, MIN(pr.valor, COALESCE(r.total, 0) - pr.valor_anterior))
+    ), 0) AS total
+    FROM parcelas pr
+    JOIN pedidos p ON p.id = pr.pedido_id
+    LEFT JOIN recebidos r ON r.pedido_id = pr.pedido_id
+    WHERE p.status != 'Cancelado' AND date(pr.vencimento_em) < date('now')
+      AND pr.valor > MAX(0, MIN(pr.valor, COALESCE(r.total, 0) - pr.valor_anterior))
+  `).get(TENANT_ID, TENANT_ID) as { total: number }
+
+  const competenciaRow = db.prepare(`
+    SELECT COALESCE(SUM(valor_total_cobrado), 0) AS total
+    FROM pedidos
+    WHERE tenant_id = ? AND orcamento_status = 'Aprovado' AND status != 'Cancelado'
+      AND strftime('%Y-%m', data_pedido) = strftime('%Y-%m', 'now')
+  `).get(TENANT_ID) as { total: number }
+
   return {
     totalRecebidoMes: mesRow.total,
+    totalRecebido: recebidoTotalRow.total,
     totalPendente: pendenteRow.total,
+    totalVencido: vencidoRow.total,
+    receitaCompetenciaMes: competenciaRow.total,
   }
 }
 
@@ -130,6 +188,7 @@ export async function registrarRecebimento(data: {
   valor: number
   forma_pagamento: string
   observacao?: string
+  data_recebimento?: string
 }): Promise<ActionResult> {
   try {
     if (!Number.isSafeInteger(data.pedido_id) || data.pedido_id <= 0) {
@@ -147,6 +206,10 @@ export async function registrarRecebimento(data: {
     }
     const forma = formas[data.forma_pagamento]
     if (!forma) return { success: false, message: 'Forma de pagamento invalida.' }
+    const dataRecebimento = data.data_recebimento || new Date().toISOString().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataRecebimento)) {
+      return { success: false, message: 'Data de recebimento inválida.' }
+    }
 
     const registrar = db.transaction(() => {
       const pedido = db.prepare(`
@@ -161,10 +224,41 @@ export async function registrarRecebimento(data: {
       const saldo = Math.round((pedido.valor_total_cobrado - pedido.recebido) * 100) / 100
       if (data.valor > saldo + 0.001) throw new Error(`OVERPAYMENT:${saldo}`)
 
-      db.prepare(
-        `INSERT INTO recebimentos (tenant_id, pedido_id, valor, forma_pagamento, observacao)
-         VALUES (?, ?, ?, ?, ?)`
-      ).run(TENANT_ID, data.pedido_id, data.valor, forma, data.observacao?.trim() || null)
+      const parcelas = db.prepare(`
+        SELECT pr.id, pr.valor,
+          COALESCE((SELECT SUM(ra.valor)
+            FROM recebimento_alocacoes ra
+            JOIN recebimentos rx ON rx.id = ra.recebimento_id
+            WHERE ra.parcela_id = pr.id AND rx.estornado_em IS NULL), 0) AS recebido
+        FROM parcelas_receber pr
+        WHERE pr.pedido_id = ? AND pr.cancelada_em IS NULL
+        ORDER BY date(pr.vencimento_em), pr.numero
+      `).all(data.pedido_id) as { id: number; valor: number; recebido: number }[]
+
+      const result = db.prepare(
+        `INSERT INTO recebimentos (
+          tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao
+        ) VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        TENANT_ID, data.pedido_id, data.valor, forma, dataRecebimento,
+        data.observacao?.trim() || null,
+      )
+      const recebimentoId = Number(result.lastInsertRowid)
+      const distribuicao = distribuirRecebimento(data.valor, parcelas)
+      if (distribuicao.restante > 0.001) throw new Error('INSTALLMENTS_MISMATCH')
+      const alocar = db.prepare(`
+        INSERT INTO recebimento_alocacoes (recebimento_id, parcela_id, valor)
+        VALUES (?, ?, ?)
+      `)
+      for (const item of distribuicao.alocacoes) {
+        alocar.run(recebimentoId, item.parcelaId, item.valor)
+      }
+      registrarAuditoria(db, {
+        entidade: 'Recebimento',
+        entidadeId: recebimentoId,
+        acao: 'CRIAR',
+        descricao: `Recebimento de R$ ${data.valor.toFixed(2)} no pedido #${data.pedido_id}`,
+      })
     })
     try {
       registrar()
@@ -174,6 +268,9 @@ export async function registrarRecebimento(data: {
       if (message.startsWith('OVERPAYMENT:')) {
         const saldo = Number(message.split(':')[1])
         return { success: false, message: `O valor excede o saldo pendente de R$ ${saldo.toFixed(2).replace('.', ',')}.` }
+      }
+      if (message === 'INSTALLMENTS_MISMATCH') {
+        return { success: false, message: 'As parcelas do pedido estão inconsistentes. Reabra o pedido e tente novamente.' }
       }
       throw error
     }
@@ -191,14 +288,24 @@ export async function registrarRecebimento(data: {
 
 export async function deletarRecebimento(id: number): Promise<ActionResult> {
   try {
-    const res = db
-      .prepare(`UPDATE recebimentos
+    const estornar = db.transaction(() => {
+      const res = db.prepare(`UPDATE recebimentos
         SET estornado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
             estorno_motivo = 'Estornado pelo usuário'
         WHERE id = ? AND tenant_id = ? AND estornado_em IS NULL`)
       .run(id, TENANT_ID)
-
-    if (res.changes === 0) return { success: false, message: 'Recebimento nao encontrado.' }
+      if (res.changes === 0) throw new Error('NOT_FOUND')
+      registrarAuditoria(db, {
+        entidade: 'Recebimento', entidadeId: id, acao: 'ESTORNAR',
+        descricao: 'Recebimento estornado pelo usuário',
+      })
+    })
+    try { estornar() } catch (error) {
+      if (error instanceof Error && error.message === 'NOT_FOUND') {
+        return { success: false, message: 'Recebimento nao encontrado.' }
+      }
+      throw error
+    }
 
     revalidatePath('/')
     revalidatePath('/financeiro')

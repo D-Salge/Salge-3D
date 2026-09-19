@@ -45,3 +45,4 @@ next-env.d.ts
 *.sqlite-journal
 *.sqlite-shm
 *.sqlite-wal
+database/backups/

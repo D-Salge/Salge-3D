@@ -5,7 +5,11 @@ import { salvarDespesa, deletarDespesa, type Despesa } from '@/app/actions/despe
 
 export function DespesaModal({ despesa, onClose }: { despesa: Despesa | null, onClose: () => void }) {
   const [isPending, startTransition] = useTransition()
-  const [form, setForm] = useState(despesa || { categoria: 'Outros', descricao: '', valor: 0, data_despesa: new Date().toISOString().substring(0,10) })
+  const hoje = new Date().toISOString().substring(0, 10)
+  const [form, setForm] = useState<Omit<Despesa, 'id'>>(despesa || {
+    categoria: 'Outros', descricao: '', valor: 0, data_despesa: hoje,
+    competencia_em: hoje, vencimento_em: hoje, pago_em: hoje,
+  })
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -47,6 +51,25 @@ export function DespesaModal({ despesa, onClose }: { despesa: Despesa | null, on
           </div>
           <input required type="date" value={form.data_despesa} onChange={e=>setForm({...form, data_despesa: e.target.value})}
               className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" />
+          <div className="grid grid-cols-2 gap-4">
+            <label className="flex flex-col gap-2 text-xs text-white/55">Competência
+              <input required type="date" value={form.competencia_em} onChange={e=>setForm({...form, competencia_em: e.target.value})}
+                className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white" />
+            </label>
+            <label className="flex flex-col gap-2 text-xs text-white/55">Vencimento
+              <input required type="date" value={form.vencimento_em} onChange={e=>setForm({...form, vencimento_em: e.target.value})}
+                className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white" />
+            </label>
+          </div>
+          <label className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3 text-xs text-white/60">
+            <input type="checkbox" checked={form.pago_em !== null}
+              onChange={e => setForm({...form, pago_em: e.target.checked ? hoje : null})} />
+            Despesa já foi paga
+          </label>
+          {form.pago_em !== null && <label className="flex flex-col gap-2 text-xs text-white/55">Data do pagamento
+            <input required type="date" value={form.pago_em ?? ''} onChange={e=>setForm({...form, pago_em: e.target.value})}
+              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white" />
+          </label>}
           
           <div className="mt-4 flex justify-between">
             {despesa ? <button type="button" onClick={handleDel} className="text-red-400 text-xs">Estornar</button> : <div/>}
