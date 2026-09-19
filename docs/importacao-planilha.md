@@ -32,6 +32,7 @@
 
 - Recebimentos são comparados com o valor recebido informado em cada venda.
 - Pagamentos acima do valor cobrado são preservados como crédito não alocado.
+- Pedidos em “Aguardando pagamento” são considerados produzidos e finalizados; somente o financeiro permanece pendente.
 - Consumo de filamentos e materiais vinculado a pedidos é registrado individualmente.
 - Diferenças entre consumo detalhado e saldo final são registradas como ajustes históricos auditáveis.
 - Lançamentos identificados como retirada do proprietário são classificados como fluxo de capital, sem alterar o efeito total no caixa.
