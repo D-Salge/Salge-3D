@@ -10,6 +10,7 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
   const [valor, setValor] = useState('')
   const [forma, setForma] = useState('Pix')
   const [obs, setObs] = useState('')
+  const [dataRecebimento, setDataRecebimento] = useState(new Date().toISOString().slice(0, 10))
 
   useEffect(() => {
     getRecebimentosPorPedido(pedidoId).then(setHistorico)
@@ -18,7 +19,13 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
   function handleSave(e: React.FormEvent) {
     e.preventDefault()
     startTransition(async () => {
-      const res = await registrarRecebimento({ pedido_id: pedidoId, valor: Number(valor), forma_pagamento: forma, observacao: obs })
+      const res = await registrarRecebimento({
+        pedido_id: pedidoId,
+        valor: Number(valor),
+        forma_pagamento: forma,
+        observacao: obs,
+        data_recebimento: dataRecebimento,
+      })
       if(res.success) {
         onClose()
       } else {
@@ -73,6 +80,11 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
               onChange={e => setObs(e.target.value)}
               className="min-h-20 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 py-2 text-sm focus:border-[#d8f45a]/60"
             />
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-white/55">Data do recebimento</span>
+            <input required type="date" value={dataRecebimento} onChange={e => setDataRecebimento(e.target.value)}
+              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" />
           </label>
           <label className="flex flex-col gap-2">
             <span className="text-xs font-medium text-white/55">Forma de Pagamento</span>

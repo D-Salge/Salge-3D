@@ -8,6 +8,7 @@
  */
 
 import db from '@/lib/db'
+import { registrarAuditoria } from '@/lib/auditoria'
 import { arredondarMoeda, calcularOrcamento } from '@/lib/orcamento.mjs'
 import { revalidatePath } from 'next/cache'
 
@@ -770,6 +771,15 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         for (const item of filamentosDoPedido) {
           if (item.quantidade <= 0) continue
           const saldoAnterior = item.estoque
+          const lotes = db.prepare(`
+            SELECT id, saldo_gramas FROM lotes_filamento
+            WHERE tenant_id = ? AND filamento_id = ? AND ativo = 1 AND saldo_gramas > 0
+            ORDER BY COALESCE(aberto_em, substr(criado_em, 1, 10)), id
+          `).all(TENANT_ID, item.filamento_id) as { id: number; saldo_gramas: number }[]
+          const saldoLotes = lotes.reduce((total, lote) => total + lote.saldo_gramas, 0)
+          if (saldoLotes + 0.001 < item.quantidade) {
+            throw new Error(`INSUFFICIENT_STOCK:${item.nome} (lotes)`)
+          }
           const baixa = baixarFilamento.run(
             item.quantidade,
             item.filamento_id,
@@ -777,15 +787,31 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
             item.quantidade,
           )
           if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
-          db.prepare(`
+          let restante = item.quantidade
+          let saldoCorrente = saldoAnterior
+          const baixarLote = db.prepare(`
+            UPDATE lotes_filamento SET saldo_gramas = saldo_gramas - ?
+            WHERE id = ? AND tenant_id = ? AND saldo_gramas >= ?
+          `)
+          const movimentoLote = db.prepare(`
             INSERT INTO movimentos_estoque (
-              tenant_id, usuario_id, tipo_item, item_id, pedido_id, tipo, quantidade,
-              saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, 'Filamento', ?, ?, 'Saida', ?, ?, ?, 'Consumo do pedido finalizado')
-          `).run(
-            TENANT_ID, item.filamento_id, pedidoId, item.quantidade,
-            saldoAnterior, saldoAnterior - item.quantidade,
-          )
+              tenant_id, usuario_id, tipo_item, item_id, lote_filamento_id,
+              pedido_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo
+            ) VALUES (?, 1, 'Filamento', ?, ?, ?, 'Saida', ?, ?, ?, 'Consumo do pedido finalizado')
+          `)
+          for (const lote of lotes) {
+            if (restante <= 0) break
+            const quantidade = Math.min(restante, lote.saldo_gramas)
+            if (baixarLote.run(quantidade, lote.id, TENANT_ID, quantidade).changes !== 1) {
+              throw new Error('STOCK_CHANGED')
+            }
+            movimentoLote.run(
+              TENANT_ID, item.filamento_id, lote.id, pedidoId, quantidade,
+              saldoCorrente, saldoCorrente - quantidade,
+            )
+            saldoCorrente -= quantidade
+            restante = Math.round((restante - quantidade) * 1000) / 1000
+          }
         }
 
         const baixarInsumo = db.prepare(
@@ -818,11 +844,16 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
 
       if (pedido.status === 'Finalizado' && novoStatus === 'Cancelado') {
         const movimentos = db.prepare(`
-          SELECT tipo_item, item_id, SUM(quantidade) AS quantidade
+          SELECT tipo_item, item_id, lote_filamento_id, SUM(quantidade) AS quantidade
           FROM movimentos_estoque
           WHERE pedido_id = ? AND tipo = 'Saida'
-          GROUP BY tipo_item, item_id
-        `).all(pedidoId) as { tipo_item: 'Filamento' | 'Insumo'; item_id: number; quantidade: number }[]
+          GROUP BY tipo_item, item_id, lote_filamento_id
+        `).all(pedidoId) as {
+          tipo_item: 'Filamento' | 'Insumo'
+          item_id: number
+          lote_filamento_id: number | null
+          quantidade: number
+        }[]
 
         for (const movimento of movimentos) {
           const tabela = movimento.tipo_item === 'Filamento' ? 'filamentos' : 'insumos'
@@ -834,15 +865,27 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
             .get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
           if (!row) throw new Error('STOCK_CHANGED')
           const saldoPosterior = row.saldo + movimento.quantidade
+          if (movimento.tipo_item === 'Filamento' && movimento.lote_filamento_id) {
+            const loteAtualizado = db.prepare(`
+              UPDATE lotes_filamento SET saldo_gramas = saldo_gramas + ?
+              WHERE id = ? AND tenant_id = ? AND filamento_id = ?
+            `).run(
+              movimento.quantidade, movimento.lote_filamento_id,
+              TENANT_ID, movimento.item_id,
+            )
+            if (loteAtualizado.changes !== 1) throw new Error('STOCK_CHANGED')
+          }
           db.prepare(`UPDATE ${tabela} SET ${campo} = ? WHERE id = ? AND tenant_id = ?`)
             .run(saldoPosterior, movimento.item_id, TENANT_ID)
           db.prepare(`
             INSERT INTO movimentos_estoque (
-              tenant_id, usuario_id, tipo_item, item_id, pedido_id, tipo, quantidade,
+              tenant_id, usuario_id, tipo_item, item_id, lote_filamento_id,
+              pedido_id, tipo, quantidade,
               saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, ?, ?, ?, 'Reversao', ?, ?, ?, 'Estorno por cancelamento do pedido')
+            ) VALUES (?, 1, ?, ?, ?, ?, 'Reversao', ?, ?, ?, 'Estorno por cancelamento do pedido')
           `).run(
-            TENANT_ID, movimento.tipo_item, movimento.item_id, pedidoId,
+            TENANT_ID, movimento.tipo_item, movimento.item_id,
+            movimento.lote_filamento_id, pedidoId,
             movimento.quantidade, row.saldo, saldoPosterior,
           )
         }
@@ -865,6 +908,10 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, 1, 'Status de produção', ?)
       `).run(TENANT_ID, pedidoId, `${pedido.status} → ${novoStatus}`)
+      registrarAuditoria(db, {
+        entidade: 'Pedido', entidadeId: pedidoId, acao: 'STATUS_PRODUCAO',
+        descricao: `${pedido.status} → ${novoStatus}`,
+      })
       return 'UPDATED'
     })
 

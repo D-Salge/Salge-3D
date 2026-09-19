@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AlertTriangle, ArrowDown, ArrowUp, Boxes, History } from 'lucide-react'
 import { getResumoEstoque } from '@/app/actions/estoque'
+import { LotesFilamento } from '@/app/components/LotesFilamento'
 
 export const metadata: Metadata = { title: 'Movimentações de Estoque · Salge 3D' }
 
@@ -61,6 +62,8 @@ export default async function EstoquePage() {
         </div>
       )}
 
+      <LotesFilamento lotes={resumo.lotes} filamentos={resumo.filamentos} />
+
       <div className="rounded-2xl border border-white/[0.08] bg-[#15171b]">
         <div className="flex items-center gap-3 border-b border-white/[0.07] px-6 py-5">
           <History size={17} className="text-[#d8f45a]" />
@@ -82,7 +85,7 @@ export default async function EstoquePage() {
                 return (
                   <tr key={movimento.id}>
                     <td className="py-3 text-xs text-white/35">{new Date(movimento.criado_em).toLocaleString('pt-BR')}</td>
-                    <td className="py-3"><p className="font-medium">{movimento.item_nome}</p><p className="text-[10px] text-white/30">{movimento.tipo_item}</p></td>
+                    <td className="py-3"><p className="font-medium">{movimento.item_nome}</p><p className="text-[10px] text-white/30">{movimento.tipo_item}{movimento.lote_codigo ? ` · lote ${movimento.lote_codigo}` : ''}</p></td>
                     <td className="py-3"><span className={entrada ? 'text-emerald-400' : 'text-red-400'}>{entrada ? <ArrowUp className="inline" size={13} /> : <ArrowDown className="inline" size={13} />} {movimento.tipo}</span></td>
                     <td className="py-3 font-mono">{movimento.quantidade} {movimento.unidade}</td>
                     <td className="py-3 font-mono text-white/55">{movimento.saldo_anterior} → {movimento.saldo_posterior}</td>

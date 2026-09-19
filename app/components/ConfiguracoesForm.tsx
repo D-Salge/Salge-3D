@@ -122,6 +122,17 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
           <a href="/api/exportacao/pedidos" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70">
             <FileSpreadsheet size={14} /> Exportar pedidos CSV
           </a>
+          <a href="/api/exportacao/financeiro" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70">
+            <FileSpreadsheet size={14} /> Exportar financeiro CSV
+          </a>
+          <a href="/api/exportacao/estoque" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70">
+            <FileSpreadsheet size={14} /> Exportar estoque CSV
+          </a>
+        </div>
+        <div className="mt-5 rounded-lg border border-white/[0.06] bg-black/20 p-4 text-xs text-white/40">
+          <p className="font-medium text-white/60">Restauração segura</p>
+          <p className="mt-1">Pare o ERP e execute no PowerShell:</p>
+          <code className="mt-2 block overflow-x-auto rounded bg-black/30 p-2 text-[11px] text-[#d8f45a]">npm run db:restore -- &quot;C:\caminho\backup.sqlite&quot;</code>
         </div>
       </div>
     </div>

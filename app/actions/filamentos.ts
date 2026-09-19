@@ -12,6 +12,7 @@ export interface FilamentoCompleto {
   peso_rolo_gramas: number
   preco_rolo: number
   estoque_gramas: number | null
+  estoque_minimo_gramas: number
   marca: string | null
   fornecedor: string | null
 }
@@ -24,7 +25,8 @@ export interface ActionResult {
 export async function getFilamentosLista(): Promise<FilamentoCompleto[]> {
   return db
     .prepare(
-      `SELECT id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas, marca, fornecedor
+      `SELECT id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas,
+         estoque_minimo_gramas, marca, fornecedor
        FROM filamentos
        WHERE tenant_id = ? AND ativo = 1
        ORDER BY material ASC, cor ASC`
@@ -39,8 +41,8 @@ export async function salvarFilamento(
   try {
     if (!data.material || !data.cor) return { success: false, message: 'Material e cor são obrigatórios.' }
     const estoque = data.estoque_gramas ?? data.peso_rolo_gramas
-    if (![data.peso_rolo_gramas, data.preco_rolo, estoque].every(Number.isFinite) ||
-        data.peso_rolo_gramas <= 0 || data.preco_rolo < 0 || estoque < 0) {
+    if (![data.peso_rolo_gramas, data.preco_rolo, estoque, data.estoque_minimo_gramas].every(Number.isFinite) ||
+        data.peso_rolo_gramas <= 0 || data.preco_rolo < 0 || estoque < 0 || data.estoque_minimo_gramas < 0) {
       return { success: false, message: 'Peso, preço ou estoque inválido.' }
     }
 
@@ -59,21 +61,54 @@ export async function salvarFilamento(
 
         db.prepare(`
           UPDATE filamentos
-          SET material = ?, cor = ?, peso_rolo_gramas = ?, preco_rolo = ?, estoque_gramas = ?, marca = ?, fornecedor = ?
+          SET material = ?, cor = ?, peso_rolo_gramas = ?, preco_rolo = ?, estoque_gramas = ?,
+            estoque_minimo_gramas = ?, marca = ?, fornecedor = ?
           WHERE id = ? AND tenant_id = ?
         `).run(
           data.material.trim(), data.cor.trim(), data.peso_rolo_gramas, data.preco_rolo,
-          novoSaldo, data.marca?.trim() || null, data.fornecedor?.trim() || null, id, TENANT_ID,
+          novoSaldo, data.estoque_minimo_gramas, data.marca?.trim() || null,
+          data.fornecedor?.trim() || null, id, TENANT_ID,
         )
       } else {
         const result = db.prepare(`
-          INSERT INTO filamentos (tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas, marca, fornecedor)
-          VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO filamentos (
+            tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo,
+            estoque_gramas, estoque_minimo_gramas, marca, fornecedor
+          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           TENANT_ID, data.material.trim(), data.cor.trim(), data.peso_rolo_gramas,
-          data.preco_rolo, novoSaldo, data.marca?.trim() || null, data.fornecedor?.trim() || null,
+          data.preco_rolo, novoSaldo, data.estoque_minimo_gramas,
+          data.marca?.trim() || null, data.fornecedor?.trim() || null,
         )
         filamentoId = Number(result.lastInsertRowid)
+      }
+
+      if (filamentoId && novoSaldo > saldoAnterior) {
+        const incremento = novoSaldo - saldoAnterior
+        db.prepare(`
+          INSERT INTO lotes_filamento (
+            tenant_id, filamento_id, codigo, peso_inicial_gramas,
+            saldo_gramas, preco_compra, aberto_em
+          ) VALUES (?, ?, ?, ?, ?, ?, date('now'))
+        `).run(
+          TENANT_ID, filamentoId, `${id ? 'AJ' : 'INI'}-${filamentoId}-${Date.now()}`,
+          incremento, incremento, data.preco_rolo,
+        )
+      } else if (filamentoId && novoSaldo < saldoAnterior) {
+        let restante = saldoAnterior - novoSaldo
+        const lotes = db.prepare(`
+          SELECT id, saldo_gramas FROM lotes_filamento
+          WHERE tenant_id = ? AND filamento_id = ? AND ativo = 1 AND saldo_gramas > 0
+          ORDER BY COALESCE(aberto_em, substr(criado_em, 1, 10)), id
+        `).all(TENANT_ID, filamentoId) as { id: number; saldo_gramas: number }[]
+        const baixar = db.prepare('UPDATE lotes_filamento SET saldo_gramas = saldo_gramas - ? WHERE id = ?')
+        for (const lote of lotes) {
+          if (restante <= 0) break
+          const quantidade = Math.min(restante, lote.saldo_gramas)
+          baixar.run(quantidade, lote.id)
+          restante = Math.round((restante - quantidade) * 1000) / 1000
+        }
+        if (restante > 0.001) throw new Error('LOT_MISMATCH')
       }
 
       if (filamentoId && novoSaldo !== saldoAnterior) {
@@ -98,6 +133,9 @@ export async function salvarFilamento(
     console.error('[salvarFilamento]', error)
     if (error instanceof Error && error.message === 'NOT_FOUND') {
       return { success: false, message: 'Filamento não encontrado.' }
+    }
+    if (error instanceof Error && error.message === 'LOT_MISMATCH') {
+      return { success: false, message: 'Os lotes não cobrem esse ajuste. Registre a perda na tela de estoque.' }
     }
     return { success: false, message: 'Erro interno ao salvar.' }
   }

@@ -10,12 +10,12 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState<FilamentoCompleto>({
-    id: 0, material: '', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000, marca: null, fornecedor: null
+    id: 0, material: '', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000, estoque_minimo_gramas: 150, marca: null, fornecedor: null
   })
   const [errorMsg, setErrorMsg] = useState('')
 
   function openNew() {
-    setForm({ id: 0, material: 'PLA', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000, marca: null, fornecedor: null })
+    setForm({ id: 0, material: 'PLA', cor: '', peso_rolo_gramas: 1000, preco_rolo: 90, estoque_gramas: 1000, estoque_minimo_gramas: 150, marca: null, fornecedor: null })
     setErrorMsg('')
     setModalOpen(true)
   }
@@ -36,6 +36,7 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
         peso_rolo_gramas: Number(form.peso_rolo_gramas),
         preco_rolo: Number(form.preco_rolo),
         estoque_gramas: Number(form.estoque_gramas),
+        estoque_minimo_gramas: Number(form.estoque_minimo_gramas),
         marca: form.marca,
         fornecedor: form.fornecedor,
       })
@@ -113,7 +114,7 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
               )}
               {filamentos.map((f) => {
                 const estoqueAtual = f.estoque_gramas ?? f.peso_rolo_gramas
-                const estoqueBaixo = estoqueAtual < 150
+                const estoqueBaixo = estoqueAtual <= f.estoque_minimo_gramas
                 const percent = Math.min((estoqueAtual / f.peso_rolo_gramas) * 100, 100)
 
                 return (
@@ -229,6 +230,13 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
                   placeholder="Estoque em gramas"
                 />
                 <span className="text-[10px] text-white/30">Atualize este valor ao abrir um novo rolo (ex: redefinir para 1000g).</span>
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-white/55">Alerta de estoque mínimo (g)</span>
+                <input required type="number" min="0" step="1" value={form.estoque_minimo_gramas}
+                  onChange={e => setForm(f => ({ ...f, estoque_minimo_gramas: Number(e.target.value) }))}
+                  className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white" />
               </label>
 
               {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
