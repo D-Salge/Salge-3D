@@ -195,11 +195,17 @@ export function OrcamentoPage({
   const precoAutomatico = aplicarPisoHistorico(calculo.precoUnitarioArredondado, precoHistorico)
   const precoUnitario = precoUnitarioVenda === '' ? null : Number(precoUnitarioVenda)
   const precoAplicado = precoUnitario ?? precoAutomatico
-  const baseComercial = arredondarMoeda(precoAplicado * quantidade)
+  // Enquanto o formulário ainda está vazio, a sugestão pode ser R$ 0,00.
+  // Nesse estado não existe preço unitário comercial: usamos apenas o custo
+  // calculado na prévia e deixamos a validação positiva para o envio.
+  const precoAplicadoValido = Number.isFinite(precoAplicado) && precoAplicado > 0 ? precoAplicado : null
+  const baseComercial = precoAplicadoValido === null
+    ? calculo.totalArredondado
+    : arredondarMoeda(precoAplicadoValido * quantidade)
   const valorFinal = calcularValorVenda({
     custoCalculado: baseComercial,
     quantidade,
-    precoUnitario: precoAplicado,
+    precoUnitario: precoAplicadoValido,
     desconto: Math.min(desc, baseComercial + freteC),
     freteCobrado: freteC,
   })
@@ -217,6 +223,10 @@ export function OrcamentoPage({
     }
     if (precoUnitario !== null && (!Number.isFinite(precoUnitario) || precoUnitario <= 0)) {
       setErrorMsg('Informe um preço de venda unitário válido.')
+      return
+    }
+    if (precoAplicadoValido === null) {
+      setErrorMsg('O preço calculado precisa ser maior que zero antes de salvar.')
       return
     }
     if (desc > baseComercial + freteC) {

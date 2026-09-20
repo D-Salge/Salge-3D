@@ -62,6 +62,15 @@ test('preserva o preço unitário comercial ao duplicar e alterar a quantidade',
   }), 95)
 })
 
+test('permite prévia ainda sem preço automático calculado', () => {
+  assert.equal(aplicarPisoHistorico(0, null), 0)
+  assert.equal(calcularValorVenda({
+    custoCalculado: 0,
+    quantidade: 1,
+    precoUnitario: null,
+  }), 0)
+})
+
 test('replica a precificação da planilha para B2C personalizado', () => {
   const resultado = calcularPrecoPlanilha({
     tipoPedido: 'B2C personalizado (1-3)',
