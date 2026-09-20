@@ -7,6 +7,8 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { gerarParcelas } from '@/lib/financeiro.mjs'
+import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -23,6 +25,22 @@ export interface Despesa {
   competencia_em: string
   vencimento_em: string
   pago_em: string | null
+  forma_pagamento: string | null
+  grupo_parcelamento: string | null
+  numero_parcela: number
+  total_parcelas: number
+}
+
+export interface DespesaInput {
+  categoria: string
+  descricao: string
+  valor: number
+  data_despesa: string
+  competencia_em: string
+  vencimento_em: string
+  pago_em: string | null
+  forma_pagamento: string
+  parcelas: number
 }
 
 export interface FluxoCapital {
@@ -46,12 +64,13 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
       .prepare(
         `SELECT id, categoria, descricao, valor, data_despesa,
            COALESCE(competencia_em, data_despesa) AS competencia_em,
-           COALESCE(vencimento_em, data_despesa) AS vencimento_em, pago_em
+           COALESCE(vencimento_em, data_despesa) AS vencimento_em, pago_em,
+           forma_pagamento, grupo_parcelamento, numero_parcela, total_parcelas
          FROM despesas
          WHERE tenant_id = ?
            AND estornada_em IS NULL
            AND strftime('%Y-%m', data_despesa) = ?
-         ORDER BY data_despesa DESC`
+         ORDER BY date(COALESCE(vencimento_em, data_despesa)), numero_parcela`
       )
       .all(TENANT_ID, mes) as Despesa[]
   }
@@ -60,10 +79,11 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
     .prepare(
       `SELECT id, categoria, descricao, valor, data_despesa,
          COALESCE(competencia_em, data_despesa) AS competencia_em,
-         COALESCE(vencimento_em, data_despesa) AS vencimento_em, pago_em
+         COALESCE(vencimento_em, data_despesa) AS vencimento_em, pago_em,
+         forma_pagamento, grupo_parcelamento, numero_parcela, total_parcelas
        FROM despesas
        WHERE tenant_id = ? AND estornada_em IS NULL
-       ORDER BY data_despesa DESC`
+       ORDER BY pago_em IS NOT NULL, date(COALESCE(vencimento_em, data_despesa)), numero_parcela`
     )
     .all(TENANT_ID) as Despesa[]
 }
@@ -144,7 +164,7 @@ export async function getResumoDespesas(): Promise<{
 
 export async function salvarDespesa(
   id: number | null,
-  data: Omit<Despesa, 'id'>,
+  data: DespesaInput,
 ): Promise<ActionResult> {
   try {
     if (!data.descricao?.trim()) return { success: false, message: 'Informe a descricao da despesa.' }
@@ -160,33 +180,54 @@ export async function salvarDespesa(
     if (data.pago_em !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data.pago_em)) {
       return { success: false, message: 'Data de pagamento inválida.' }
     }
+    if (!Number.isSafeInteger(data.parcelas) || data.parcelas < 1 || data.parcelas > 120) {
+      return { success: false, message: 'Quantidade de parcelas inválida.' }
+    }
+    if (!data.forma_pagamento?.trim() || data.forma_pagamento.length > 80) {
+      return { success: false, message: 'Informe uma forma de pagamento válida.' }
+    }
 
     if (id === null) {
-      const res = db.prepare(
-        `INSERT INTO despesas (
-          tenant_id, usuario_id, categoria, descricao, valor, data_despesa,
-          competencia_em, vencimento_em, pago_em
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        TENANT_ID,
-        USUARIO_ID,
-        data.categoria,
-        data.descricao.trim(),
-        data.valor,
-        data.data_despesa,
-        data.competencia_em,
-        data.vencimento_em,
-        data.pago_em,
-      )
-      registrarAuditoria(db, {
-        entidade: 'Despesa', entidadeId: Number(res.lastInsertRowid), acao: 'CRIAR',
-        descricao: data.descricao.trim(), detalhes: { valor: data.valor, pagoEm: data.pago_em },
+      const criarParcelas = db.transaction(() => {
+        const grupo = data.parcelas > 1 ? randomUUID() : null
+        const inserir = db.prepare(
+          `INSERT INTO despesas (
+            tenant_id, usuario_id, categoria, descricao, valor, data_despesa,
+            competencia_em, vencimento_em, pago_em, forma_pagamento,
+            grupo_parcelamento, numero_parcela, total_parcelas
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        const ids: number[] = []
+        for (const parcela of gerarParcelas(data.valor, data.parcelas, data.vencimento_em)) {
+          const res = inserir.run(
+            TENANT_ID,
+            USUARIO_ID,
+            data.categoria,
+            data.descricao.trim(),
+            parcela.valor,
+            data.data_despesa,
+            data.competencia_em,
+            parcela.vencimentoEm,
+            data.pago_em,
+            data.forma_pagamento.trim(),
+            grupo,
+            parcela.numero,
+            data.parcelas,
+          )
+          ids.push(Number(res.lastInsertRowid))
+        }
+        registrarAuditoria(db, {
+          entidade: 'Despesa', entidadeId: ids[0], acao: 'CRIAR',
+          descricao: `${data.descricao.trim()} · ${data.parcelas}x`,
+          detalhes: { valorTotal: data.valor, parcelas: data.parcelas, grupo, ids },
+        })
       })
+      criarParcelas()
     } else {
       const res = db.prepare(
         `UPDATE despesas
          SET categoria = ?, descricao = ?, valor = ?, data_despesa = ?,
-           competencia_em = ?, vencimento_em = ?, pago_em = ?
+           competencia_em = ?, vencimento_em = ?, pago_em = ?, forma_pagamento = ?
          WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`
       ).run(
         data.categoria,
@@ -196,6 +237,7 @@ export async function salvarDespesa(
         data.competencia_em,
         data.vencimento_em,
         data.pago_em,
+        data.forma_pagamento.trim(),
         id,
         TENANT_ID,
       )
@@ -216,6 +258,29 @@ export async function salvarDespesa(
   } catch (error) {
     console.error('[salvarDespesa]', error)
     return { success: false, message: 'Erro interno ao salvar despesa.' }
+  }
+}
+
+export async function alterarPagamentoDespesa(
+  id: number,
+  pagoEm: string | null,
+): Promise<ActionResult> {
+  try {
+    if (!Number.isSafeInteger(id) || id <= 0 || (pagoEm !== null && !/^\d{4}-\d{2}-\d{2}$/.test(pagoEm))) {
+      return { success: false, message: 'Despesa ou data de pagamento inválida.' }
+    }
+    const result = db.prepare(`UPDATE despesas SET pago_em = ?
+      WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`).run(pagoEm, id, TENANT_ID)
+    if (result.changes !== 1) return { success: false, message: 'Despesa não encontrada.' }
+    registrarAuditoria(db, {
+      entidade: 'Despesa', entidadeId: id, acao: pagoEm ? 'PAGAR' : 'REABRIR',
+      descricao: pagoEm ? `Parcela paga em ${pagoEm}` : 'Pagamento da parcela removido',
+    })
+    revalidatePath('/financeiro')
+    return { success: true, message: pagoEm ? 'Parcela marcada como paga.' : 'Parcela reaberta.' }
+  } catch (error) {
+    console.error('[alterarPagamentoDespesa]', error)
+    return { success: false, message: 'Erro interno ao atualizar pagamento.' }
   }
 }
 

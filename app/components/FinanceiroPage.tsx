@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react'
 import type { RecebimentoResumo } from '@/app/actions/recebimentos'
-import type { Despesa, FluxoCapital } from '@/app/actions/despesas'
+import { alterarPagamentoDespesa, type Despesa, type FluxoCapital } from '@/app/actions/despesas'
 import { RecebimentoModal } from './RecebimentoModal'
 import { DespesaModal } from './DespesaModal'
 import { FluxoCapitalModal } from './FluxoCapitalModal'
@@ -34,13 +34,24 @@ export function FinanceiroPage({
   },
   fluxo: FluxoCapital[]
 }) {
+  const [isPending, startTransition] = useTransition()
   const [recModal, setRecModal] = useState<number | null>(null)
   const [despesaModal, setDespesaModal] = useState<Despesa | 'new' | null>(null)
   const [fluxoModal, setFluxoModal] = useState<FluxoCapital | 'new' | null>(null)
+  const [mensagem, setMensagem] = useState('')
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
   const saldoCaixa = resumoRecebimentos.totalRecebido - resumoDespesas.totalDespesasPagas + resumoDespesas.totalAportes - resumoDespesas.totalRetiradas
   const saldoProjetado = saldoCaixa + resumoRecebimentos.totalPendente - resumoDespesas.totalDespesasPendentes
+
+  function alternarPagamento(event: React.MouseEvent, despesa: Despesa) {
+    event.stopPropagation()
+    const hoje = new Date().toISOString().substring(0, 10)
+    startTransition(async () => {
+      const result = await alterarPagamentoDespesa(despesa.id, despesa.pago_em ? null : hoje)
+      setMensagem(result.message)
+    })
+  }
 
   return (
     <>
@@ -107,6 +118,8 @@ export function FinanceiroPage({
         </div>
       </div>
 
+      {mensagem && <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/70">{mensagem}</div>}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Pagamentos Pendentes */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
@@ -159,11 +172,22 @@ export function FinanceiroPage({
                   <tr key={d.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setDespesaModal(d)}>
                     <td className="p-4">
                       <p className="font-medium text-white">{d.descricao}</p>
+                      <p className="mt-1 text-xs text-white/40">
+                        {d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}
+                        vence {d.vencimento_em.split('-').reverse().join('/')}
+                        {d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}
+                      </p>
                       <span className="inline-block mt-1 rounded bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase text-white/50">{d.categoria}</span>
                       <span className={`ml-2 inline-block rounded px-2 py-0.5 text-[10px] ${d.pago_em ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{d.pago_em ? 'Paga' : 'Pendente'}</span>
                     </td>
-                    <td className="p-4 font-mono text-white/80">{d.data_despesa.substring(0,10)}</td>
+                    <td className="p-4 font-mono text-white/80">{d.vencimento_em.split('-').reverse().join('/')}</td>
                     <td className="p-4 text-right font-mono text-red-400">{fmtBRL(d.valor)}</td>
+                    <td className="p-4 text-right">
+                      <button type="button" disabled={isPending} onClick={(event) => alternarPagamento(event, d)}
+                        className={`rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${d.pago_em ? 'bg-white/[0.05] text-white/50 hover:bg-white/[0.1]' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                        {d.pago_em ? 'Reabrir' : 'Dar baixa'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

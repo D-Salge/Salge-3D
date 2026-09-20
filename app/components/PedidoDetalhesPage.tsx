@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useTransition } from 'react'
-import { ArrowLeft, ExternalLink, FileDown, Link2, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Copy, ExternalLink, FileDown, Link2, Save, Trash2 } from 'lucide-react'
 import {
   atualizarStatusOrcamento,
   removerAnexoPedido,
@@ -79,7 +79,7 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
     <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><Link href="/" className="mb-4 inline-flex items-center gap-2 text-xs text-white/40 hover:text-white"><ArrowLeft size={13} /> Voltar</Link><p className="text-xs text-[#d8f45a]">{pedido.numero_orcamento}</p><h1 className="mt-2 text-3xl font-semibold">{pedido.nome_da_peca}</h1><p className="mt-1 text-sm text-white/45">{pedido.cliente_nome} · {pedido.orcamento_status} · {pedido.status}</p></div>
-        <div className="flex flex-wrap gap-2"><a href={`/api/orcamentos/${pedido.id}/pdf`} target="_blank" className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs"><FileDown size={14} /> Baixar PDF</a>{pedido.saldo_pendente > 0 && <button onClick={() => setReceber(true)} className="rounded-lg bg-emerald-500/15 px-4 py-2.5 text-xs font-medium text-emerald-400">Registrar pagamento</button>}</div>
+        <div className="flex flex-wrap gap-2"><Link href={`/orcamentos/duplicar/${pedido.id}`} className="flex items-center gap-2 rounded-lg bg-[#d8f45a]/10 px-4 py-2.5 text-xs font-medium text-[#d8f45a]"><Copy size={14} /> Duplicar pedido</Link><a href={`/api/orcamentos/${pedido.id}/pdf`} target="_blank" className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs"><FileDown size={14} /> Baixar PDF</a>{pedido.saldo_pendente > 0 && <button onClick={() => setReceber(true)} className="rounded-lg bg-emerald-500/15 px-4 py-2.5 text-xs font-medium text-emerald-400">Registrar pagamento</button>}</div>
       </div>
 
       {mensagem && <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/70">{mensagem}</div>}

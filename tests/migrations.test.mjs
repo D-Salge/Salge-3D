@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import Database from 'better-sqlite3'
-import { applyMigrations } from '../lib/migrations.mjs'
+import { applyMigrations, migrations } from '../lib/migrations.mjs'
 
 test('migra o schema legado uma única vez e preserva os dados', () => {
   const db = new Database(':memory:')
@@ -25,7 +25,7 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     const columns = db.prepare(`PRAGMA table_info(pedidos)`).all().map((column) => column.name)
     assert.ok(columns.includes('orcamento_status'))
     assert.ok(columns.includes('tempo_real_horas'))
-    assert.equal(db.prepare('SELECT COUNT(*) AS total FROM schema_migrations').get().total, 3)
+    assert.equal(db.prepare('SELECT COUNT(*) AS total FROM schema_migrations').get().total, migrations.length)
     assert.equal(db.prepare('SELECT nome FROM clientes WHERE nome = ?').get('Cliente teste').nome, 'Cliente teste')
     assert.equal(db.prepare('SELECT COUNT(*) AS total FROM impressoras').get().total, 2)
     assert.equal(db.prepare('SELECT COUNT(*) AS total FROM lotes_filamento').get().total, 1)
@@ -34,6 +34,9 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'auditoria'`).get())
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'importacoes_planilha'`).get())
     assert.ok(columns.includes('codigo_externo'))
+    const expenseColumns = db.prepare(`PRAGMA table_info(despesas)`).all().map((column) => column.name)
+    assert.ok(expenseColumns.includes('grupo_parcelamento'))
+    assert.ok(expenseColumns.includes('total_parcelas'))
   } finally {
     db.close()
   }
