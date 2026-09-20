@@ -9,11 +9,13 @@ import { TabelaPedidos } from '@/app/components/TabelaPedidos'
 import { getImpressoras } from '@/app/actions/operacao'
 import { getModelosOrcamento } from '@/app/actions/modelos-orcamento'
 import { ModelosOrcamento } from '@/app/components/ModelosOrcamento'
+import { getPendenciasWhatsApp } from '@/app/actions/whatsapp'
+import { PendenciasWhatsApp } from '@/app/components/PendenciasWhatsApp'
 
 export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
 
 export default async function Page() {
-  const [clientes, filamentos, insumos, config, pedidos, impressoras, modelos, referenciasPrecos] = await Promise.all([
+  const [clientes, filamentos, insumos, config, pedidos, impressoras, modelos, referenciasPrecos, pendenciasWhatsApp] = await Promise.all([
     getClientesLista(),
     getFilamentosLista(),
     getInsumosLista(),
@@ -22,6 +24,7 @@ export default async function Page() {
     getImpressoras(),
     getModelosOrcamento(),
     getReferenciasPrecos(),
+    getPendenciasWhatsApp(),
   ])
 
   return (
@@ -34,6 +37,8 @@ export default async function Page() {
           Novo Orçamento
         </h1>
       </div>
+
+      <PendenciasWhatsApp pendencias={pendenciasWhatsApp} />
 
       <ModelosOrcamento modelos={modelos} />
 
