@@ -37,6 +37,7 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     const expenseColumns = db.prepare(`PRAGMA table_info(despesas)`).all().map((column) => column.name)
     assert.ok(expenseColumns.includes('grupo_parcelamento'))
     assert.ok(expenseColumns.includes('total_parcelas'))
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'modelos_orcamento'`).get())
   } finally {
     db.close()
   }

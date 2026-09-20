@@ -4,20 +4,24 @@ import { getFilamentosLista } from '@/app/actions/filamentos'
 import { getInsumosLista } from '@/app/actions/insumos'
 import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
-import { getPedidosRecentes } from '@/app/actions/pedidos'
+import { getPedidosRecentes, getReferenciasPrecos } from '@/app/actions/pedidos'
 import { TabelaPedidos } from '@/app/components/TabelaPedidos'
 import { getImpressoras } from '@/app/actions/operacao'
+import { getModelosOrcamento } from '@/app/actions/modelos-orcamento'
+import { ModelosOrcamento } from '@/app/components/ModelosOrcamento'
 
 export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
 
 export default async function Page() {
-  const [clientes, filamentos, insumos, config, pedidos, impressoras] = await Promise.all([
+  const [clientes, filamentos, insumos, config, pedidos, impressoras, modelos, referenciasPrecos] = await Promise.all([
     getClientesLista(),
     getFilamentosLista(),
     getInsumosLista(),
     getConfiguracoes(),
     getPedidosRecentes(100),
     getImpressoras(),
+    getModelosOrcamento(),
+    getReferenciasPrecos(),
   ])
 
   return (
@@ -30,6 +34,8 @@ export default async function Page() {
           Novo Orçamento
         </h1>
       </div>
+
+      <ModelosOrcamento modelos={modelos} />
 
       <OrcamentoPage 
         clientes={clientes}
@@ -46,6 +52,7 @@ export default async function Page() {
         fatorB2BPiloto={config.fator_b2b_piloto}
         fatorB2BRecorrente={config.fator_b2b_recorrente}
         pedidoMinimoB2B={config.pedido_minimo_b2b}
+        referenciasPrecos={referenciasPrecos}
       />
 
       <div className="mt-10 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 sm:p-8">

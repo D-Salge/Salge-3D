@@ -2,13 +2,20 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Plus, Trash2, CheckCircle2, ChevronRight, Zap } from 'lucide-react'
-import { criarPedido, type PedidoParaDuplicar } from '@/app/actions/pedidos'
+import { criarPedido, type PedidoParaDuplicar, type ReferenciaPreco } from '@/app/actions/pedidos'
 import { useRouter } from 'next/navigation'
 import type { Cliente } from '@/app/actions/clientes'
 import type { FilamentoCompleto } from '@/app/actions/filamentos'
 import type { Insumo } from '@/app/actions/insumos'
 import type { Impressora } from '@/app/actions/operacao'
-import { arredondarMoeda, calcularPrecoPlanilha, calcularValorVenda, TIPOS_PEDIDO } from '@/lib/orcamento.mjs'
+import {
+  aplicarPisoHistorico,
+  arredondarMoeda,
+  calcularPrecoPlanilha,
+  calcularValorVenda,
+  normalizarChaveTexto,
+  TIPOS_PEDIDO,
+} from '@/lib/orcamento.mjs'
 
 function formaPagamentoInicial(valor?: string | null) {
   const mapa: Record<string, string> = {
@@ -34,6 +41,7 @@ export function OrcamentoPage({
   fatorB2BPiloto,
   fatorB2BRecorrente,
   pedidoMinimoB2B,
+  referenciasPrecos,
   pedidoInicial,
 }: { 
   clientes: Cliente[]
@@ -50,6 +58,7 @@ export function OrcamentoPage({
   fatorB2BPiloto: number
   fatorB2BRecorrente: number
   pedidoMinimoB2B: number
+  referenciasPrecos: ReferenciaPreco[]
   pedidoInicial?: PedidoParaDuplicar | null
 }) {
   const router = useRouter()
@@ -178,12 +187,19 @@ export function OrcamentoPage({
   // O preço comercial informado prevalece sobre a sugestão da planilha.
   const desc = Number(desconto) || 0
   const freteC = Number(freteCobrado) || 0
+  const referenciaPreco = referenciasPrecos.find((item) => (
+    item.cliente_id === Number(clienteId) &&
+    normalizarChaveTexto(item.nome_da_peca) === normalizarChaveTexto(nomeDaPeca)
+  ))
+  const precoHistorico = referenciaPreco?.preco_unitario ?? null
+  const precoAutomatico = aplicarPisoHistorico(calculo.precoUnitarioArredondado, precoHistorico)
   const precoUnitario = precoUnitarioVenda === '' ? null : Number(precoUnitarioVenda)
-  const baseComercial = precoUnitario === null ? calculo.totalArredondado : arredondarMoeda(precoUnitario * quantidade)
+  const precoAplicado = precoUnitario ?? precoAutomatico
+  const baseComercial = arredondarMoeda(precoAplicado * quantidade)
   const valorFinal = calcularValorVenda({
-    custoCalculado: calculo.totalArredondado,
+    custoCalculado: baseComercial,
     quantidade,
-    precoUnitario,
+    precoUnitario: precoAplicado,
     desconto: Math.min(desc, baseComercial + freteC),
     freteCobrado: freteC,
   })
@@ -421,10 +437,10 @@ export function OrcamentoPage({
             </label>
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-[#d8f45a]">Preço de venda por unidade (R$)</span>
-              <input type="number" min="0.01" step="0.01" placeholder={`Sugestão: ${fmt(calculo.precoUnitarioArredondado)}`} value={precoUnitarioVenda}
+              <input type="number" min="0.01" step="0.01" placeholder={`Automático: ${fmt(precoAutomatico)}`} value={precoUnitarioVenda}
                 onChange={e => setPrecoUnitarioVenda(e.target.value === '' ? '' : Number(e.target.value))}
                 className="h-11 rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 text-sm text-white focus:border-[#d8f45a] outline-none" />
-              <span className="text-[10px] text-white/30">Editável. Vazio usa a sugestão da planilha; ao duplicar, preserva o preço anterior.</span>
+              <span className="text-[10px] text-white/30">Editável. Vazio usa o maior valor entre a sugestão e o histórico deste cliente.</span>
             </label>
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-[#d8f45a]">Desconto (R$)</span>
@@ -522,13 +538,23 @@ export function OrcamentoPage({
             <span>Sugestão por unidade</span><span className="font-mono text-white/80">{fmt(calculo.precoUnitarioArredondado)}</span>
           </div>
 
-          {precoUnitario !== null && <div className="flex justify-between font-medium text-[#d8f45a]">
-            <span>Preço comercial ({quantidade} × {fmt(precoUnitario)})</span><span className="font-mono">{fmt(baseComercial)}</span>
+          {referenciaPreco && <div className="rounded-lg border border-blue-400/15 bg-blue-400/[0.06] p-3 text-xs text-blue-200/75">
+            Último preço para este cliente: <strong>{fmt(referenciaPreco.preco_unitario)}/un.</strong> em {new Date(referenciaPreco.data_pedido).toLocaleDateString('pt-BR')}.
+            {precoHistorico && precoHistorico > calculo.precoUnitarioArredondado && ' Esse valor foi mantido como piso automático.'}
           </div>}
 
-          {precoUnitario !== null && precoUnitario !== calculo.precoUnitarioArredondado && (
+          <div className="flex justify-between font-medium text-[#d8f45a]">
+            <span>Preço aplicado ({quantidade} × {fmt(precoAplicado)})</span><span className="font-mono">{fmt(baseComercial)}</span>
+          </div>
+
+          {precoAplicado !== calculo.precoUnitarioArredondado && (
             <button type="button" onClick={() => setPrecoUnitarioVenda(calculo.precoUnitarioArredondado)} className="text-left text-[11px] text-[#d8f45a]/70 underline underline-offset-2">
               Usar preço sugerido de {fmt(calculo.precoUnitarioArredondado)} por unidade
+            </button>
+          )}
+          {precoUnitario !== null && (
+            <button type="button" onClick={() => setPrecoUnitarioVenda('')} className="ml-3 text-left text-[11px] text-white/45 underline underline-offset-2">
+              Restaurar preço automático
             </button>
           )}
 
@@ -543,6 +569,11 @@ export function OrcamentoPage({
           {valorFinal < calculo.precoMinimo && (
             <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs leading-5 text-red-300">
               Atenção: o valor final está abaixo do preço mínimo sem prejuízo calculado pela planilha.
+            </div>
+          )}
+          {precoHistorico && precoAplicado < precoHistorico && (
+            <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-5 text-amber-200">
+              O preço manual está abaixo dos {fmt(precoHistorico)} por unidade cobrados anteriormente deste cliente.
             </div>
           )}
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useTransition } from 'react'
-import { ArrowLeft, Copy, ExternalLink, FileDown, Link2, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, BookmarkPlus, Copy, ExternalLink, FileDown, Link2, Save, Trash2, X } from 'lucide-react'
 import {
   atualizarStatusOrcamento,
   removerAnexoPedido,
@@ -13,6 +13,7 @@ import {
 } from '@/app/actions/operacao'
 import { RecebimentoModal } from './RecebimentoModal'
 import { atualizarStatusPedido } from '@/app/actions/pedidos'
+import { salvarModeloOrcamento } from '@/app/actions/modelos-orcamento'
 
 function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -22,6 +23,8 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
   const [isPending, startTransition] = useTransition()
   const [mensagem, setMensagem] = useState('')
   const [receber, setReceber] = useState(false)
+  const [salvarModelo, setSalvarModelo] = useState(false)
+  const [nomeModelo, setNomeModelo] = useState(pedido.nome_da_peca)
   const [anexoNome, setAnexoNome] = useState('')
   const [anexoUrl, setAnexoUrl] = useState('')
   const [impressoraId, setImpressoraId] = useState(pedido.impressora_id ? String(pedido.impressora_id) : '')
@@ -75,11 +78,20 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
     })
   }
 
+  function criarModelo(event: React.FormEvent) {
+    event.preventDefault()
+    startTransition(async () => {
+      const result = await salvarModeloOrcamento(pedido.id, nomeModelo)
+      setMensagem(result.message)
+      if (result.success) setSalvarModelo(false)
+    })
+  }
+
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><Link href="/" className="mb-4 inline-flex items-center gap-2 text-xs text-white/40 hover:text-white"><ArrowLeft size={13} /> Voltar</Link><p className="text-xs text-[#d8f45a]">{pedido.numero_orcamento}</p><h1 className="mt-2 text-3xl font-semibold">{pedido.nome_da_peca}</h1><p className="mt-1 text-sm text-white/45">{pedido.cliente_nome} · {pedido.orcamento_status} · {pedido.status}</p></div>
-        <div className="flex flex-wrap gap-2"><Link href={`/orcamentos/duplicar/${pedido.id}`} className="flex items-center gap-2 rounded-lg bg-[#d8f45a]/10 px-4 py-2.5 text-xs font-medium text-[#d8f45a]"><Copy size={14} /> Duplicar pedido</Link><a href={`/api/orcamentos/${pedido.id}/pdf`} target="_blank" className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs"><FileDown size={14} /> Baixar PDF</a>{pedido.saldo_pendente > 0 && <button onClick={() => setReceber(true)} className="rounded-lg bg-emerald-500/15 px-4 py-2.5 text-xs font-medium text-emerald-400">Registrar pagamento</button>}</div>
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setSalvarModelo(true)} className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70"><BookmarkPlus size={14} /> Salvar como modelo</button><Link href={`/orcamentos/duplicar/${pedido.id}`} className="flex items-center gap-2 rounded-lg bg-[#d8f45a]/10 px-4 py-2.5 text-xs font-medium text-[#d8f45a]"><Copy size={14} /> Duplicar pedido</Link><a href={`/api/orcamentos/${pedido.id}/pdf`} target="_blank" className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs"><FileDown size={14} /> Baixar PDF</a>{pedido.saldo_pendente > 0 && <button onClick={() => setReceber(true)} className="rounded-lg bg-emerald-500/15 px-4 py-2.5 text-xs font-medium text-emerald-400">Registrar pagamento</button>}</div>
       </div>
 
       {mensagem && <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/70">{mensagem}</div>}
@@ -116,6 +128,13 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
           <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><h2 className="mb-4 font-semibold">Histórico</h2><div className="space-y-4">{pedido.historico.map((item) => <div key={item.id} className="border-l border-white/10 pl-3"><p className="text-xs font-medium">{item.evento}</p><p className="mt-1 text-xs text-white/40">{item.descricao}</p><p className="mt-1 text-[10px] text-white/25">{new Date(item.criado_em).toLocaleString('pt-BR')}</p></div>)}</div></section>
         </div>
       </div>
+      {salvarModelo && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <form onSubmit={criarModelo} className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15171b] p-6 shadow-2xl">
+          <div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold">Salvar como modelo</h2><p className="mt-1 text-xs text-white/35">Depois ele aparecerá no início da tela Novo Orçamento.</p></div><button type="button" onClick={() => setSalvarModelo(false)} className="text-white/35 hover:text-white"><X size={18} /></button></div>
+          <label className="text-xs text-white/55">Nome do modelo<input autoFocus required maxLength={100} value={nomeModelo} onChange={(event) => setNomeModelo(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+          <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setSalvarModelo(false)} className="rounded-lg bg-white/[0.05] px-4 py-2.5 text-xs text-white/55">Cancelar</button><button disabled={isPending} className="rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-50">{isPending ? 'Salvando...' : 'Salvar modelo'}</button></div>
+        </form>
+      </div>}
       {receber && <RecebimentoModal pedidoId={pedido.id} onClose={() => setReceber(false)} />}
     </div>
   )
