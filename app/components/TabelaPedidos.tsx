@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import type { PedidoResumo } from '@/app/actions/pedidos'
 import { RecebimentoModal } from '@/app/components/RecebimentoModal'
+import { WhatsAppModal } from '@/app/components/WhatsAppModal'
+import type { PedidoWhatsApp } from '@/app/actions/whatsapp'
 import Link from 'next/link'
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
@@ -25,6 +27,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
   const [modalPedidoId, setModalPedidoId] = useState<number | null>(null)
+  const [pedidoWhatsApp, setPedidoWhatsApp] = useState<PedidoWhatsApp | null>(null)
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
   const fmtData = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -49,13 +52,6 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
         </thead>
         <tbody className="divide-y divide-white/[0.04]">
           {pedidos.map((p) => {
-            let zapUrl = ''
-            if (p.cliente_telefone) {
-              const num = p.cliente_telefone.replace(/\D/g, '')
-              const text = encodeURIComponent(`Olá, ${p.cliente_nome.split(' ')[0]}! Tudo bem? O orçamento da sua peça "${p.nome_da_peca}" ficou em ${fmtBRL(p.valor_total_cobrado)}. Podemos iniciar a produção?`)
-              zapUrl = `https://wa.me/55${num}?text=${text}`
-            }
-
             const isPendente = p.total_recebido < p.valor_total_cobrado
 
             return (
@@ -81,16 +77,27 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
                     >
                       💰 Pagar
                     </button>}
-                    {zapUrl && (
-                      <a
-                        href={zapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    {p.cliente_telefone && (
+                      <button
+                        type="button"
+                        onClick={() => setPedidoWhatsApp({
+                          id: p.id,
+                          numero_orcamento: p.numero_orcamento,
+                          nome_da_peca: p.nome_da_peca,
+                          cliente_nome: p.cliente_nome,
+                          cliente_telefone: p.cliente_telefone,
+                          valor_total_cobrado: p.valor_total_cobrado,
+                          total_recebido: p.total_recebido,
+                          saldo_pendente: Math.max(0, p.valor_total_cobrado - p.total_recebido),
+                          orcamento_status: p.orcamento_status,
+                          status: p.status,
+                          vencimento_em: p.vencimento_em,
+                        })}
                         className="inline-flex h-7 items-center justify-center rounded-md bg-emerald-500/10 px-2 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/20"
-                        title="Enviar cobrança pelo WhatsApp"
+                        title="Preparar mensagem pelo WhatsApp"
                       >
                         WhatsApp
-                      </a>
+                      </button>
                     )}
                   </div>
                 </td>
@@ -102,6 +109,9 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
 
       {modalPedidoId && (
         <RecebimentoModal pedidoId={modalPedidoId} onClose={() => setModalPedidoId(null)} />
+      )}
+      {pedidoWhatsApp && (
+        <WhatsAppModal key={pedidoWhatsApp.id} pedido={pedidoWhatsApp} onClose={() => setPedidoWhatsApp(null)} />
       )}
     </div>
   )
