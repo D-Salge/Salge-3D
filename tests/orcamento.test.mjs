@@ -4,10 +4,12 @@ import test from 'node:test'
 import {
   arredondarMoeda,
   arredondarMoedaParaCima,
+  aplicarPisoHistorico,
   calcularOrcamento,
   calcularPrecoPlanilha,
   calcularValorVenda,
   obterFatorPedido,
+  normalizarChaveTexto,
 } from '../lib/orcamento.mjs'
 
 test('arredonda valores monetários em centavos', () => {
@@ -115,4 +117,11 @@ test('usa os mesmos degraus de lote da fórmula da planilha', () => {
   assert.equal(obterFatorPedido('B2C lote (4+)', 50, fatores), 1.9)
   assert.equal(obterFatorPedido('B2C lote (4+)', 80, fatores), 1.85)
   assert.equal(obterFatorPedido('B2C lote (4+)', 100, fatores), 1.87)
+})
+
+test('protege o preço anterior do cliente sem limitar aumentos', () => {
+  assert.equal(aplicarPisoHistorico(16.86, 19), 19)
+  assert.equal(aplicarPisoHistorico(21.5, 19), 21.5)
+  assert.equal(aplicarPisoHistorico(16.86, null), 16.86)
+  assert.equal(normalizarChaveTexto('  Espremedor de PÁSTA   de Dente '), 'espremedor de pasta de dente')
 })

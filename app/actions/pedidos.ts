@@ -9,7 +9,14 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { arredondarMoeda, calcularPrecoPlanilha, calcularValorVenda, TIPOS_PEDIDO } from '@/lib/orcamento.mjs'
+import {
+  aplicarPisoHistorico,
+  arredondarMoeda,
+  calcularPrecoPlanilha,
+  calcularValorVenda,
+  normalizarChaveTexto,
+  TIPOS_PEDIDO,
+} from '@/lib/orcamento.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -111,6 +118,15 @@ export interface PedidoParaDuplicar {
   impressora_id: number | null
   materiais: MaterialInput[]
   insumos: InsumoInput[]
+}
+
+export interface ReferenciaPreco {
+  pedido_id: number
+  numero_orcamento: string | null
+  cliente_id: number
+  nome_da_peca: string
+  preco_unitario: number
+  data_pedido: string
 }
 
 export interface DashboardStats {
@@ -381,6 +397,45 @@ export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoPar
   return { ...pedido, materiais, insumos }
 }
 
+export async function getReferenciasPrecos(limite = 500): Promise<ReferenciaPreco[]> {
+  const limiteSeguro = Number.isSafeInteger(limite) ? Math.min(Math.max(limite, 1), 2_000) : 500
+  return db.prepare(`
+    SELECT p.id AS pedido_id, p.numero_orcamento, p.cliente_id, p.nome_da_peca,
+      COALESCE(NULLIF(p.preco_unitario, 0),
+        (p.valor_total_cobrado + p.desconto - p.frete_cobrado) / MAX(p.quantidade, 1)
+      ) AS preco_unitario,
+      p.data_pedido
+    FROM pedidos p
+    WHERE p.tenant_id = ?
+      AND p.orcamento_status = 'Aprovado'
+      AND p.status != 'Cancelado'
+      AND p.valor_total_cobrado > 0
+    ORDER BY p.data_pedido DESC, p.id DESC
+    LIMIT ?
+  `).all(TENANT_ID, limiteSeguro) as ReferenciaPreco[]
+}
+
+function buscarPrecoHistorico(clienteId: number, nomeDaPeca: string): number | null {
+  const chave = normalizarChaveTexto(nomeDaPeca)
+  if (!chave) return null
+  const candidatos = db.prepare(`
+    SELECT nome_da_peca,
+      COALESCE(NULLIF(preco_unitario, 0),
+        (valor_total_cobrado + desconto - frete_cobrado) / MAX(quantidade, 1)
+      ) AS preco_unitario
+    FROM pedidos
+    WHERE tenant_id = ? AND cliente_id = ?
+      AND orcamento_status = 'Aprovado' AND status != 'Cancelado'
+      AND valor_total_cobrado > 0
+    ORDER BY data_pedido DESC, id DESC
+    LIMIT 200
+  `).all(TENANT_ID, clienteId) as { nome_da_peca: string; preco_unitario: number }[]
+  const encontrado = candidatos.find((item) => normalizarChaveTexto(item.nome_da_peca) === chave)
+  return encontrado?.preco_unitario && encontrado.preco_unitario > 0
+    ? arredondarMoeda(encontrado.preco_unitario)
+    : null
+}
+
 // --- Tipos de entrada ---
 
 export interface MaterialInput {
@@ -638,7 +693,11 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
     const descontoValidado = arredondarMoeda(desconto)
     const freteCobrado = arredondarMoeda(frete_cobrado)
     const fretePago = arredondarMoeda(frete_pago)
-    const precoUnitarioAplicado = preco_unitario ?? calculo.precoUnitarioArredondado
+    const precoHistorico = buscarPrecoHistorico(cliente_id, nome_da_peca)
+    const precoUnitarioAplicado = preco_unitario ?? aplicarPisoHistorico(
+      calculo.precoUnitarioArredondado,
+      precoHistorico,
+    )
     let valorTotal: number
     try {
       valorTotal = calcularValorVenda({

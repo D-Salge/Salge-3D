@@ -4,7 +4,7 @@ import { getClientesLista } from '@/app/actions/clientes'
 import { getFilamentosLista } from '@/app/actions/filamentos'
 import { getInsumosLista } from '@/app/actions/insumos'
 import { getConfiguracoes } from '@/app/actions/configuracoes'
-import { getPedidoParaDuplicar } from '@/app/actions/pedidos'
+import { getPedidoParaDuplicar, getReferenciasPrecos } from '@/app/actions/pedidos'
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
 import { getImpressoras } from '@/app/actions/operacao'
 
@@ -15,13 +15,14 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const pedidoId = Number(id)
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) notFound()
 
-  const [pedido, clientes, filamentos, insumos, config, impressoras] = await Promise.all([
+  const [pedido, clientes, filamentos, insumos, config, impressoras, referenciasPrecos] = await Promise.all([
     getPedidoParaDuplicar(pedidoId),
     getClientesLista(),
     getFilamentosLista(),
     getInsumosLista(),
     getConfiguracoes(),
     getImpressoras(),
+    getReferenciasPrecos(),
   ])
   if (!pedido) notFound()
 
@@ -48,6 +49,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         fatorB2BPiloto={config.fator_b2b_piloto}
         fatorB2BRecorrente={config.fator_b2b_recorrente}
         pedidoMinimoB2B={config.pedido_minimo_b2b}
+        referenciasPrecos={referenciasPrecos}
         pedidoInicial={pedido}
       />
     </div>
