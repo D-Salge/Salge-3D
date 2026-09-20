@@ -72,6 +72,7 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
                 <td className="py-3.5 pl-3 pr-0 text-right whitespace-nowrap">
                   <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                     <Link href={`/pedidos/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-[#d8f45a]/10 px-2 text-xs font-medium text-[#d8f45a] hover:bg-[#d8f45a]/20">Detalhes</Link>
+                    <Link href={`/orcamentos/duplicar/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-white/[0.05] px-2 text-xs font-medium text-white/60 hover:bg-white/[0.1] hover:text-white">Duplicar</Link>
                     {p.orcamento_status === 'Aprovado' && <button
                       onClick={() => setModalPedidoId(p.id)}
                       className="inline-flex h-7 items-center rounded-md bg-white/[0.05] px-2 text-xs font-medium text-white/60 hover:bg-white/[0.1] hover:text-white"

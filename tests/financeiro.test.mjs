@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { adicionarMeses, distribuirRecebimento, dividirEmParcelas } from '../lib/financeiro.mjs'
+import { adicionarMeses, distribuirRecebimento, dividirEmParcelas, gerarParcelas } from '../lib/financeiro.mjs'
 
 test('divide valores em parcelas sem perder centavos', () => {
   assert.deepEqual(dividirEmParcelas(100, 3), [33.34, 33.33, 33.33])
@@ -20,4 +20,16 @@ test('distribui pagamento nas parcelas mais antigas', () => {
     alocacoes: [{ parcelaId: 1, valor: 30 }, { parcelaId: 2, valor: 40 }],
     restante: 0,
   })
+})
+
+test('gera parcelas de despesa com centavos e vencimentos mensais corretos', () => {
+  const parcelas = gerarParcelas(322.92, 7, '2026-09-30')
+
+  assert.equal(parcelas.length, 7)
+  assert.deepEqual(parcelas.map((item) => item.valor), [46.14, 46.13, 46.13, 46.13, 46.13, 46.13, 46.13])
+  assert.deepEqual(parcelas.map((item) => item.vencimentoEm), [
+    '2026-09-30', '2026-10-30', '2026-11-30', '2026-12-30',
+    '2027-01-30', '2027-02-28', '2027-03-30',
+  ])
+  assert.equal(Math.round(parcelas.reduce((total, item) => total + item.valor, 0) * 100), 32292)
 })

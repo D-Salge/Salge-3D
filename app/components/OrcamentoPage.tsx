@@ -2,12 +2,21 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Plus, Trash2, CheckCircle2, ChevronRight, Zap } from 'lucide-react'
-import { criarPedido } from '@/app/actions/pedidos'
+import { criarPedido, type PedidoParaDuplicar } from '@/app/actions/pedidos'
 import { useRouter } from 'next/navigation'
 import type { Cliente } from '@/app/actions/clientes'
 import type { FilamentoCompleto } from '@/app/actions/filamentos'
 import type { Insumo } from '@/app/actions/insumos'
 import { arredondarMoeda, calcularOrcamento } from '@/lib/orcamento.mjs'
+
+function formaPagamentoInicial(valor?: string | null) {
+  const mapa: Record<string, string> = {
+    'Cartao Credito': 'Cartão de Crédito',
+    'Cartao Debito': 'Cartão de Débito',
+    Transferencia: 'Transferência',
+  }
+  return valor ? (mapa[valor] ?? valor) : 'Pix'
+}
 
 export function OrcamentoPage({ 
   clientes, 
@@ -16,7 +25,8 @@ export function OrcamentoPage({
   taxaOperacional, 
   custoHoraMaquina,
   tarifaEnergia,
-  potenciaW
+  potenciaW,
+  pedidoInicial,
 }: { 
   clientes: Cliente[]
   filamentos: FilamentoCompleto[]
@@ -25,29 +35,35 @@ export function OrcamentoPage({
   custoHoraMaquina: number
   tarifaEnergia: number
   potenciaW: number
+  pedidoInicial?: PedidoParaDuplicar | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   
   // Basic info
-  const [nomeDaPeca, setNomeDaPeca] = useState('')
+  const [nomeDaPeca, setNomeDaPeca] = useState(pedidoInicial?.nome_da_peca ?? '')
   const [clienteId, setClienteId] = useState('')
-  const [tempoHoras, setTempoHoras] = useState<number | ''>('')
+  const [tempoHoras, setTempoHoras] = useState<number | ''>(pedidoInicial?.tempo_impressao_horas ?? '')
+  const [quantidade, setQuantidade] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
   
   // Arrays
-  const [materiais, setMateriais] = useState<{ id: string; filamentoId: string; pesoGasto: number | '' }[]>([])
-  const [insumos, setInsumos] = useState<{ id: string; insumoId: string; quantidade: number | '' }[]>([])
+  const [materiais, setMateriais] = useState<{ id: string; filamentoId: string; pesoGasto: number | '' }[]>(
+    pedidoInicial?.materiais.map((item, index) => ({ id: `duplicado-filamento-${index}`, filamentoId: String(item.filamento_id), pesoGasto: item.peso_gasto_gramas })) ?? [],
+  )
+  const [insumos, setInsumos] = useState<{ id: string; insumoId: string; quantidade: number | '' }[]>(
+    pedidoInicial?.insumos.map((item, index) => ({ id: `duplicado-insumo-${index}`, insumoId: String(item.insumo_id), quantidade: item.quantidade })) ?? [],
+  )
 
   // Faturamento e Custos Extras
-  const [desconto, setDesconto] = useState<number | ''>('')
-  const [freteCobrado, setFreteCobrado] = useState<number | ''>('')
-  const [fretePago, setFretePago] = useState<number | ''>('')
-  const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>('')
+  const [desconto, setDesconto] = useState<number | ''>(pedidoInicial?.desconto || '')
+  const [freteCobrado, setFreteCobrado] = useState<number | ''>(pedidoInicial?.frete_cobrado || '')
+  const [fretePago, setFretePago] = useState<number | ''>(pedidoInicial?.frete_pago || '')
+  const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>(pedidoInicial?.custo_embalagem || '')
   const [dataEntrega, setDataEntrega] = useState('')
   const [validadeOrcamento, setValidadeOrcamento] = useState('')
   const [vencimentoEm, setVencimentoEm] = useState('')
-  const [parcelas, setParcelas] = useState(1)
-  const [condicaoPagamento, setCondicaoPagamento] = useState('Pix')
+  const [parcelas, setParcelas] = useState(pedidoInicial?.parcelas ?? 1)
+  const [condicaoPagamento, setCondicaoPagamento] = useState(formaPagamentoInicial(pedidoInicial?.condicao_pagamento))
 
   // UI state
   const [sucesso, setSucesso] = useState(false)
@@ -65,6 +81,15 @@ export function OrcamentoPage({
   }
   function removeInsumo(id: string) {
     setInsumos(insumos.filter(i => i.id !== id))
+  }
+  function alterarQuantidade(novaQuantidade: number) {
+    if (!Number.isSafeInteger(novaQuantidade) || novaQuantidade < 1) return
+    const fator = novaQuantidade / quantidade
+    const escalar = (valor: number | '') => valor === '' ? '' : Math.round(Number(valor) * fator * 1000) / 1000
+    setTempoHoras(escalar(tempoHoras))
+    setMateriais(lista => lista.map(item => ({ ...item, pesoGasto: escalar(item.pesoGasto) })))
+    setInsumos(lista => lista.map(item => ({ ...item, quantidade: escalar(item.quantidade) })))
+    setQuantidade(novaQuantidade)
   }
 
   // ─── CALCULATIONS ────────────────────────────────────────────────
@@ -134,6 +159,7 @@ export function OrcamentoPage({
         nome_da_peca: nomeDaPeca,
         cliente_id: Number(clienteId),
         tempo_impressao_horas: th,
+        quantidade,
         materials: payloadMateriais,
         insumos: payloadInsumos,
         custo_embalagem: Number(custoEmbalagem) || 0,
@@ -145,11 +171,12 @@ export function OrcamentoPage({
         vencimento_em: vencimentoEm || undefined,
         parcelas,
         condicao_pagamento: condicaoPagamento,
+        pedido_origem_id: pedidoInicial?.origem_id,
       })
 
       if (res.success) {
         setSucesso(true)
-        setTimeout(() => router.push('/'), 1500)
+        setTimeout(() => router.push(res.pedidoId ? `/pedidos/${res.pedidoId}` : '/orcamentos'), 1200)
       } else {
         setErrorMsg(res.message)
       }
@@ -173,6 +200,9 @@ export function OrcamentoPage({
   return (
     <div className="flex flex-col gap-8 lg:flex-row lg:items-start shrink-0">
       <form onSubmit={handleSubmit} className="flex-1 space-y-8">
+        {pedidoInicial && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.06] p-4 text-xs leading-5 text-[#d8f45a]/80">
+          Cópia de {pedidoInicial.origem_numero ?? `pedido #${pedidoInicial.origem_id}`} (valor anterior: {pedidoInicial.valor_total_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). Cliente, datas, pagamentos e produção anterior não serão copiados. Os custos serão recalculados com os valores atuais.
+        </div>}
         
         {/* 1. Dados Básicos */}
         <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
@@ -190,6 +220,11 @@ export function OrcamentoPage({
                 <option value="" disabled>Selecione...</option>
                 {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Quantidade de peças</span>
+              <input required type="number" step="1" min="1" max="100000" value={quantidade} onChange={e => alterarQuantidade(Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-white/55">Tempo de Impressão (Horas)</span>
