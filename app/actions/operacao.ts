@@ -293,7 +293,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
         p.custo_energia +
         COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) *
           CASE WHEN imp.custo_hora > 0 THEN imp.custo_hora ELSE t.custo_hora_maquina END +
-        p.custo_embalagem + p.frete_pago + p.custo_extra_real
+        p.taxa_operacional + p.custo_embalagem + p.frete_pago +
+        p.taxas_comissoes + p.custo_extra_real
       ) AS custo_real
     FROM pedidos p
     JOIN clientes c ON c.id = p.cliente_id
