@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { arredondarMoeda, calcularOrcamento } from '../lib/orcamento.mjs'
+import {
+  arredondarMoeda,
+  arredondarMoedaParaCima,
+  calcularOrcamento,
+  calcularPrecoPlanilha,
+  calcularValorVenda,
+  obterFatorPedido,
+} from '../lib/orcamento.mjs'
 
 test('arredonda valores monetários em centavos', () => {
   assert.equal(arredondarMoeda(10.005), 10.01)
@@ -38,4 +45,74 @@ test('rejeita números inválidos ou negativos', () => {
   )
 
   assert.throws(() => arredondarMoeda(Number.NaN), /inválido/)
+})
+
+test('preserva o preço unitário comercial ao duplicar e alterar a quantidade', () => {
+  assert.equal(calcularValorVenda({
+    custoCalculado: 31.5,
+    quantidade: 3,
+    precoUnitario: 19,
+  }), 57)
+  assert.equal(calcularValorVenda({
+    custoCalculado: 52.5,
+    quantidade: 5,
+    precoUnitario: 19,
+  }), 95)
+})
+
+test('replica a precificação da planilha para B2C personalizado', () => {
+  const resultado = calcularPrecoPlanilha({
+    tipoPedido: 'B2C personalizado (1-3)',
+    quantidade: 1,
+    tempoImpressaoHoras: 1.666,
+    potenciaW: 100,
+    tarifaEnergiaKwh: 1.1,
+    custoHoraMaquina: 2.5,
+    materiais: [{ pesoGramas: 34.7, custoPorGrama: 3.71 / 34.7 }],
+    custoInsumos: 0,
+    materiaisAvulsosPorUnidade: 0,
+    horasTrabalhoAtivo: 0,
+    valorHoraTrabalho: 25,
+    custoEmbalagem: 0,
+    fretePago: 0,
+    setupProjeto: 0,
+    margemPerdas: 0.1,
+    taxaVenda: 0,
+    fatorB2CPersonalizado: 2,
+    fatorB2BPiloto: 1.8,
+    fatorB2BRecorrente: 1.5,
+    pedidoMinimoB2B: 80,
+  })
+
+  assert.equal(resultado.fatorAplicado, 2)
+  assert.equal(resultado.custoCompleto, 8.43)
+  assert.equal(resultado.precoSugerido, 16.86)
+  assert.equal(resultado.precoUnitarioArredondado, 16.86)
+  assert.equal(resultado.totalArredondado, 16.86)
+  assert.ok(Math.abs(resultado.margemEstimada - 0.5) < 0.001)
+})
+
+test('arredonda o preço unitário para cima e aplica taxa de venda', () => {
+  assert.equal(arredondarMoedaParaCima(19.0077104), 19.01)
+  const resultado = calcularPrecoPlanilha({
+    tipoPedido: 'B2C personalizado (1-3)', quantidade: 3,
+    tempoImpressaoHoras: 0, potenciaW: 100, tarifaEnergiaKwh: 1.1, custoHoraMaquina: 2.5,
+    materiais: [], custoInsumos: 27, materiaisAvulsosPorUnidade: 0,
+    horasTrabalhoAtivo: 0, valorHoraTrabalho: 25, custoEmbalagem: 0,
+    fretePago: 0, setupProjeto: 0, margemPerdas: 0, taxaVenda: 0.1,
+    fatorB2CPersonalizado: 2, fatorB2BPiloto: 1.8, fatorB2BRecorrente: 1.5,
+    pedidoMinimoB2B: 80,
+  })
+  assert.equal(resultado.precoMinimo, 30)
+  assert.equal(resultado.precoUnitarioArredondado, 20)
+  assert.equal(resultado.totalArredondado, 60)
+  assert.equal(resultado.taxasEstimadas, 6)
+})
+
+test('usa os mesmos degraus de lote da fórmula da planilha', () => {
+  const fatores = { b2cPersonalizado: 2, b2bPiloto: 1.8, b2bRecorrente: 1.5 }
+  assert.equal(obterFatorPedido('B2C lote (4+)', 4, fatores), 2)
+  assert.equal(obterFatorPedido('B2C lote (4+)', 50, fatores), 1.9)
+  assert.equal(obterFatorPedido('B2C lote (4+)', 80, fatores), 1.85)
+  assert.equal(obterFatorPedido('B2C lote (4+)', 100, fatores), 1.87)
 })

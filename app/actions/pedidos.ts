@@ -9,7 +9,7 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { arredondarMoeda, calcularOrcamento } from '@/lib/orcamento.mjs'
+import { arredondarMoeda, calcularPrecoPlanilha, calcularValorVenda, TIPOS_PEDIDO } from '@/lib/orcamento.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -106,6 +106,9 @@ export interface PedidoParaDuplicar {
   parcelas: number
   condicao_pagamento: string | null
   valor_total_original: number
+  preco_unitario_original: number
+  tipo_venda: string | null
+  impressora_id: number | null
   materiais: MaterialInput[]
   insumos: InsumoInput[]
 }
@@ -149,7 +152,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
          COALESCE(SUM(valor_total_cobrado), 0) AS faturamento_bruto,
          COALESCE(SUM(
            custo_filamento + custo_insumos + custo_energia +
-           valor_reserva_maquina + custo_embalagem + frete_pago
+           valor_reserva_maquina + taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes
          ), 0) AS custos_totais
        FROM pedidos
        WHERE tenant_id = ?
@@ -207,12 +210,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     SELECT
       COALESCE(SUM(valor_total_cobrado - (
         custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
-        custo_embalagem + frete_pago + custo_extra_real
+        taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real
       )), 0) AS lucro_liquido,
       COALESCE(AVG(CASE WHEN valor_total_cobrado > 0 THEN
         ((valor_total_cobrado - (
           custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
-          custo_embalagem + frete_pago + custo_extra_real
+          taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real
         )) / valor_total_cobrado) * 100 END), 0) AS margem_media
     FROM pedidos
     WHERE tenant_id = ? AND status = 'Finalizado'
@@ -324,12 +327,12 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
          p.fim_previsto,
          p.valor_total_cobrado - (
            p.custo_filamento + p.custo_insumos + p.custo_energia +
-           p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+           p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
          ) AS lucro_liquido,
          CASE WHEN p.valor_total_cobrado > 0 THEN
            ((p.valor_total_cobrado - (
              p.custo_filamento + p.custo_insumos + p.custo_energia +
-             p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+             p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
            )) / p.valor_total_cobrado) * 100 ELSE 0 END AS margem_percentual,
          COALESCE(
            (SELECT SUM(r.valor) FROM recebimentos r
@@ -351,7 +354,11 @@ export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoPar
     SELECT id AS origem_id, numero_orcamento AS origem_numero, nome_da_peca,
       quantidade, tempo_impressao_horas, custo_embalagem, desconto,
       frete_cobrado, frete_pago, parcelas, condicao_pagamento,
-      valor_total_cobrado AS valor_total_original
+      tipo_venda, impressora_id,
+      valor_total_cobrado AS valor_total_original,
+      COALESCE(NULLIF(preco_unitario, 0),
+        (valor_total_cobrado + desconto - frete_cobrado) / MAX(quantidade, 1)
+      ) AS preco_unitario_original
     FROM pedidos WHERE id = ? AND tenant_id = ?
   `).get(pedidoId, TENANT_ID) as Omit<PedidoParaDuplicar, 'materiais' | 'insumos'> | undefined
   if (!pedido) return null
@@ -391,6 +398,7 @@ export interface CriarPedidoInput {
   cliente_id: number
   tempo_impressao_horas: number
   quantidade?: number
+  tipo_pedido: string
   materials: MaterialInput[]
   insumos: InsumoInput[]
   custo_embalagem: number
@@ -403,6 +411,12 @@ export interface CriarPedidoInput {
   parcelas?: number
   condicao_pagamento?: string
   pedido_origem_id?: number
+  preco_unitario?: number
+  materiais_avulsos_por_unidade: number
+  horas_trabalho_ativo: number
+  setup_projeto: number
+  margem_perdas: number
+  impressora_id?: number | null
 }
 
 // --- Mutation: criar pedido ---
@@ -414,6 +428,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       cliente_id,
       tempo_impressao_horas,
       quantidade = 1,
+      tipo_pedido,
       materials,
       insumos,
       custo_embalagem,
@@ -426,6 +441,12 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       parcelas = 1,
       condicao_pagamento,
       pedido_origem_id,
+      preco_unitario,
+      materiais_avulsos_por_unidade,
+      horas_trabalho_ativo,
+      setup_projeto,
+      margem_perdas,
+      impressora_id = null,
     } = data
 
     if (typeof nome_da_peca !== 'string' || !nome_da_peca.trim())
@@ -438,15 +459,27 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       return { success: false, message: 'Tempo de impressão inválido.' }
     if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100_000)
       return { success: false, message: 'Quantidade de peças inválida.' }
+    if (!TIPOS_PEDIDO.includes(tipo_pedido))
+      return { success: false, message: 'Tipo de pedido inválido.' }
+    if (impressora_id !== null && (!Number.isSafeInteger(impressora_id) || impressora_id <= 0))
+      return { success: false, message: 'Impressora inválida.' }
+    if (preco_unitario !== undefined && (!Number.isFinite(preco_unitario) || preco_unitario <= 0 || preco_unitario > 1_000_000))
+      return { success: false, message: 'Preço de venda unitário inválido.' }
     if (!Array.isArray(materials) || materials.length === 0 || materials.length > 8)
       return { success: false, message: 'Adicione de um a oito materiais.' }
     if (!Array.isArray(insumos) || insumos.length > 20)
       return { success: false, message: 'Lista de insumos inválida.' }
 
-    for (const valor of [custo_embalagem, desconto, frete_cobrado, frete_pago]) {
+    for (const valor of [
+      custo_embalagem, desconto, frete_cobrado, frete_pago,
+      materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto,
+    ]) {
       if (!Number.isFinite(valor) || valor < 0 || valor > 1_000_000) {
         return { success: false, message: 'Custos, desconto ou frete inválidos.' }
       }
+    }
+    if (!Number.isFinite(margem_perdas) || margem_perdas < 0 || margem_perdas > 1) {
+      return { success: false, message: 'A margem para perdas deve ficar entre 0% e 100%.' }
     }
     if (data_entrega && !/^\d{4}-\d{2}-\d{2}$/.test(data_entrega)) {
       return { success: false, message: 'Data de entrega inválida.' }
@@ -541,21 +574,44 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
 
     const configuracao = db
       .prepare(
-        `SELECT taxa_operacional, custo_hora_maquina, tarifa_energia_kwh, potencia_impressora_w
+        `SELECT custo_hora_maquina, tarifa_energia_kwh, potencia_impressora_w,
+                taxa_venda_padrao, valor_hora_trabalho, fator_b2c_personalizado,
+                fator_b2b_piloto, fator_b2b_recorrente, pedido_minimo_b2b
          FROM tenants WHERE id = ? AND ativo = 1`,
       )
       .get(TENANT_ID) as {
-        taxa_operacional: number
         custo_hora_maquina: number
         tarifa_energia_kwh: number
         potencia_impressora_w: number
+        taxa_venda_padrao: number
+        valor_hora_trabalho: number
+        fator_b2c_personalizado: number
+        fator_b2b_piloto: number
+        fator_b2b_recorrente: number
+        pedido_minimo_b2b: number
       } | undefined
     if (!configuracao) return { success: false, message: 'Configuração da empresa não encontrada.' }
 
-    const totaisBasicos = calcularOrcamento({
+    const impressora = impressora_id === null ? null : db.prepare(`
+      SELECT id, potencia_w, custo_hora FROM impressoras
+      WHERE id = ? AND tenant_id = ? AND ativo = 1
+    `).get(impressora_id, TENANT_ID) as { id: number; potencia_w: number; custo_hora: number } | undefined
+    if (impressora_id !== null && !impressora) {
+      return { success: false, message: 'Impressora não encontrada.' }
+    }
+
+    const custoInsumosBruto = insumosValidos.reduce((total, item) => {
+      return total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario
+    }, 0)
+    const calculo = calcularPrecoPlanilha({
+      tipoPedido: tipo_pedido,
+      quantidade,
       tempoImpressaoHoras: tempo_impressao_horas,
-      custoHoraMaquina: configuracao.custo_hora_maquina,
-      taxaOperacional: configuracao.taxa_operacional,
+      potenciaW: impressora?.potencia_w ?? configuracao.potencia_impressora_w,
+      tarifaEnergiaKwh: configuracao.tarifa_energia_kwh,
+      custoHoraMaquina: impressora && impressora.custo_hora > 0
+        ? impressora.custo_hora
+        : configuracao.custo_hora_maquina,
       materiais: materialsValidos.map((m) => {
         const filamento = filamentosMap.get(m.filamento_id)!
         return {
@@ -563,26 +619,42 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           custoPorGrama: filamento.preco_rolo / filamento.peso_rolo_gramas,
         }
       }),
+      custoInsumos: custoInsumosBruto,
+      materiaisAvulsosPorUnidade: materiais_avulsos_por_unidade,
+      horasTrabalhoAtivo: horas_trabalho_ativo,
+      valorHoraTrabalho: configuracao.valor_hora_trabalho,
+      custoEmbalagem: custo_embalagem,
+      fretePago: frete_pago,
+      setupProjeto: setup_projeto,
+      margemPerdas: margem_perdas,
+      taxaVenda: configuracao.taxa_venda_padrao,
+      fatorB2CPersonalizado: configuracao.fator_b2c_personalizado,
+      fatorB2BPiloto: configuracao.fator_b2b_piloto,
+      fatorB2BRecorrente: configuracao.fator_b2b_recorrente,
+      pedidoMinimoB2B: configuracao.pedido_minimo_b2b,
     })
-    const custoInsumos = arredondarMoeda(insumosValidos.reduce((total, item) => {
-      return total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario
-    }, 0))
-    const custoEnergia = arredondarMoeda(
-      (configuracao.potencia_impressora_w / 1000) *
-      tempo_impressao_horas *
-      configuracao.tarifa_energia_kwh,
-    )
+    const custoInsumos = arredondarMoeda(custoInsumosBruto)
     const embalagem = arredondarMoeda(custo_embalagem)
     const descontoValidado = arredondarMoeda(desconto)
     const freteCobrado = arredondarMoeda(frete_cobrado)
     const fretePago = arredondarMoeda(frete_pago)
-    const subtotal = arredondarMoeda(
-      totaisBasicos.total + custoInsumos + custoEnergia + embalagem + freteCobrado,
-    )
-    if (descontoValidado > subtotal) {
+    const precoUnitarioAplicado = preco_unitario ?? calculo.precoUnitarioArredondado
+    let valorTotal: number
+    try {
+      valorTotal = calcularValorVenda({
+        custoCalculado: calculo.totalArredondado,
+        quantidade,
+        precoUnitario: precoUnitarioAplicado,
+        desconto: descontoValidado,
+        freteCobrado,
+      })
+    } catch {
       return { success: false, message: 'O desconto não pode ser maior que o valor do orçamento.' }
     }
-    const valorTotal = arredondarMoeda(subtotal - descontoValidado)
+    const custosAdicionais = arredondarMoeda(
+      calculo.reservaPerdas + calculo.materiaisAvulsos + calculo.maoObraAtiva + calculo.setupProjeto,
+    )
+    const taxasComissoes = arredondarMoeda(valorTotal * configuracao.taxa_venda_padrao)
 
     const inserir = db.transaction(() => {
       // 1. Insere o pedido
@@ -595,20 +667,20 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             valor_reserva_maquina, taxa_operacional, custo_embalagem,
             desconto, frete_cobrado, frete_pago,
             valor_total_cobrado, data_entrega, validade_orcamento, vencimento_em,
-            parcelas, condicao_pagamento, quantidade, preco_unitario,
+            parcelas, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
             orcamento_status, status
-          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
+          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           TENANT_ID,
           cliente_id,
           nome_da_peca.trim(),
           tempo_impressao_horas,
-          totaisBasicos.materialCost,
+          calculo.filamentoSemPerdas,
           custoInsumos,
-          custoEnergia,
-          totaisBasicos.machineReserve,
-          totaisBasicos.operationalFee,
+          calculo.energia,
+          calculo.reservaMaquina,
+          custosAdicionais,
           embalagem,
           descontoValidado,
           freteCobrado,
@@ -620,7 +692,10 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           parcelas,
           condicao_pagamento?.trim() || null,
           quantidade,
-          arredondarMoeda(valorTotal / quantidade),
+          precoUnitarioAplicado,
+          tipo_pedido,
+          taxasComissoes,
+          impressora_id,
         )
 
       const pedidoId = pedidoResult.lastInsertRowid as number
@@ -737,12 +812,12 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
          p.fim_previsto,
          p.valor_total_cobrado - (
            p.custo_filamento + p.custo_insumos + p.custo_energia +
-           p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+           p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
          ) AS lucro_liquido,
          CASE WHEN p.valor_total_cobrado > 0 THEN
            ((p.valor_total_cobrado - (
              p.custo_filamento + p.custo_insumos + p.custo_energia +
-             p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
+             p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
            )) / p.valor_total_cobrado) * 100 ELSE 0 END AS margem_percentual,
          COALESCE(
            (SELECT SUM(r.valor) FROM recebimentos r

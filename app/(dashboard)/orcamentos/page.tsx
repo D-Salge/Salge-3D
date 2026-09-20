@@ -6,16 +6,18 @@ import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
 import { getPedidosRecentes } from '@/app/actions/pedidos'
 import { TabelaPedidos } from '@/app/components/TabelaPedidos'
+import { getImpressoras } from '@/app/actions/operacao'
 
 export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
 
 export default async function Page() {
-  const [clientes, filamentos, insumos, config, pedidos] = await Promise.all([
+  const [clientes, filamentos, insumos, config, pedidos, impressoras] = await Promise.all([
     getClientesLista(),
     getFilamentosLista(),
     getInsumosLista(),
     getConfiguracoes(),
     getPedidosRecentes(100),
+    getImpressoras(),
   ])
 
   return (
@@ -33,10 +35,17 @@ export default async function Page() {
         clientes={clientes}
         filamentos={filamentos}
         insumosList={insumos}
-        taxaOperacional={config.taxa_operacional}
+        impressoras={impressoras}
         custoHoraMaquina={config.custo_hora_maquina}
         tarifaEnergia={config.tarifa_energia_kwh}
         potenciaW={config.potencia_impressora_w}
+        margemPerdasPadrao={config.margem_perdas_padrao}
+        taxaVenda={config.taxa_venda_padrao}
+        valorHoraTrabalho={config.valor_hora_trabalho}
+        fatorB2CPersonalizado={config.fator_b2c_personalizado}
+        fatorB2BPiloto={config.fator_b2b_piloto}
+        fatorB2BRecorrente={config.fator_b2b_recorrente}
+        pedidoMinimoB2B={config.pedido_minimo_b2b}
       />
 
       <div className="mt-10 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 sm:p-8">

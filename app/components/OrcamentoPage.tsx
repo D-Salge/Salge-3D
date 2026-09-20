@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation'
 import type { Cliente } from '@/app/actions/clientes'
 import type { FilamentoCompleto } from '@/app/actions/filamentos'
 import type { Insumo } from '@/app/actions/insumos'
-import { arredondarMoeda, calcularOrcamento } from '@/lib/orcamento.mjs'
+import type { Impressora } from '@/app/actions/operacao'
+import { arredondarMoeda, calcularPrecoPlanilha, calcularValorVenda, TIPOS_PEDIDO } from '@/lib/orcamento.mjs'
 
 function formaPagamentoInicial(valor?: string | null) {
   const mapa: Record<string, string> = {
@@ -22,19 +23,33 @@ export function OrcamentoPage({
   clientes, 
   filamentos, 
   insumosList,
-  taxaOperacional, 
+  impressoras,
   custoHoraMaquina,
   tarifaEnergia,
   potenciaW,
+  margemPerdasPadrao,
+  taxaVenda,
+  valorHoraTrabalho,
+  fatorB2CPersonalizado,
+  fatorB2BPiloto,
+  fatorB2BRecorrente,
+  pedidoMinimoB2B,
   pedidoInicial,
 }: { 
   clientes: Cliente[]
   filamentos: FilamentoCompleto[]
   insumosList: Insumo[]
-  taxaOperacional: number
+  impressoras: Impressora[]
   custoHoraMaquina: number
   tarifaEnergia: number
   potenciaW: number
+  margemPerdasPadrao: number
+  taxaVenda: number
+  valorHoraTrabalho: number
+  fatorB2CPersonalizado: number
+  fatorB2BPiloto: number
+  fatorB2BRecorrente: number
+  pedidoMinimoB2B: number
   pedidoInicial?: PedidoParaDuplicar | null
 }) {
   const router = useRouter()
@@ -45,6 +60,14 @@ export function OrcamentoPage({
   const [clienteId, setClienteId] = useState('')
   const [tempoHoras, setTempoHoras] = useState<number | ''>(pedidoInicial?.tempo_impressao_horas ?? '')
   const [quantidade, setQuantidade] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
+  const [tipoPedido, setTipoPedido] = useState(
+    pedidoInicial?.tipo_venda && TIPOS_PEDIDO.includes(pedidoInicial.tipo_venda)
+      ? pedidoInicial.tipo_venda
+      : (pedidoInicial?.quantidade ?? 1) >= 4 ? 'B2C lote (4+)' : 'B2C personalizado (1-3)',
+  )
+  const [impressoraId, setImpressoraId] = useState(
+    pedidoInicial?.impressora_id ? String(pedidoInicial.impressora_id) : '',
+  )
   
   // Arrays
   const [materiais, setMateriais] = useState<{ id: string; filamentoId: string; pesoGasto: number | '' }[]>(
@@ -59,6 +82,11 @@ export function OrcamentoPage({
   const [freteCobrado, setFreteCobrado] = useState<number | ''>(pedidoInicial?.frete_cobrado || '')
   const [fretePago, setFretePago] = useState<number | ''>(pedidoInicial?.frete_pago || '')
   const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>(pedidoInicial?.custo_embalagem || '')
+  const [materiaisAvulsosPorUnidade, setMateriaisAvulsosPorUnidade] = useState<number | ''>('')
+  const [horasTrabalhoAtivo, setHorasTrabalhoAtivo] = useState<number | ''>('')
+  const [setupProjeto, setSetupProjeto] = useState<number | ''>('')
+  const [margemPerdas, setMargemPerdas] = useState(margemPerdasPadrao)
+  const [precoUnitarioVenda, setPrecoUnitarioVenda] = useState<number | ''>(pedidoInicial?.preco_unitario_original || '')
   const [dataEntrega, setDataEntrega] = useState('')
   const [validadeOrcamento, setValidadeOrcamento] = useState('')
   const [vencimentoEm, setVencimentoEm] = useState('')
@@ -94,10 +122,18 @@ export function OrcamentoPage({
 
   // ─── CALCULATIONS ────────────────────────────────────────────────
   const th = Number(tempoHoras) || 0
-  const totaisBasicos = useMemo(() => calcularOrcamento({
+  const impressoraSelecionada = impressoras.find(item => item.id === Number(impressoraId))
+  const potenciaAplicada = impressoraSelecionada?.potencia_w ?? potenciaW
+  const custoHoraAplicado = impressoraSelecionada && impressoraSelecionada.custo_hora > 0
+    ? impressoraSelecionada.custo_hora
+    : custoHoraMaquina
+  const calculo = useMemo(() => calcularPrecoPlanilha({
+    tipoPedido,
+    quantidade,
     tempoImpressaoHoras: th >= 0 ? th : 0,
-    custoHoraMaquina,
-    taxaOperacional,
+    potenciaW: potenciaAplicada,
+    tarifaEnergiaKwh: tarifaEnergia,
+    custoHoraMaquina: custoHoraAplicado,
     materiais: materiais.map((material) => {
       const filamento = filamentos.find(f => f.id === Number(material.filamentoId))
       const peso = Number(material.pesoGasto)
@@ -106,11 +142,32 @@ export function OrcamentoPage({
         custoPorGrama: filamento ? filamento.preco_rolo / filamento.peso_rolo_gramas : 0,
       }
     }),
-  }), [th, custoHoraMaquina, taxaOperacional, materiais, filamentos])
-  const custoFilamento = totaisBasicos.materialCost
-  const reservaMaquina = totaisBasicos.machineReserve
-
-  // Insumos
+    custoInsumos: insumos.reduce((acc, ins) => {
+      if (!ins.insumoId || !ins.quantidade) return acc
+      const item = insumosList.find(i => i.id === Number(ins.insumoId))
+      return item ? acc + Number(ins.quantidade) * item.custo_unitario : acc
+    }, 0),
+    materiaisAvulsosPorUnidade: Number(materiaisAvulsosPorUnidade) || 0,
+    horasTrabalhoAtivo: Number(horasTrabalhoAtivo) || 0,
+    valorHoraTrabalho,
+    custoEmbalagem: Number(custoEmbalagem) || 0,
+    fretePago: Number(fretePago) || 0,
+    setupProjeto: Number(setupProjeto) || 0,
+    margemPerdas,
+    taxaVenda,
+    fatorB2CPersonalizado,
+    fatorB2BPiloto,
+    fatorB2BRecorrente,
+    pedidoMinimoB2B,
+  }), [
+    tipoPedido, quantidade, th, potenciaAplicada, tarifaEnergia, custoHoraAplicado,
+    materiais, filamentos, insumos, insumosList, materiaisAvulsosPorUnidade,
+    horasTrabalhoAtivo, valorHoraTrabalho, custoEmbalagem, fretePago,
+    setupProjeto, margemPerdas, taxaVenda, fatorB2CPersonalizado,
+    fatorB2BPiloto, fatorB2BRecorrente, pedidoMinimoB2B,
+  ])
+  const custoFilamento = calculo.filamentoSemPerdas
+  const reservaMaquina = calculo.reservaMaquina
   const custoInsumos = arredondarMoeda(insumos.reduce((acc, ins) => {
     if (!ins.insumoId || !ins.quantidade) return acc
     const item = insumosList.find(i => i.id === Number(ins.insumoId))
@@ -118,19 +175,20 @@ export function OrcamentoPage({
     return acc + (Number(ins.quantidade) * item.custo_unitario)
   }, 0))
 
-  // Energia: (Potência Watts / 1000) * Horas * Tarifa(R$/kWh)
-  const custoEnergia = arredondarMoeda((potenciaW / 1000) * th * tarifaEnergia)
-
-  // Base
-  const custoBase = arredondarMoeda(
-    custoFilamento + custoInsumos + custoEnergia + reservaMaquina +
-    totaisBasicos.operationalFee + (Number(custoEmbalagem) || 0),
-  )
-  
-  // Total = Base - Desconto + FreteCobrado
+  // O preço comercial informado prevalece sobre a sugestão da planilha.
   const desc = Number(desconto) || 0
   const freteC = Number(freteCobrado) || 0
-  const valorFinal = arredondarMoeda(Math.max(0, custoBase - desc + freteC))
+  const precoUnitario = precoUnitarioVenda === '' ? null : Number(precoUnitarioVenda)
+  const baseComercial = precoUnitario === null ? calculo.totalArredondado : arredondarMoeda(precoUnitario * quantidade)
+  const valorFinal = calcularValorVenda({
+    custoCalculado: calculo.totalArredondado,
+    quantidade,
+    precoUnitario,
+    desconto: Math.min(desc, baseComercial + freteC),
+    freteCobrado: freteC,
+  })
+  const taxasEstimadas = arredondarMoeda(valorFinal * taxaVenda)
+  const lucroEstimado = arredondarMoeda(valorFinal - taxasEstimadas - calculo.custoCompleto)
 
   // ─── SUBMIT ──────────────────────────────────────────────────────
   function handleSubmit(e?: React.SyntheticEvent) {
@@ -141,7 +199,11 @@ export function OrcamentoPage({
       setErrorMsg('Preencha os dados básicos corretamente.')
       return
     }
-    if (desc > custoBase + freteC) {
+    if (precoUnitario !== null && (!Number.isFinite(precoUnitario) || precoUnitario <= 0)) {
+      setErrorMsg('Informe um preço de venda unitário válido.')
+      return
+    }
+    if (desc > baseComercial + freteC) {
       setErrorMsg('O desconto não pode ser maior que o valor do orçamento.')
       return
     }
@@ -160,8 +222,14 @@ export function OrcamentoPage({
         cliente_id: Number(clienteId),
         tempo_impressao_horas: th,
         quantidade,
+        tipo_pedido: tipoPedido,
         materials: payloadMateriais,
         insumos: payloadInsumos,
+        materiais_avulsos_por_unidade: Number(materiaisAvulsosPorUnidade) || 0,
+        horas_trabalho_ativo: Number(horasTrabalhoAtivo) || 0,
+        setup_projeto: Number(setupProjeto) || 0,
+        margem_perdas: margemPerdas,
+        impressora_id: impressoraId ? Number(impressoraId) : null,
         custo_embalagem: Number(custoEmbalagem) || 0,
         desconto: desc,
         frete_cobrado: freteC,
@@ -172,6 +240,7 @@ export function OrcamentoPage({
         parcelas,
         condicao_pagamento: condicaoPagamento,
         pedido_origem_id: pedidoInicial?.origem_id,
+        preco_unitario: precoUnitario ?? undefined,
       })
 
       if (res.success) {
@@ -201,7 +270,7 @@ export function OrcamentoPage({
     <div className="flex flex-col gap-8 lg:flex-row lg:items-start shrink-0">
       <form onSubmit={handleSubmit} className="flex-1 space-y-8">
         {pedidoInicial && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.06] p-4 text-xs leading-5 text-[#d8f45a]/80">
-          Cópia de {pedidoInicial.origem_numero ?? `pedido #${pedidoInicial.origem_id}`} (valor anterior: {pedidoInicial.valor_total_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). Cliente, datas, pagamentos e produção anterior não serão copiados. Os custos serão recalculados com os valores atuais.
+          Cópia de {pedidoInicial.origem_numero ?? `pedido #${pedidoInicial.origem_id}`} (valor anterior: {pedidoInicial.valor_total_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O preço comercial por unidade foi preservado; os custos técnicos serão recalculados com os valores atuais. Cliente, datas, pagamentos e produção anterior não serão copiados.
         </div>}
         
         {/* 1. Dados Básicos */}
@@ -230,6 +299,23 @@ export function OrcamentoPage({
               <span className="text-xs font-medium text-white/55">Tempo de Impressão (Horas)</span>
               <input required type="number" step="0.1" min="0" value={tempoHoras} onChange={e => setTempoHoras(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Tipo de pedido</span>
+              <select value={tipoPedido} onChange={e => setTipoPedido(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                {TIPOS_PEDIDO.map(tipo => <option key={tipo}>{tipo}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Impressora usada no cálculo</span>
+              <select value={impressoraId} onChange={e => setImpressoraId(e.target.value)}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                <option value="">Configuração geral</option>
+                {impressoras.filter(item => item.status !== 'Inativa').map(item => (
+                  <option key={item.id} value={item.id}>{item.nome}{item.modelo ? ` — ${item.modelo}` : ''}</option>
+                ))}
+              </select>
             </label>
           </div>
         </section>
@@ -334,6 +420,13 @@ export function OrcamentoPage({
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-[#d8f45a]">Preço de venda por unidade (R$)</span>
+              <input type="number" min="0.01" step="0.01" placeholder={`Sugestão: ${fmt(calculo.precoUnitarioArredondado)}`} value={precoUnitarioVenda}
+                onChange={e => setPrecoUnitarioVenda(e.target.value === '' ? '' : Number(e.target.value))}
+                className="h-11 rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 text-sm text-white focus:border-[#d8f45a] outline-none" />
+              <span className="text-[10px] text-white/30">Editável. Vazio usa a sugestão da planilha; ao duplicar, preserva o preço anterior.</span>
+            </label>
+            <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-[#d8f45a]">Desconto (R$)</span>
               <input type="number" step="0.01" min="0" value={desconto} onChange={e => setDesconto(Number(e.target.value))}
                 className="h-11 rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 text-sm text-white focus:border-[#d8f45a] outline-none" />
@@ -353,6 +446,30 @@ export function OrcamentoPage({
               <input type="number" step="0.01" min="0" value={custoEmbalagem} onChange={e => setCustoEmbalagem(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Materiais avulsos por unidade (R$)</span>
+              <input type="number" step="0.01" min="0" value={materiaisAvulsosPorUnidade} onChange={e => setMateriaisAvulsosPorUnidade(e.target.value === '' ? '' : Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Horas de trabalho ativo</span>
+              <input type="number" step="0.01" min="0" value={horasTrabalhoAtivo} onChange={e => setHorasTrabalhoAtivo(e.target.value === '' ? '' : Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+              <span className="text-[10px] text-white/30">Somente modelagem, preparo e acabamento; não conte a impressora sozinha.</span>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Setup / projeto total (R$)</span>
+              <input type="number" step="0.01" min="0" value={setupProjeto} onChange={e => setSetupProjeto(e.target.value === '' ? '' : Number(e.target.value))}
+                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-white/55">Margem para perdas</span>
+              <div className="relative">
+                <input type="number" step="1" min="0" max="100" value={arredondarMoeda(margemPerdas * 100)} onChange={e => setMargemPerdas(Number(e.target.value) / 100)}
+                  className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pr-8 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                <span className="absolute right-3 top-3 text-sm text-white/35">%</span>
+              </div>
+            </label>
           </div>
         </section>
 
@@ -367,29 +484,53 @@ export function OrcamentoPage({
             <span>Filamentos</span><span className="font-mono text-white/80">{fmt(custoFilamento)}</span>
           </div>
           <div className="flex justify-between text-white/60">
+            <span>Reserva para perdas ({arredondarMoeda(margemPerdas * 100)}%)</span><span className="font-mono text-white/80">{fmt(calculo.reservaPerdas)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
             <span>Insumos extras</span><span className="font-mono text-white/80">{fmt(custoInsumos)}</span>
           </div>
           <div className="flex justify-between text-white/60">
-            <span className="flex items-center gap-1"><Zap size={13} className="text-amber-400"/> Energia ({(potenciaW/1000).toFixed(2)}kW)</span>
-            <span className="font-mono text-white/80">{fmt(custoEnergia)}</span>
+            <span className="flex items-center gap-1"><Zap size={13} className="text-amber-400"/> Energia ({(potenciaAplicada/1000).toFixed(2)}kW)</span>
+            <span className="font-mono text-white/80">{fmt(calculo.energia)}</span>
           </div>
           <div className="flex justify-between text-white/60">
             <span>Reserva Máquina</span><span className="font-mono text-white/80">{fmt(reservaMaquina)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Taxa Operacional</span><span className="font-mono text-white/80">{fmt(totaisBasicos.operationalFee)}</span>
-          </div>
+          {calculo.materiaisAvulsos > 0 && <div className="flex justify-between text-white/60"><span>Materiais avulsos</span><span className="font-mono text-white/80">{fmt(calculo.materiaisAvulsos)}</span></div>}
+          {calculo.maoObraAtiva > 0 && <div className="flex justify-between text-white/60"><span>Mão de obra ativa</span><span className="font-mono text-white/80">{fmt(calculo.maoObraAtiva)}</span></div>}
+          {calculo.setupProjeto > 0 && <div className="flex justify-between text-white/60"><span>Setup / projeto</span><span className="font-mono text-white/80">{fmt(calculo.setupProjeto)}</span></div>}
           {Number(custoEmbalagem) > 0 && (
             <div className="flex justify-between text-white/60">
               <span>Embalagem</span><span className="font-mono text-white/80">{fmt(Number(custoEmbalagem))}</span>
             </div>
           )}
+          {calculo.fretePago > 0 && <div className="flex justify-between text-white/60"><span>Frete pago</span><span className="font-mono text-white/80">{fmt(calculo.fretePago)}</span></div>}
           
           <div className="my-3 h-px w-full bg-white/[0.08]" />
           
           <div className="flex justify-between font-medium text-white/80">
-            <span>Custo Base</span><span className="font-mono">{fmt(custoBase)}</span>
+            <span>Custo completo</span><span className="font-mono">{fmt(calculo.custoCompleto)}</span>
           </div>
+
+          <div className="flex justify-between text-white/60">
+            <span>Preço mínimo sem prejuízo</span><span className="font-mono text-white/80">{fmt(calculo.precoMinimo)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
+            <span>Sugestão ({calculo.fatorAplicado.toFixed(2)}×)</span><span className="font-mono text-white/80">{fmt(calculo.totalArredondado)}</span>
+          </div>
+          <div className="flex justify-between text-white/60">
+            <span>Sugestão por unidade</span><span className="font-mono text-white/80">{fmt(calculo.precoUnitarioArredondado)}</span>
+          </div>
+
+          {precoUnitario !== null && <div className="flex justify-between font-medium text-[#d8f45a]">
+            <span>Preço comercial ({quantidade} × {fmt(precoUnitario)})</span><span className="font-mono">{fmt(baseComercial)}</span>
+          </div>}
+
+          {precoUnitario !== null && precoUnitario !== calculo.precoUnitarioArredondado && (
+            <button type="button" onClick={() => setPrecoUnitarioVenda(calculo.precoUnitarioArredondado)} className="text-left text-[11px] text-[#d8f45a]/70 underline underline-offset-2">
+              Usar preço sugerido de {fmt(calculo.precoUnitarioArredondado)} por unidade
+            </button>
+          )}
 
           {(desc > 0 || freteC > 0) && (
             <div className="pt-2 space-y-2">
@@ -397,12 +538,20 @@ export function OrcamentoPage({
               {freteC > 0 && <div className="flex justify-between text-blue-400"><span className="text-xs">Frete Cobrado</span><span className="font-mono">+ {fmt(freteC)}</span></div>}
             </div>
           )}
+          {taxasEstimadas > 0 && <div className="flex justify-between text-white/60"><span>Taxas estimadas</span><span className="font-mono text-white/80">{fmt(taxasEstimadas)}</span></div>}
+
+          {valorFinal < calculo.precoMinimo && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs leading-5 text-red-300">
+              Atenção: o valor final está abaixo do preço mínimo sem prejuízo calculado pela planilha.
+            </div>
+          )}
 
           <div className="mt-4 rounded-xl bg-white/[0.03] p-4 text-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Valor Final Sugerido</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Valor final do orçamento</span>
             <div className="mt-1 text-3xl font-bold tracking-tight text-[#d8f45a]">
               {fmt(valorFinal)}
             </div>
+            <p className={`mt-2 text-xs ${lucroEstimado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>Lucro estimado: {fmt(lucroEstimado)}</p>
           </div>
         </div>
 

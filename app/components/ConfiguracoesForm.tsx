@@ -86,17 +86,6 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Taxa Operacional Fixa (R$)</span>
-              <input
-                required type="number" step="0.01" min="0"
-                value={form.taxa_operacional}
-                onChange={e => setForm(f => ({ ...f, taxa_operacional: Number(e.target.value) }))}
-                className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
-              />
-              <span className="text-[10px] text-white/30">Adicionada a cada orçamento (setup, embalagem, etc).</span>
-            </label>
-
-            <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-white/55">Custo Hora da Máquina (R$)</span>
               <input
                 required type="number" step="0.01" min="0"
@@ -104,7 +93,7 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
                 onChange={e => setForm(f => ({ ...f, custo_hora_maquina: Number(e.target.value) }))}
                 className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
               />
-              <span className="text-[10px] text-white/30">Custo de depreciação e energia por hora de impressão.</span>
+              <span className="text-[10px] text-white/30">Reserva por hora para desgaste, manutenção e reposição. A energia é calculada separadamente.</span>
             </label>
           </div>
 
