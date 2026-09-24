@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  contatoWhatsAppJaRegistrado,
   criarMensagemWhatsApp,
   criarUrlWhatsApp,
   normalizarTelefoneWhatsApp,
@@ -46,3 +47,18 @@ test('monta cobrança com saldo real e gera URL codificada', () => {
   assert.match(mensagem, /20\/09\/2026/)
   assert.match(criarUrlWhatsApp('(34) 99999-1234', mensagem), /^https:\/\/wa\.me\/5534999991234\?text=/)
 })
+
+test('não repete uma pendência do WhatsApp que já foi contatada', () => {
+  const eventos = 'WhatsApp: Enviar orçamento||Status do orçamento'
+  assert.equal(contatoWhatsAppJaRegistrado('orcamento', eventos), true)
+  assert.equal(contatoWhatsAppJaRegistrado('pronto', eventos), false)
+})
+
+test('pedido finalizado não volta a ser tratado como retomada de orçamento', () => {
+  assert.equal(sugerirTipoMensagemWhatsApp({
+    orcamentoStatus: 'Enviado',
+    status: 'Finalizado',
+    saldoPendente: 0,
+  }), 'pronto')
+})
+
