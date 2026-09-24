@@ -60,5 +60,10 @@ test('pedido finalizado não volta a ser tratado como retomada de orçamento', (
     status: 'Finalizado',
     saldoPendente: 0,
   }), 'pronto')
+  assert.equal(sugerirTipoMensagemWhatsApp({
+    orcamentoStatus: 'Enviado',
+    status: 'Finalizado',
+    saldoPendente: 57,
+  }), 'cobranca')
 })
 
