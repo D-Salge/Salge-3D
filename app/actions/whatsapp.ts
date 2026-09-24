@@ -2,7 +2,12 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { ROTULOS_MENSAGEM_WHATSAPP, TIPOS_MENSAGEM_WHATSAPP } from '@/lib/whatsapp.mjs'
+import {
+  contatoWhatsAppJaRegistrado,
+  ROTULOS_MENSAGEM_WHATSAPP,
+  sugerirTipoMensagemWhatsApp,
+  TIPOS_MENSAGEM_WHATSAPP,
+} from '@/lib/whatsapp.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -29,7 +34,10 @@ export interface PendenciaWhatsApp extends PedidoWhatsApp {
   ultimo_contato: string | null
 }
 
-type PedidoPendenteRow = PedidoWhatsApp & { ultimo_contato: string | null }
+type PedidoPendenteRow = PedidoWhatsApp & {
+  ultimo_contato: string | null
+  contatos_whatsapp: string | null
+}
 
 export async function getPendenciasWhatsApp(): Promise<PendenciaWhatsApp[]> {
   const pedidos = db.prepare(`
@@ -41,14 +49,16 @@ export async function getPendenciasWhatsApp(): Promise<PendenciaWhatsApp[]> {
       MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
       (SELECT MAX(h.criado_em) FROM historico_pedidos h
-        WHERE h.pedido_id = p.id AND h.evento LIKE 'WhatsApp:%') AS ultimo_contato
+        WHERE h.pedido_id = p.id AND h.evento LIKE 'WhatsApp:%') AS ultimo_contato,
+      (SELECT GROUP_CONCAT(h.evento, '||') FROM historico_pedidos h
+        WHERE h.pedido_id = p.id AND h.evento LIKE 'WhatsApp:%') AS contatos_whatsapp
     FROM pedidos p
     JOIN clientes c ON c.id = p.cliente_id AND c.tenant_id = p.tenant_id
     WHERE p.tenant_id = ? AND p.status != 'Cancelado'
       AND c.telefone IS NOT NULL AND trim(c.telefone) != ''
       AND (
-        p.orcamento_status = 'Enviado'
-        OR (p.orcamento_status = 'Aprovado' AND p.status = 'Finalizado')
+        p.status = 'Finalizado'
+        OR p.orcamento_status = 'Enviado'
         OR (p.orcamento_status = 'Aprovado' AND p.vencimento_em IS NOT NULL
           AND date(p.vencimento_em) < date('now'))
       )
@@ -65,18 +75,20 @@ export async function getPendenciasWhatsApp(): Promise<PendenciaWhatsApp[]> {
     LIMIT 30
   `).all(TENANT_ID) as PedidoPendenteRow[]
 
-  const limiteRecente = Date.now() - 24 * 60 * 60 * 1000
   return pedidos
-    .filter((pedido) => !pedido.ultimo_contato || new Date(pedido.ultimo_contato).getTime() < limiteRecente)
     .map((pedido) => {
-      let tipo_sugerido: TipoMensagemWhatsApp = 'pronto'
-      if (pedido.orcamento_status === 'Aprovado' && pedido.saldo_pendente > 0.009) {
-        tipo_sugerido = 'cobranca'
-      } else if (pedido.orcamento_status === 'Enviado') {
-        tipo_sugerido = 'orcamento'
-      }
+      const tipo_sugerido = sugerirTipoMensagemWhatsApp({
+        orcamentoStatus: pedido.orcamento_status,
+        status: pedido.status,
+        saldoPendente: pedido.saldo_pendente,
+        vencimentoEm: pedido.vencimento_em,
+      }) as TipoMensagemWhatsApp
       return { ...pedido, tipo_sugerido }
     })
+    .filter((pedido) => !contatoWhatsAppJaRegistrado(
+      pedido.tipo_sugerido,
+      pedido.contatos_whatsapp,
+    ))
     .slice(0, 12)
 }
 
