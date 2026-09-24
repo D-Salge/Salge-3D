@@ -1159,3 +1159,185 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
     return { success: false, message: 'Erro interno ao atualizar status.' }
   }
 }
+
+export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
+  try {
+    if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
+      return { success: false, message: 'Pedido inválido.' }
+    }
+
+    const excluir = db.transaction(() => {
+      const pedido = db.prepare(`
+        SELECT id, numero_orcamento, nome_da_peca, status
+        FROM pedidos
+        WHERE id = ? AND tenant_id = ?
+      `).get(pedidoId, TENANT_ID) as {
+        id: number
+        numero_orcamento: string | null
+        nome_da_peca: string
+        status: string
+      } | undefined
+
+      if (!pedido) throw new Error('NOT_FOUND')
+
+      // Restaura somente o saldo de estoque que ainda estiver efetivamente
+      // baixado por este pedido. Se ele já foi cancelado/revertido, o saldo
+      // líquido é zero e nada é devolvido novamente.
+      const movimentos = db.prepare(`
+        SELECT
+          tipo_item,
+          item_id,
+          lote_filamento_id,
+          SUM(
+            CASE
+              WHEN tipo = 'Saida' THEN quantidade
+              WHEN tipo = 'Reversao' THEN -quantidade
+              ELSE 0
+            END
+          ) AS quantidade
+        FROM movimentos_estoque
+        WHERE pedido_id = ?
+        GROUP BY tipo_item, item_id, lote_filamento_id
+        HAVING SUM(
+          CASE
+            WHEN tipo = 'Saida' THEN quantidade
+            WHEN tipo = 'Reversao' THEN -quantidade
+            ELSE 0
+          END
+        ) > 0.0005
+      `).all(pedidoId) as {
+        tipo_item: 'Filamento' | 'Insumo'
+        item_id: number
+        lote_filamento_id: number | null
+        quantidade: number
+      }[]
+
+      const referencia = pedido.numero_orcamento || `#${pedido.id}`
+      for (const movimento of movimentos) {
+        if (movimento.tipo_item === 'Filamento') {
+          const atual = db.prepare(`
+            SELECT COALESCE(estoque_gramas, peso_rolo_gramas) AS saldo
+            FROM filamentos WHERE id = ? AND tenant_id = ?
+          `).get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
+          if (!atual) throw new Error('STOCK_CHANGED')
+
+          if (movimento.lote_filamento_id) {
+            const lote = db.prepare(`
+              UPDATE lotes_filamento
+              SET saldo_gramas = saldo_gramas + ?
+              WHERE id = ? AND tenant_id = ? AND filamento_id = ?
+            `).run(
+              movimento.quantidade,
+              movimento.lote_filamento_id,
+              TENANT_ID,
+              movimento.item_id,
+            )
+            if (lote.changes !== 1) throw new Error('STOCK_CHANGED')
+          }
+
+          const saldoPosterior = atual.saldo + movimento.quantidade
+          db.prepare(`
+            UPDATE filamentos
+            SET estoque_gramas = ?
+            WHERE id = ? AND tenant_id = ?
+          `).run(saldoPosterior, movimento.item_id, TENANT_ID)
+
+          db.prepare(`
+            INSERT INTO movimentos_estoque (
+              tenant_id, usuario_id, tipo_item, item_id, lote_filamento_id,
+              pedido_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo
+            ) VALUES (?, 1, 'Filamento', ?, ?, NULL, 'Reversao', ?, ?, ?, ?)
+          `).run(
+            TENANT_ID,
+            movimento.item_id,
+            movimento.lote_filamento_id,
+            movimento.quantidade,
+            atual.saldo,
+            saldoPosterior,
+            `Estorno por exclusão do pedido ${referencia}`,
+          )
+        } else {
+          const atual = db.prepare(`
+            SELECT estoque_atual AS saldo
+            FROM insumos WHERE id = ? AND tenant_id = ?
+          `).get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
+          if (!atual) throw new Error('STOCK_CHANGED')
+
+          const saldoPosterior = atual.saldo + movimento.quantidade
+          db.prepare(`
+            UPDATE insumos SET estoque_atual = ?
+            WHERE id = ? AND tenant_id = ?
+          `).run(saldoPosterior, movimento.item_id, TENANT_ID)
+
+          db.prepare(`
+            INSERT INTO movimentos_estoque (
+              tenant_id, usuario_id, tipo_item, item_id, pedido_id,
+              tipo, quantidade, saldo_anterior, saldo_posterior, motivo
+            ) VALUES (?, 1, 'Insumo', ?, NULL, 'Reversao', ?, ?, ?, ?)
+          `).run(
+            TENANT_ID,
+            movimento.item_id,
+            movimento.quantidade,
+            atual.saldo,
+            saldoPosterior,
+            `Estorno por exclusão do pedido ${referencia}`,
+          )
+        }
+      }
+
+      // Modelos usam RESTRICT para proteger o pedido de origem; ao excluir o
+      // pedido, o modelo correspondente também precisa ser removido.
+      db.prepare('DELETE FROM modelos_orcamento WHERE pedido_id = ? AND tenant_id = ?')
+        .run(pedidoId, TENANT_ID)
+
+      // Mantém o livro de movimentos de estoque, mas sem apontar para um pedido
+      // que deixará de existir.
+      db.prepare('UPDATE movimentos_estoque SET pedido_id = NULL WHERE pedido_id = ?')
+        .run(pedidoId)
+
+      const resultado = db.prepare('DELETE FROM pedidos WHERE id = ? AND tenant_id = ?')
+        .run(pedidoId, TENANT_ID)
+      if (resultado.changes !== 1) throw new Error('NOT_FOUND')
+
+      registrarAuditoria(db, {
+        entidade: 'Pedido',
+        entidadeId: pedidoId,
+        acao: 'EXCLUIR',
+        descricao: `Pedido ${referencia} excluído permanentemente`,
+        detalhes: {
+          nomeDaPeca: pedido.nome_da_peca,
+          statusAnterior: pedido.status,
+          movimentosEstornados: movimentos.length,
+        },
+      })
+    })
+
+    try {
+      excluir()
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      if (message === 'NOT_FOUND') {
+        return { success: false, message: 'Pedido não encontrado.' }
+      }
+      if (message === 'STOCK_CHANGED') {
+        return {
+          success: false,
+          message: 'Não foi possível reconciliar o estoque deste pedido. Atualize a página e tente novamente.',
+        }
+      }
+      throw error
+    }
+
+    revalidatePath('/')
+    revalidatePath('/orcamentos')
+    revalidatePath('/producao')
+    revalidatePath('/financeiro')
+    revalidatePath('/estoque')
+    revalidatePath(`/pedidos/${pedidoId}`)
+    return { success: true, message: 'Pedido excluído permanentemente.' }
+  } catch (error) {
+    console.error('[excluirPedido]', error)
+    return { success: false, message: 'Erro interno ao excluir o pedido.' }
+  }
+}
+

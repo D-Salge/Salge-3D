@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import type { PedidoResumo } from '@/app/actions/pedidos'
+import { useState, useTransition } from 'react'
+import { Trash2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { excluirPedido, type PedidoResumo } from '@/app/actions/pedidos'
 import { RecebimentoModal } from '@/app/components/RecebimentoModal'
 import { WhatsAppModal } from '@/app/components/WhatsAppModal'
 import type { PedidoWhatsApp } from '@/app/actions/whatsapp'
@@ -28,6 +30,25 @@ function StatusBadge({ status }: { status: string }) {
 export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
   const [modalPedidoId, setModalPedidoId] = useState<number | null>(null)
   const [pedidoWhatsApp, setPedidoWhatsApp] = useState<PedidoWhatsApp | null>(null)
+  const [isDeleting, startDelete] = useTransition()
+  const router = useRouter()
+
+  function handleExcluir(pedido: PedidoResumo) {
+    const referencia = pedido.numero_orcamento ?? `#${pedido.id}`
+    const aviso = pedido.status === 'Finalizado'
+      ? `Excluir permanentemente ${referencia}? Pagamentos, parcelas, anexos e histórico serão removidos. A baixa de estoque deste pedido será estornada.`
+      : `Excluir permanentemente ${referencia}? Pagamentos, parcelas, anexos e histórico também serão removidos.`
+    if (!confirm(aviso)) return
+
+    startDelete(async () => {
+      const resultado = await excluirPedido(pedido.id)
+      if (!resultado.success) {
+        alert(resultado.message)
+        return
+      }
+      router.refresh()
+    })
+  }
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
   const fmtData = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -47,7 +68,7 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
             <th className="w-[90px] px-3 pb-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25">Orçamento</th>
             <th className="w-[95px] px-3 pb-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25">Produção</th>
             <th className="hidden w-[75px] px-3 pb-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25 xl:table-cell">Data</th>
-            <th className="sticky right-0 z-20 w-[220px] min-w-[220px] bg-[#15171b] pb-3 pl-4 pr-0 text-right text-[10px] font-medium uppercase tracking-wider text-white/25 shadow-[-12px_0_18px_-18px_rgba(0,0,0,0.95)]">Ações</th>
+            <th className="sticky right-0 z-20 w-[270px] min-w-[270px] bg-[#15171b] pb-3 pl-4 pr-0 text-right text-[10px] font-medium uppercase tracking-wider text-white/25 shadow-[-12px_0_18px_-18px_rgba(0,0,0,0.95)]">Ações</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/[0.04]">
@@ -66,7 +87,7 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
                 <td className="py-3.5 px-3"><span className="rounded-full bg-white/[0.05] px-2 py-1 text-[10px] text-white/60">{p.orcamento_status}</span></td>
                 <td className="py-3.5 px-3"><StatusBadge status={p.status} /></td>
                 <td className="hidden py-3.5 px-3 text-white/25 text-xs whitespace-nowrap xl:table-cell">{fmtData(p.data_pedido)}</td>
-                <td className="sticky right-0 z-10 w-[220px] min-w-[220px] bg-[#15171b] py-3.5 pl-4 pr-0 text-right shadow-[-12px_0_18px_-18px_rgba(0,0,0,0.95)] transition-colors group-hover:bg-[#17191d]">
+                <td className="sticky right-0 z-10 w-[270px] min-w-[270px] bg-[#15171b] py-3.5 pl-4 pr-0 text-right shadow-[-12px_0_18px_-18px_rgba(0,0,0,0.95)] transition-colors group-hover:bg-[#17191d]">
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <Link href={`/pedidos/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-[#d8f45a]/10 px-2 text-xs font-medium text-[#d8f45a] hover:bg-[#d8f45a]/20">Detalhes</Link>
                     <Link href={`/orcamentos/duplicar/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-white/[0.05] px-2 text-xs font-medium text-white/60 hover:bg-white/[0.1] hover:text-white">Duplicar</Link>
@@ -99,6 +120,15 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
                         WhatsApp
                       </button>
                     )}
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => handleExcluir(p)}
+                      className="inline-flex h-7 items-center gap-1 rounded-md bg-red-500/10 px-2 text-xs font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-40"
+                      title="Excluir pedido permanentemente"
+                    >
+                      <Trash2 size={12} /> Excluir
+                    </button>
                   </div>
                 </td>
               </tr>
