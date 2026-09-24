@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Check, Copy, ExternalLink, MessageCircle, X } from 'lucide-react'
 import {
   criarMensagemWhatsApp,
@@ -49,6 +50,7 @@ export function WhatsAppModal({
   const [retorno, setRetorno] = useState('')
   const [copiado, setCopiado] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
   const numeroValido = useMemo(
     () => normalizarTelefoneWhatsApp(pedido.cliente_telefone),
     [pedido.cliente_telefone],
@@ -80,6 +82,7 @@ export function WhatsAppModal({
     startTransition(async () => {
       const resultado = await registrarContatoWhatsApp({ pedidoId: pedido.id, tipo, mensagem })
       setRetorno(resultado.message)
+      if (resultado.success) router.refresh()
     })
   }
 
