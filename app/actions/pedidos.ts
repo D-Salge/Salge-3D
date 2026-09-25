@@ -103,6 +103,8 @@ export interface PedidoResumo {
 export interface PedidoParaDuplicar {
   origem_id: number
   origem_numero: string | null
+  cliente_id: number
+  orcamento_status: string
   nome_da_peca: string
   quantidade: number
   tempo_impressao_horas: number
@@ -116,6 +118,13 @@ export interface PedidoParaDuplicar {
   preco_unitario_original: number
   tipo_venda: string | null
   impressora_id: number | null
+  data_entrega: string | null
+  validade_orcamento: string | null
+  vencimento_em: string | null
+  materiais_avulsos_por_unidade: number
+  horas_trabalho_ativo: number
+  setup_projeto: number
+  margem_perdas: number
   materiais: MaterialInput[]
   insumos: InsumoInput[]
 }
@@ -367,10 +376,12 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
 export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoParaDuplicar | null> {
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return null
   const pedido = db.prepare(`
-    SELECT id AS origem_id, numero_orcamento AS origem_numero, nome_da_peca,
+    SELECT id AS origem_id, numero_orcamento AS origem_numero, cliente_id,
+      orcamento_status, nome_da_peca,
       quantidade, tempo_impressao_horas, custo_embalagem, desconto,
       frete_cobrado, frete_pago, parcelas, condicao_pagamento,
-      tipo_venda, impressora_id,
+      tipo_venda, impressora_id, data_entrega, validade_orcamento, vencimento_em,
+      materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
       valor_total_cobrado AS valor_total_original,
       COALESCE(NULLIF(preco_unitario, 0),
         (valor_total_cobrado + desconto - frete_cobrado) / MAX(quantidade, 1)
@@ -727,8 +738,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             desconto, frete_cobrado, frete_pago,
             valor_total_cobrado, data_entrega, validade_orcamento, vencimento_em,
             parcelas, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
+            materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
             orcamento_status, status
-          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
+          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           TENANT_ID,
@@ -755,6 +767,10 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           tipo_pedido,
           taxasComissoes,
           impressora_id,
+          materiais_avulsos_por_unidade,
+          horas_trabalho_ativo,
+          setup_projeto,
+          margem_perdas,
         )
 
       const pedidoId = pedidoResult.lastInsertRowid as number
@@ -818,6 +834,206 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
   } catch (err) {
     console.error('[criarPedido]', err)
     return { success: false, message: 'Erro interno ao salvar. Tente novamente.' }
+  }
+}
+
+// Edita somente orçamentos que ainda não viraram compromisso de produção ou financeiro.
+export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInput): Promise<ActionResult> {
+  try {
+    if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
+      return { success: false, message: 'Orçamento inválido.' }
+    }
+
+    const {
+      nome_da_peca, cliente_id, tempo_impressao_horas, quantidade = 1, tipo_pedido,
+      materials, insumos, custo_embalagem, desconto, frete_cobrado, frete_pago,
+      data_entrega, validade_orcamento, vencimento_em, parcelas = 1, condicao_pagamento,
+      preco_unitario, materiais_avulsos_por_unidade, horas_trabalho_ativo,
+      setup_projeto, margem_perdas, impressora_id = null,
+    } = data
+
+    if (typeof nome_da_peca !== 'string' || !nome_da_peca.trim() || nome_da_peca.trim().length > 160)
+      return { success: false, message: 'Informe um nome de peça válido, com até 160 caracteres.' }
+    if (!Number.isSafeInteger(cliente_id) || cliente_id <= 0)
+      return { success: false, message: 'Selecione um cliente válido.' }
+    if (!Number.isFinite(tempo_impressao_horas) || tempo_impressao_horas <= 0 || tempo_impressao_horas > 10_000)
+      return { success: false, message: 'Tempo de impressão inválido.' }
+    if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100_000)
+      return { success: false, message: 'Quantidade de peças inválida.' }
+    if (!TIPOS_PEDIDO.includes(tipo_pedido))
+      return { success: false, message: 'Tipo de pedido inválido.' }
+    if (impressora_id !== null && (!Number.isSafeInteger(impressora_id) || impressora_id <= 0))
+      return { success: false, message: 'Impressora inválida.' }
+    if (preco_unitario !== undefined && (!Number.isFinite(preco_unitario) || preco_unitario <= 0 || preco_unitario > 1_000_000))
+      return { success: false, message: 'Preço de venda unitário inválido.' }
+    if (!Array.isArray(materials) || materials.length === 0 || materials.length > 8)
+      return { success: false, message: 'Adicione de um a oito materiais.' }
+    if (!Array.isArray(insumos) || insumos.length > 20)
+      return { success: false, message: 'Lista de insumos inválida.' }
+    for (const valor of [
+      custo_embalagem, desconto, frete_cobrado, frete_pago,
+      materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto,
+    ]) {
+      if (!Number.isFinite(valor) || valor < 0 || valor > 1_000_000)
+        return { success: false, message: 'Custos, desconto ou frete inválidos.' }
+    }
+    if (!Number.isFinite(margem_perdas) || margem_perdas < 0 || margem_perdas > 1)
+      return { success: false, message: 'A margem para perdas deve ficar entre 0% e 100%.' }
+    for (const dataOpcional of [data_entrega, validade_orcamento, vencimento_em]) {
+      if (dataOpcional && !/^\d{4}-\d{2}-\d{2}$/.test(dataOpcional))
+        return { success: false, message: 'Data informada inválida.' }
+    }
+    if (!Number.isSafeInteger(parcelas) || parcelas < 1 || parcelas > 120)
+      return { success: false, message: 'Quantidade de parcelas inválida.' }
+
+    const pesosPorFilamento = new Map<number, number>()
+    for (const material of materials) {
+      if (!Number.isSafeInteger(material.filamento_id) || material.filamento_id <= 0 ||
+          !Number.isFinite(material.peso_gasto_gramas) || material.peso_gasto_gramas <= 0 || material.peso_gasto_gramas > 100_000) {
+        return { success: false, message: 'Material ou peso inválido.' }
+      }
+      pesosPorFilamento.set(material.filamento_id, (pesosPorFilamento.get(material.filamento_id) ?? 0) + material.peso_gasto_gramas)
+    }
+    const materialsValidos = Array.from(pesosPorFilamento, ([filamento_id, peso_gasto_gramas]) => ({ filamento_id, peso_gasto_gramas }))
+
+    const quantidadesPorInsumo = new Map<number, number>()
+    for (const insumo of insumos) {
+      if (!Number.isSafeInteger(insumo.insumo_id) || insumo.insumo_id <= 0 ||
+          !Number.isFinite(insumo.quantidade) || insumo.quantidade <= 0 || insumo.quantidade > 100_000) {
+        return { success: false, message: 'Insumo ou quantidade inválida.' }
+      }
+      quantidadesPorInsumo.set(insumo.insumo_id, (quantidadesPorInsumo.get(insumo.insumo_id) ?? 0) + insumo.quantidade)
+    }
+    const insumosValidos = Array.from(quantidadesPorInsumo, ([insumo_id, quantidade]) => ({ insumo_id, quantidade }))
+
+    const clienteOk = db.prepare('SELECT id FROM clientes WHERE id = ? AND tenant_id = ? AND ativo = 1').get(cliente_id, TENANT_ID)
+    if (!clienteOk) return { success: false, message: 'Cliente inválido.' }
+
+    const filamentosMap = new Map<number, Filamento>()
+    for (const material of materialsValidos) {
+      const filamento = db.prepare(`SELECT id, material, cor, peso_rolo_gramas, preco_rolo
+        FROM filamentos WHERE id = ? AND tenant_id = ? AND ativo = 1`).get(material.filamento_id, TENANT_ID) as Filamento | undefined
+      if (!filamento) return { success: false, message: `Filamento ID ${material.filamento_id} inválido.` }
+      filamentosMap.set(material.filamento_id, filamento)
+    }
+    const insumosMap = new Map<number, { nome: string; custo_unitario: number }>()
+    for (const item of insumosValidos) {
+      const insumo = db.prepare('SELECT nome, custo_unitario FROM insumos WHERE id = ? AND tenant_id = ? AND ativo = 1')
+        .get(item.insumo_id, TENANT_ID) as { nome: string; custo_unitario: number } | undefined
+      if (!insumo) return { success: false, message: `Insumo ID ${item.insumo_id} inválido.` }
+      insumosMap.set(item.insumo_id, insumo)
+    }
+
+    const configuracao = db.prepare(`SELECT custo_hora_maquina, tarifa_energia_kwh, potencia_impressora_w,
+      taxa_venda_padrao, valor_hora_trabalho, fator_b2c_personalizado, fator_b2b_piloto,
+      fator_b2b_recorrente, pedido_minimo_b2b FROM tenants WHERE id = ? AND ativo = 1`).get(TENANT_ID) as {
+        custo_hora_maquina: number; tarifa_energia_kwh: number; potencia_impressora_w: number
+        taxa_venda_padrao: number; valor_hora_trabalho: number; fator_b2c_personalizado: number
+        fator_b2b_piloto: number; fator_b2b_recorrente: number; pedido_minimo_b2b: number
+      } | undefined
+    if (!configuracao) return { success: false, message: 'Configuração da empresa não encontrada.' }
+    const impressora = impressora_id === null ? null : db.prepare(`SELECT id, potencia_w, custo_hora FROM impressoras
+      WHERE id = ? AND tenant_id = ? AND ativo = 1`).get(impressora_id, TENANT_ID) as { id: number; potencia_w: number; custo_hora: number } | undefined
+    if (impressora_id !== null && !impressora) return { success: false, message: 'Impressora não encontrada.' }
+
+    const custoInsumosBruto = insumosValidos.reduce((total, item) => total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario, 0)
+    const calculo = calcularPrecoPlanilha({
+      tipoPedido: tipo_pedido, quantidade, tempoImpressaoHoras: tempo_impressao_horas,
+      potenciaW: impressora?.potencia_w ?? configuracao.potencia_impressora_w,
+      tarifaEnergiaKwh: configuracao.tarifa_energia_kwh,
+      custoHoraMaquina: impressora && impressora.custo_hora > 0 ? impressora.custo_hora : configuracao.custo_hora_maquina,
+      materiais: materialsValidos.map((material) => {
+        const filamento = filamentosMap.get(material.filamento_id)!
+        return { pesoGramas: material.peso_gasto_gramas, custoPorGrama: filamento.preco_rolo / filamento.peso_rolo_gramas }
+      }),
+      custoInsumos: custoInsumosBruto, materiaisAvulsosPorUnidade: materiais_avulsos_por_unidade,
+      horasTrabalhoAtivo: horas_trabalho_ativo, valorHoraTrabalho: configuracao.valor_hora_trabalho,
+      custoEmbalagem: custo_embalagem, fretePago: frete_pago, setupProjeto: setup_projeto,
+      margemPerdas: margem_perdas, taxaVenda: configuracao.taxa_venda_padrao,
+      fatorB2CPersonalizado: configuracao.fator_b2c_personalizado,
+      fatorB2BPiloto: configuracao.fator_b2b_piloto, fatorB2BRecorrente: configuracao.fator_b2b_recorrente,
+      pedidoMinimoB2B: configuracao.pedido_minimo_b2b,
+    })
+    const precoUnitarioAplicado = preco_unitario ?? aplicarPisoHistorico(
+      calculo.precoUnitarioArredondado, buscarPrecoHistorico(cliente_id, nome_da_peca),
+    )
+    let valorTotal: number
+    try {
+      valorTotal = calcularValorVenda({
+        custoCalculado: calculo.totalArredondado, quantidade, precoUnitario: precoUnitarioAplicado,
+        desconto: arredondarMoeda(desconto), freteCobrado: arredondarMoeda(frete_cobrado),
+      })
+    } catch {
+      return { success: false, message: 'O desconto não pode ser maior que o valor do orçamento.' }
+    }
+    const custosAdicionais = arredondarMoeda(calculo.reservaPerdas + calculo.materiaisAvulsos + calculo.maoObraAtiva + calculo.setupProjeto)
+    const taxasComissoes = arredondarMoeda(valorTotal * configuracao.taxa_venda_padrao)
+
+    const atualizar = db.transaction(() => {
+      const atual = db.prepare(`SELECT numero_orcamento, orcamento_status, status,
+        (SELECT COUNT(*) FROM recebimentos r WHERE r.pedido_id = pedidos.id AND r.estornado_em IS NULL) AS recebimentos
+        FROM pedidos WHERE id = ? AND tenant_id = ?`).get(pedidoId, TENANT_ID) as {
+          numero_orcamento: string | null; orcamento_status: string; status: string; recebimentos: number
+        } | undefined
+      if (!atual) throw new Error('NOT_FOUND')
+      if (!['Rascunho', 'Enviado'].includes(atual.orcamento_status) || atual.status !== 'Fila' || atual.recebimentos > 0) {
+        throw new Error('NOT_EDITABLE')
+      }
+
+      db.prepare(`UPDATE pedidos SET
+        cliente_id = ?, nome_da_peca = ?, tempo_impressao_horas = ?, custo_filamento = ?,
+        custo_insumos = ?, custo_energia = ?, valor_reserva_maquina = ?, taxa_operacional = ?,
+        custo_embalagem = ?, desconto = ?, frete_cobrado = ?, frete_pago = ?, valor_total_cobrado = ?,
+        data_entrega = ?, validade_orcamento = ?, vencimento_em = ?, parcelas = ?, condicao_pagamento = ?,
+        quantidade = ?, preco_unitario = ?, tipo_venda = ?, taxas_comissoes = ?, impressora_id = ?,
+        materiais_avulsos_por_unidade = ?, horas_trabalho_ativo = ?, setup_projeto = ?, margem_perdas = ?
+        WHERE id = ? AND tenant_id = ?`).run(
+          cliente_id, nome_da_peca.trim(), tempo_impressao_horas, calculo.filamentoSemPerdas,
+          arredondarMoeda(custoInsumosBruto), calculo.energia, calculo.reservaMaquina, custosAdicionais,
+          arredondarMoeda(custo_embalagem), arredondarMoeda(desconto), arredondarMoeda(frete_cobrado),
+          arredondarMoeda(frete_pago), valorTotal, data_entrega ?? null, validade_orcamento ?? null,
+          vencimento_em ?? null, parcelas, condicao_pagamento?.trim() || null, quantidade,
+          precoUnitarioAplicado, tipo_pedido, taxasComissoes, impressora_id,
+          materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
+          pedidoId, TENANT_ID,
+        )
+
+      db.prepare('DELETE FROM pedido_filamentos WHERE pedido_id = ?').run(pedidoId)
+      const inserirMaterial = db.prepare(`INSERT INTO pedido_filamentos
+        (pedido_id, filamento_id, peso_gasto_gramas, custo_calculado) VALUES (?, ?, ?, ?)`)
+      for (const material of materialsValidos) {
+        const filamento = filamentosMap.get(material.filamento_id)!
+        inserirMaterial.run(pedidoId, material.filamento_id, material.peso_gasto_gramas,
+          arredondarMoeda(material.peso_gasto_gramas * filamento.preco_rolo / filamento.peso_rolo_gramas))
+      }
+      db.prepare('DELETE FROM pedido_insumos WHERE pedido_id = ?').run(pedidoId)
+      const inserirInsumo = db.prepare(`INSERT INTO pedido_insumos
+        (pedido_id, insumo_id, quantidade, custo_unitario_snap, custo_calculado) VALUES (?, ?, ?, ?, ?)`)
+      for (const item of insumosValidos) {
+        const insumo = insumosMap.get(item.insumo_id)!
+        inserirInsumo.run(pedidoId, item.insumo_id, item.quantidade, insumo.custo_unitario,
+          arredondarMoeda(item.quantidade * insumo.custo_unitario))
+      }
+      db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
+        VALUES (?, ?, 1, 'Orcamento editado', 'Dados comerciais e custos do orçamento atualizados')`).run(TENANT_ID, pedidoId)
+      registrarAuditoria(db, {
+        entidade: 'Pedido', entidadeId: pedidoId, acao: 'EDITAR',
+        descricao: `Orçamento ${atual.numero_orcamento ?? `#${pedidoId}`} editado`,
+      })
+    })
+    atualizar.immediate()
+
+    revalidatePath('/')
+    revalidatePath('/orcamentos')
+    revalidatePath(`/pedidos/${pedidoId}`)
+    return { success: true, message: 'Orçamento atualizado com segurança!', pedidoId, valorTotal }
+  } catch (err) {
+    if (err instanceof Error && err.message === 'NOT_FOUND') return { success: false, message: 'Orçamento não encontrado.' }
+    if (err instanceof Error && err.message === 'NOT_EDITABLE') {
+      return { success: false, message: 'Somente orçamentos em rascunho ou enviados, sem pagamentos e sem produção iniciada, podem ser editados.' }
+    }
+    console.error('[atualizarOrcamento]', err)
+    return { success: false, message: 'Erro interno ao atualizar. Tente novamente.' }
   }
 }
 
@@ -1340,4 +1556,3 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
     return { success: false, message: 'Erro interno ao excluir o pedido.' }
   }
 }
-

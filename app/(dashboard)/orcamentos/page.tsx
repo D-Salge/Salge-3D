@@ -22,7 +22,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
     getFilamentosLista(),
     getInsumosLista(),
     getConfiguracoes(),
-    getPedidosRecentes(100),
+    getPedidosRecentes(500),
     getImpressoras(),
     getModelosOrcamento(),
     getReferenciasPrecos(),

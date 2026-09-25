@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useMemo, useState, useTransition } from 'react'
+import { Search, Trash2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { excluirPedido, type PedidoResumo } from '@/app/actions/pedidos'
 import { RecebimentoModal } from '@/app/components/RecebimentoModal'
 import { WhatsAppModal } from '@/app/components/WhatsAppModal'
 import type { PedidoWhatsApp } from '@/app/actions/whatsapp'
 import Link from 'next/link'
+import { filtrarPedidos, resumirPedidos } from '@/lib/filtros-pedidos.mjs'
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
   'Fila':        { label: 'Fila',       dot: 'bg-amber-400',   text: 'text-amber-400/80' },
@@ -30,6 +31,10 @@ function StatusBadge({ status }: { status: string }) {
 export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
   const [modalPedidoId, setModalPedidoId] = useState<number | null>(null)
   const [pedidoWhatsApp, setPedidoWhatsApp] = useState<PedidoWhatsApp | null>(null)
+  const [busca, setBusca] = useState('')
+  const [orcamento, setOrcamento] = useState('Todos')
+  const [producao, setProducao] = useState('Todos')
+  const [financeiro, setFinanceiro] = useState('Todos')
   const [isDeleting, startDelete] = useTransition()
   const router = useRouter()
 
@@ -52,11 +57,65 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
   const fmtData = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const pedidosFiltrados = useMemo(
+    () => filtrarPedidos(pedidos, { busca, orcamento, producao, financeiro }) as PedidoResumo[],
+    [pedidos, busca, orcamento, producao, financeiro],
+  )
+  const resumo = useMemo(() => resumirPedidos(pedidosFiltrados), [pedidosFiltrados])
+  const filtrosAtivos = Boolean(busca || orcamento !== 'Todos' || producao !== 'Todos' || financeiro !== 'Todos')
 
-  if (pedidos.length === 0) return null
+  function limparFiltros() {
+    setBusca('')
+    setOrcamento('Todos')
+    setProducao('Todos')
+    setFinanceiro('Todos')
+  }
+
+  if (pedidos.length === 0) return <p className="py-8 text-center text-sm text-white/35">Nenhum orçamento cadastrado.</p>
 
   return (
-    <div className="overflow-x-auto">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+          <p className="text-[10px] uppercase tracking-wider text-white/30">Resultados</p>
+          <p className="mt-1 text-xl font-semibold text-white">{resumo.quantidade}</p>
+        </div>
+        <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+          <p className="text-[10px] uppercase tracking-wider text-white/30">Valor da carteira</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-[#d8f45a]">{fmtBRL(resumo.total)}</p>
+        </div>
+        <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+          <p className="text-[10px] uppercase tracking-wider text-white/30">Recebido</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-emerald-400">{fmtBRL(resumo.recebido)}</p>
+        </div>
+        <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+          <p className="text-[10px] uppercase tracking-wider text-white/30">Saldo pendente</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-amber-400">{fmtBRL(resumo.pendente)}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px_160px_auto]">
+        <label className="relative">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar número, peça ou cliente"
+            className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#101114] pl-9 pr-3 text-xs text-white outline-none placeholder:text-white/25 focus:border-[#d8f45a]/50" />
+        </label>
+        <select value={orcamento} onChange={(event) => setOrcamento(event.target.value)} className="h-10 rounded-lg border border-white/[0.08] bg-[#101114] px-3 text-xs text-white/75 outline-none focus:border-[#d8f45a]/50">
+          {['Todos', 'Rascunho', 'Enviado', 'Aprovado', 'Recusado', 'Expirado'].map((item) => <option key={item} value={item}>{item === 'Todos' ? 'Todos os orçamentos' : item}</option>)}
+        </select>
+        <select value={producao} onChange={(event) => setProducao(event.target.value)} className="h-10 rounded-lg border border-white/[0.08] bg-[#101114] px-3 text-xs text-white/75 outline-none focus:border-[#d8f45a]/50">
+          {['Todos', 'Fila', 'Imprimindo', 'Acabamento', 'Finalizado', 'Cancelado'].map((item) => <option key={item} value={item}>{item === 'Todos' ? 'Toda a produção' : item}</option>)}
+        </select>
+        <select value={financeiro} onChange={(event) => setFinanceiro(event.target.value)} className="h-10 rounded-lg border border-white/[0.08] bg-[#101114] px-3 text-xs text-white/75 outline-none focus:border-[#d8f45a]/50">
+          {['Todos', 'Pendente', 'Quitado'].map((item) => <option key={item} value={item}>{item === 'Todos' ? 'Todo financeiro' : item}</option>)}
+        </select>
+        <button type="button" onClick={limparFiltros} disabled={!filtrosAtivos}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] px-3 text-xs text-white/50 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-30">
+          <X size={14} /> Limpar
+        </button>
+      </div>
+
+      <div className="overflow-x-auto">
       <table className="w-full min-w-[820px] text-sm">
         <thead>
           <tr className="border-b border-white/[0.06]">
@@ -72,7 +131,7 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-white/[0.04]">
-          {pedidos.map((p) => {
+          {pedidosFiltrados.map((p) => {
             const isPendente = p.total_recebido < p.valor_total_cobrado
 
             return (
@@ -90,6 +149,7 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
                 <td className="sticky right-0 z-10 w-[270px] min-w-[270px] bg-[#15171b] py-3.5 pl-4 pr-0 text-right shadow-[-12px_0_18px_-18px_rgba(0,0,0,0.95)] transition-colors group-hover:bg-[#17191d]">
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <Link href={`/pedidos/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-[#d8f45a]/10 px-2 text-xs font-medium text-[#d8f45a] hover:bg-[#d8f45a]/20">Detalhes</Link>
+                    {['Rascunho', 'Enviado'].includes(p.orcamento_status) && <Link href={`/orcamentos/editar/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-blue-500/10 px-2 text-xs font-medium text-blue-300 hover:bg-blue-500/20">Editar</Link>}
                     <Link href={`/orcamentos/duplicar/${p.id}`} className="inline-flex h-7 items-center rounded-md bg-white/[0.05] px-2 text-xs font-medium text-white/60 hover:bg-white/[0.1] hover:text-white">Duplicar</Link>
                     {p.orcamento_status === 'Aprovado' && <button
                       onClick={() => setModalPedidoId(p.id)}
@@ -134,8 +194,12 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
               </tr>
             )
           })}
+          {pedidosFiltrados.length === 0 && (
+            <tr><td colSpan={9} className="py-12 text-center text-sm text-white/35">Nenhum orçamento corresponde aos filtros.</td></tr>
+          )}
         </tbody>
       </table>
+      </div>
 
       {modalPedidoId && (
         <RecebimentoModal pedidoId={modalPedidoId} onClose={() => setModalPedidoId(null)} />
