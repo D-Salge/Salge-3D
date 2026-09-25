@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { Plus, Trash2, CheckCircle2, ChevronRight, Zap } from 'lucide-react'
-import { criarPedido, type PedidoParaDuplicar, type ReferenciaPreco } from '@/app/actions/pedidos'
+import { atualizarOrcamento, criarPedido, type PedidoParaDuplicar, type ReferenciaPreco } from '@/app/actions/pedidos'
 import { useRouter } from 'next/navigation'
 import type { Cliente } from '@/app/actions/clientes'
 import type { FilamentoCompleto } from '@/app/actions/filamentos'
@@ -44,6 +44,7 @@ export function OrcamentoPage({
   referenciasPrecos,
   clienteInicialId,
   pedidoInicial,
+  pedidoEdicaoId,
 }: { 
   clientes: Cliente[]
   filamentos: FilamentoCompleto[]
@@ -62,6 +63,7 @@ export function OrcamentoPage({
   referenciasPrecos: ReferenciaPreco[]
   clienteInicialId?: number | null
   pedidoInicial?: PedidoParaDuplicar | null
+  pedidoEdicaoId?: number | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -97,14 +99,14 @@ export function OrcamentoPage({
   const [freteCobrado, setFreteCobrado] = useState<number | ''>(pedidoInicial?.frete_cobrado || '')
   const [fretePago, setFretePago] = useState<number | ''>(pedidoInicial?.frete_pago || '')
   const [custoEmbalagem, setCustoEmbalagem] = useState<number | ''>(pedidoInicial?.custo_embalagem || '')
-  const [materiaisAvulsosPorUnidade, setMateriaisAvulsosPorUnidade] = useState<number | ''>('')
-  const [horasTrabalhoAtivo, setHorasTrabalhoAtivo] = useState<number | ''>('')
-  const [setupProjeto, setSetupProjeto] = useState<number | ''>('')
-  const [margemPerdas, setMargemPerdas] = useState(margemPerdasPadrao)
+  const [materiaisAvulsosPorUnidade, setMateriaisAvulsosPorUnidade] = useState<number | ''>(pedidoInicial?.materiais_avulsos_por_unidade || '')
+  const [horasTrabalhoAtivo, setHorasTrabalhoAtivo] = useState<number | ''>(pedidoInicial?.horas_trabalho_ativo || '')
+  const [setupProjeto, setSetupProjeto] = useState<number | ''>(pedidoInicial?.setup_projeto || '')
+  const [margemPerdas, setMargemPerdas] = useState(pedidoInicial?.margem_perdas ?? margemPerdasPadrao)
   const [precoUnitarioVenda, setPrecoUnitarioVenda] = useState<number | ''>(pedidoInicial?.preco_unitario_original || '')
-  const [dataEntrega, setDataEntrega] = useState('')
-  const [validadeOrcamento, setValidadeOrcamento] = useState('')
-  const [vencimentoEm, setVencimentoEm] = useState('')
+  const [dataEntrega, setDataEntrega] = useState(pedidoEdicaoId ? pedidoInicial?.data_entrega?.slice(0, 10) ?? '' : '')
+  const [validadeOrcamento, setValidadeOrcamento] = useState(pedidoEdicaoId ? pedidoInicial?.validade_orcamento?.slice(0, 10) ?? '' : '')
+  const [vencimentoEm, setVencimentoEm] = useState(pedidoEdicaoId ? pedidoInicial?.vencimento_em?.slice(0, 10) ?? '' : '')
   const [parcelas, setParcelas] = useState(pedidoInicial?.parcelas ?? 1)
   const [condicaoPagamento, setCondicaoPagamento] = useState(formaPagamentoInicial(pedidoInicial?.condicao_pagamento))
 
@@ -249,7 +251,7 @@ export function OrcamentoPage({
       .map(i => ({ insumo_id: Number(i.insumoId), quantidade: Number(i.quantidade) }))
 
     startTransition(async () => {
-      const res = await criarPedido({
+      const payload = {
         nome_da_peca: nomeDaPeca,
         cliente_id: Number(clienteId),
         tempo_impressao_horas: th,
@@ -271,9 +273,12 @@ export function OrcamentoPage({
         vencimento_em: vencimentoEm || undefined,
         parcelas,
         condicao_pagamento: condicaoPagamento,
-        pedido_origem_id: pedidoInicial?.origem_id,
+        pedido_origem_id: pedidoEdicaoId ? undefined : pedidoInicial?.origem_id,
         preco_unitario: precoUnitario ?? undefined,
-      })
+      }
+      const res = pedidoEdicaoId
+        ? await atualizarOrcamento(pedidoEdicaoId, payload)
+        : await criarPedido(payload)
 
       if (res.success) {
         setSucesso(true)
@@ -292,8 +297,8 @@ export function OrcamentoPage({
         <div className="mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
           <CheckCircle2 size={40} />
         </div>
-        <h2 className="mb-2 text-2xl font-bold text-white">Orçamento Gerado!</h2>
-        <p className="text-sm text-white/50">O orçamento foi salvo como rascunho. Aprove-o antes de iniciar a produção.</p>
+        <h2 className="mb-2 text-2xl font-bold text-white">{pedidoEdicaoId ? 'Orçamento Atualizado!' : 'Orçamento Gerado!'}</h2>
+        <p className="text-sm text-white/50">{pedidoEdicaoId ? 'As alterações foram salvas com segurança.' : 'O orçamento foi salvo como rascunho. Aprove-o antes de iniciar a produção.'}</p>
       </div>
     )
   }
@@ -301,8 +306,11 @@ export function OrcamentoPage({
   return (
     <div className="flex flex-col gap-8 lg:flex-row lg:items-start shrink-0">
       <form onSubmit={handleSubmit} className="flex-1 space-y-8">
-        {pedidoInicial && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.06] p-4 text-xs leading-5 text-[#d8f45a]/80">
+        {pedidoInicial && !pedidoEdicaoId && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.06] p-4 text-xs leading-5 text-[#d8f45a]/80">
           Cópia de {pedidoInicial.origem_numero ?? `pedido #${pedidoInicial.origem_id}`} (valor anterior: {pedidoInicial.valor_total_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O preço comercial por unidade foi preservado; os custos técnicos serão recalculados com os valores atuais. Cliente, datas, pagamentos e produção anterior não serão copiados.
+        </div>}
+        {pedidoInicial && pedidoEdicaoId && <div className="rounded-xl border border-blue-400/20 bg-blue-400/[0.06] p-4 text-xs leading-5 text-blue-200/80">
+          Editando {pedidoInicial.origem_numero ?? `orçamento #${pedidoInicial.origem_id}`}. Esta opção fica disponível somente antes da aprovação, sem pagamento e sem produção iniciada.
         </div>}
         
         {/* 1. Dados Básicos */}
@@ -606,7 +614,7 @@ export function OrcamentoPage({
 
         <button onClick={handleSubmit} disabled={isPending}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#d8f45a] py-3.5 text-sm font-bold text-[#15180d] transition hover:bg-[#e4ff76] disabled:opacity-50">
-          {isPending ? 'Salvando...' : 'Gerar Orçamento'}
+          {isPending ? 'Salvando...' : pedidoEdicaoId ? 'Salvar alterações' : 'Gerar Orçamento'}
           <ChevronRight size={16} />
         </button>
       </aside>
