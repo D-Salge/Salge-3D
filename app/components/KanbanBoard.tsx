@@ -121,19 +121,23 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
                   {col.id !== 'Finalizado' && (
                     <div className="mt-1 flex items-center justify-between">
                       <Link href={`/pedidos/${pedido.id}`} className="text-[10px] text-white/35 hover:text-[#d8f45a]">Detalhes</Link>
-                      <button
-                        onClick={() => handleAvancarStatus(pedido.id, pedido.status)}
-                        disabled={isPending}
-                        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition disabled:opacity-50
-                          ${col.id === 'Fila' ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : ''}
-                          ${col.id === 'Imprimindo' ? 'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20' : ''}
-                          ${col.id === 'Acabamento' ? 'bg-[#d8f45a]/10 text-[#d8f45a] hover:bg-[#d8f45a]/20' : ''}
-                        `}
-                      >
-                        {col.id === 'Fila' && <><Play size={12} /> Iniciar Impressão</>}
-                        {col.id === 'Imprimindo' && <><CheckCircle2 size={12} /> Concluir Impressão</>}
-                        {col.id === 'Acabamento' && <><PackageCheck size={12} /> Finalizar Peça</>}
-                      </button>
+                      {col.id === 'Acabamento' ? (
+                        <Link href={`/pedidos/${pedido.id}#fechamento`} className="flex items-center gap-1.5 rounded-md bg-[#d8f45a]/10 px-2.5 py-1.5 text-[11px] font-medium text-[#d8f45a] transition hover:bg-[#d8f45a]/20">
+                          <PackageCheck size={12} /> Revisar e finalizar
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => handleAvancarStatus(pedido.id, pedido.status)}
+                          disabled={isPending}
+                          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition disabled:opacity-50
+                            ${col.id === 'Fila' ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : ''}
+                            ${col.id === 'Imprimindo' ? 'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20' : ''}
+                          `}
+                        >
+                          {col.id === 'Fila' && <><Play size={12} /> Iniciar Impressão</>}
+                          {col.id === 'Imprimindo' && <><CheckCircle2 size={12} /> Concluir Impressão</>}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

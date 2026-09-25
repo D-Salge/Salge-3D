@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowDown, ArrowUp, Boxes, History } from 'lucide-react'
 import { getResumoEstoque } from '@/app/actions/estoque'
 import { LotesFilamento } from '@/app/components/LotesFilamento'
+import { ListaComprasEstoque } from '@/app/components/ListaComprasEstoque'
 
 export const metadata: Metadata = { title: 'Movimentações de Estoque · Salge 3D' }
 
@@ -44,23 +45,7 @@ export default async function EstoquePage() {
         </div>
       </div>
 
-      {resumo.alertas.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-300">
-            <AlertTriangle size={16} /> Reposição necessária
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {resumo.alertas.map((item) => (
-              <div key={`${item.tipo_item}-${item.item_id}`} className="rounded-xl bg-black/20 p-4">
-                <p className="text-sm font-medium">{item.nome}</p>
-                <p className="mt-1 text-xs text-white/45">
-                  {item.saldo} {item.unidade} disponíveis · mínimo {item.minimo} {item.unidade}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <ListaComprasEstoque itens={resumo.alertas} investimento={resumo.resumoCompras.investimento} />
 
       <LotesFilamento lotes={resumo.lotes} filamentos={resumo.filamentos} />
 
