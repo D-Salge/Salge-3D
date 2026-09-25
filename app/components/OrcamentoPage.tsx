@@ -42,6 +42,7 @@ export function OrcamentoPage({
   fatorB2BRecorrente,
   pedidoMinimoB2B,
   referenciasPrecos,
+  clienteInicialId,
   pedidoInicial,
 }: { 
   clientes: Cliente[]
@@ -59,6 +60,7 @@ export function OrcamentoPage({
   fatorB2BRecorrente: number
   pedidoMinimoB2B: number
   referenciasPrecos: ReferenciaPreco[]
+  clienteInicialId?: number | null
   pedidoInicial?: PedidoParaDuplicar | null
 }) {
   const router = useRouter()
@@ -66,7 +68,11 @@ export function OrcamentoPage({
   
   // Basic info
   const [nomeDaPeca, setNomeDaPeca] = useState(pedidoInicial?.nome_da_peca ?? '')
-  const [clienteId, setClienteId] = useState('')
+  const [clienteId, setClienteId] = useState(
+    clienteInicialId && clientes.some((cliente) => cliente.id === clienteInicialId)
+      ? String(clienteInicialId)
+      : '',
+  )
   const [tempoHoras, setTempoHoras] = useState<number | ''>(pedidoInicial?.tempo_impressao_horas ?? '')
   const [quantidade, setQuantidade] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
   const [tipoPedido, setTipoPedido] = useState(
