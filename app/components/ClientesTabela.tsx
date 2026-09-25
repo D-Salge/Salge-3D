@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { AtSign, MapPin, Pencil, Phone, Plus, Trash2, Users, X } from 'lucide-react'
+import Link from 'next/link'
+import { AtSign, Eye, Mail, MapPin, Pencil, Phone, Plus, Trash2, Users, X } from 'lucide-react'
 import { salvarCliente, deletarCliente, type Cliente } from '@/app/actions/clientes'
 
 const ORIGEM_COLORS: Record<string, string> = {
@@ -19,9 +20,12 @@ type FormState = {
   id: number | null
   nome: string
   telefone: string
+  email: string
   instagram: string
   cidade: string
   origem: string
+  tipoCliente: string
+  observacoes: string
 }
 
 export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
@@ -30,12 +34,12 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState<FormState>({
-    id: null, nome: '', telefone: '', instagram: '', cidade: '', origem: ''
+    id: null, nome: '', telefone: '', email: '', instagram: '', cidade: '', origem: '', tipoCliente: '', observacoes: ''
   })
   const [errorMsg, setErrorMsg] = useState('')
 
   function openNew() {
-    setForm({ id: null, nome: '', telefone: '', instagram: '', cidade: '', origem: '' })
+    setForm({ id: null, nome: '', telefone: '', email: '', instagram: '', cidade: '', origem: '', tipoCliente: '', observacoes: '' })
     setErrorMsg('')
     setModalOpen(true)
   }
@@ -45,9 +49,12 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
       id: c.id,
       nome: c.nome,
       telefone: c.telefone || '',
+      email: c.email || '',
       instagram: c.instagram || '',
       cidade: c.cidade || '',
       origem: c.origem || '',
+      tipoCliente: c.tipo_cliente || '',
+      observacoes: c.observacoes || '',
     })
     setErrorMsg('')
     setModalOpen(true)
@@ -57,7 +64,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
     e.preventDefault()
     setErrorMsg('')
     startTransition(async () => {
-      const res = await salvarCliente(form.id, form.nome, form.telefone, form.instagram, form.cidade, form.origem)
+      const res = await salvarCliente(form)
       if (res.success) {
         setModalOpen(false)
       } else {
@@ -73,6 +80,11 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
       if (!res.success) alert(res.message)
     })
   }
+
+  const fmtBRL = (valor: number | undefined) => (valor ?? 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
 
   return (
     <>
@@ -115,7 +127,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
-                {['ID', 'Nome', 'Telefone', 'Origem', 'Orçamentos', 'Ações'].map((h) => (
+                {['ID', 'Nome', 'Telefone', 'Origem', 'Vendido', 'A receber', 'Pedidos', 'Ações'].map((h) => (
                   <th key={h} className="pb-3.5 px-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25 first:pl-0 last:pr-0 last:text-right">
                     {h}
                   </th>
@@ -125,7 +137,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
             <tbody className="divide-y divide-white/[0.04]">
               {clientes.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-xs text-white/30">Nenhum cliente cadastrado.</td>
+                  <td colSpan={8} className="py-8 text-center text-xs text-white/30">Nenhum cliente cadastrado.</td>
                 </tr>
               )}
               {clientes.map((c) => (
@@ -142,13 +154,18 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
                       <span className="text-white/20">—</span>
                     )}
                   </td>
+                  <td className="whitespace-nowrap py-4 px-3 font-mono text-xs text-[#d8f45a]">{fmtBRL(c.total_vendido)}</td>
+                  <td className={`whitespace-nowrap py-4 px-3 font-mono text-xs ${(c.saldo_pendente ?? 0) > 0 ? 'text-amber-300' : 'text-white/30'}`}>{fmtBRL(c.saldo_pendente)}</td>
                   <td className="py-4 px-3 text-white/40">
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1 text-xs">
                       {c.total_pedidos}
                     </span>
                   </td>
                   <td className="py-4 pl-3 pr-0 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href={`/clientes/${c.id}`} title="Abrir ficha do cliente" className="rounded-md p-1.5 text-[#d8f45a]/70 transition hover:bg-[#d8f45a]/10 hover:text-[#d8f45a]">
+                        <Eye size={15} />
+                      </Link>
                       <button onClick={() => openEdit(c)} className="rounded-md p-1.5 text-white/30 hover:bg-white/[0.06] hover:text-white transition">
                         <Pencil size={15} />
                       </button>
@@ -167,7 +184,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-lg font-semibold">{form.id ? 'Editar Cliente' : 'Novo Cliente'}</h3>
               <button onClick={() => setModalOpen(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
@@ -196,6 +213,20 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
                     placeholder="(11) 99999-9999"
                   />
                   <Phone size={14} className="absolute left-3 top-3.5 text-white/30" />
+                </div>
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-white/55">E-mail</span>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pl-9 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                    placeholder="cliente@email.com"
+                  />
+                  <Mail size={14} className="absolute left-3 top-3.5 text-white/30" />
                 </div>
               </label>
 
@@ -240,6 +271,32 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-white/55">Tipo de cliente</span>
+                <select
+                  value={form.tipoCliente}
+                  onChange={e => setForm(f => ({ ...f, tipoCliente: e.target.value }))}
+                  className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60"
+                >
+                  <option value="">Não informado</option>
+                  <option value="Pessoa fisica">Pessoa física</option>
+                  <option value="Empresa">Empresa</option>
+                  <option value="Revenda">Revenda</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-white/55">Observações</span>
+                <textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={form.observacoes}
+                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                  className="w-full resize-y rounded-lg border border-white/[0.1] bg-[#101114] p-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                  placeholder="Preferências, endereço, condições combinadas..."
+                />
               </label>
 
               {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}

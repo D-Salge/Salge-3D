@@ -109,12 +109,13 @@ export async function registrarContatoWhatsApp(dados: {
       return { success: false, message: 'A mensagem deve ter entre 1 e 2.000 caracteres.' }
     }
     const pedido = db.prepare(`
-      SELECT p.id, p.numero_orcamento, c.telefone
+      SELECT p.id, p.numero_orcamento, p.cliente_id, c.telefone
       FROM pedidos p JOIN clientes c ON c.id = p.cliente_id
       WHERE p.id = ? AND p.tenant_id = ? AND c.tenant_id = ?
     `).get(dados.pedidoId, TENANT_ID, TENANT_ID) as {
       id: number
       numero_orcamento: string | null
+      cliente_id: number
       telefone: string | null
     } | undefined
     if (!pedido) return { success: false, message: 'Pedido não encontrado.' }
@@ -132,6 +133,10 @@ export async function registrarContatoWhatsApp(dados: {
         `WhatsApp: ${rotulo}`,
         `Conversa aberta com a mensagem: ${mensagem}`,
       )
+      db.prepare(`
+        UPDATE clientes SET ultimo_contato = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ? AND tenant_id = ?
+      `).run(pedido.cliente_id, TENANT_ID)
       registrarAuditoria(db, {
         entidade: 'Pedido',
         entidadeId: pedido.id,
@@ -143,6 +148,8 @@ export async function registrarContatoWhatsApp(dados: {
 
     revalidatePath('/')
     revalidatePath('/orcamentos')
+    revalidatePath('/clientes')
+    revalidatePath(`/clientes/${pedido.cliente_id}`)
     revalidatePath(`/pedidos/${pedido.id}`)
     return { success: true, message: 'Contato registrado no histórico do pedido.' }
   } catch (error) {

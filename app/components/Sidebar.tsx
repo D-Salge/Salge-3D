@@ -16,6 +16,7 @@ import {
   Boxes,
   Printer,
   ShieldCheck,
+  BarChart3,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -84,6 +85,7 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
         <NavItem href="/" icon={<LayoutDashboard size={15} />} label="Dashboard" active={pathname === '/'} />
         <NavItem href="/orcamentos" icon={<ReceiptText size={15} />} label="Novo Orçamento" active={pathname === '/orcamentos'} />
         <NavItem href="/producao" icon={<Layers size={15} />} label="Produção" active={pathname === '/producao'} badge={pedidosEmProducao > 0 ? String(pedidosEmProducao) : undefined} />
+        <NavItem href="/produtos" icon={<BarChart3 size={15} />} label="Produtos e Vendas" active={pathname === '/produtos'} />
       </div>
 
       <div className="mt-9 flex flex-col gap-1">

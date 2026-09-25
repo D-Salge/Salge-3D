@@ -14,7 +14,9 @@ import { PendenciasWhatsApp } from '@/app/components/PendenciasWhatsApp'
 
 export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
+  const { cliente } = await searchParams
+  const clienteInicialId = Number(cliente)
   const [clientes, filamentos, insumos, config, pedidos, impressoras, modelos, referenciasPrecos, pendenciasWhatsApp] = await Promise.all([
     getClientesLista(),
     getFilamentosLista(),
@@ -58,6 +60,7 @@ export default async function Page() {
         fatorB2BRecorrente={config.fator_b2b_recorrente}
         pedidoMinimoB2B={config.pedido_minimo_b2b}
         referenciasPrecos={referenciasPrecos}
+        clienteInicialId={Number.isSafeInteger(clienteInicialId) && clienteInicialId > 0 ? clienteInicialId : null}
       />
 
       <div className="mt-10 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 sm:p-8">
