@@ -114,6 +114,7 @@ export async function getResumoDespesas(): Promise<{
        WHERE tenant_id = ?
          AND estornada_em IS NULL
          AND pago_em IS NOT NULL
+         AND date(pago_em) <= date('now')
          AND strftime('%Y-%m', pago_em) = strftime('%Y-%m', 'now')`
     )
     .get(TENANT_ID) as { total: number }
@@ -127,6 +128,7 @@ export async function getResumoDespesas(): Promise<{
   const pagasRow = db.prepare(`
     SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
     WHERE tenant_id = ? AND estornada_em IS NULL AND pago_em IS NOT NULL
+      AND date(pago_em) <= date('now')
   `).get(TENANT_ID) as { total: number }
 
   const pendentesRow = db.prepare(`
@@ -138,7 +140,7 @@ export async function getResumoDespesas(): Promise<{
     .prepare(
       `SELECT COALESCE(SUM(valor), 0) AS total
        FROM fluxo_capital
-       WHERE tenant_id = ? AND tipo = 'Aporte'`
+       WHERE tenant_id = ? AND tipo = 'Aporte' AND date(data_movimentacao) <= date('now')`
     )
     .get(TENANT_ID) as { total: number }
 
@@ -146,7 +148,7 @@ export async function getResumoDespesas(): Promise<{
     .prepare(
       `SELECT COALESCE(SUM(valor), 0) AS total
        FROM fluxo_capital
-       WHERE tenant_id = ? AND tipo = 'Retirada'`
+       WHERE tenant_id = ? AND tipo = 'Retirada' AND date(data_movimentacao) <= date('now')`
     )
     .get(TENANT_ID) as { total: number }
 

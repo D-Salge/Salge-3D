@@ -7,13 +7,16 @@ import { alterarPagamentoDespesa, type Despesa, type FluxoCapital } from '@/app/
 import { RecebimentoModal } from './RecebimentoModal'
 import { DespesaModal } from './DespesaModal'
 import { FluxoCapitalModal } from './FluxoCapitalModal'
+import { ProjecaoFluxoCaixa } from './ProjecaoFluxoCaixa'
+import type { ProjecaoFluxoCaixa as Projecao } from '@/app/actions/financeiro'
 
 export function FinanceiroPage({ 
   pendentes, 
   resumoRecebimentos, 
   despesas, 
   resumoDespesas, 
-  fluxo 
+  fluxo,
+  projecao,
 }: { 
   pendentes: RecebimentoResumo[],
   resumoRecebimentos: {
@@ -32,7 +35,8 @@ export function FinanceiroPage({
     totalAportes: number,
     totalRetiradas: number,
   },
-  fluxo: FluxoCapital[]
+  fluxo: FluxoCapital[],
+  projecao: Projecao,
 }) {
   const [isPending, startTransition] = useTransition()
   const [recModal, setRecModal] = useState<number | null>(null)
@@ -119,6 +123,8 @@ export function FinanceiroPage({
       </div>
 
       {mensagem && <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/70">{mensagem}</div>}
+
+      <ProjecaoFluxoCaixa projecao={projecao} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Pagamentos Pendentes */}
