@@ -42,6 +42,11 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(expenseColumns.includes('grupo_parcelamento'))
     assert.ok(expenseColumns.includes('total_parcelas'))
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'modelos_orcamento'`).get())
+    const printerColumns = db.prepare(`PRAGMA table_info(impressoras)`).all().map((column) => column.name)
+    assert.ok(printerColumns.includes('bico_atual'))
+    assert.ok(printerColumns.includes('horas_base'))
+    assert.ok(printerColumns.includes('intervalo_manutencao_horas'))
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'manutencoes_impressora'`).get())
   } finally {
     db.close()
   }
