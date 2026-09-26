@@ -2,6 +2,7 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { calcularSugestaoReposicao, CONSULTA_ITENS_REPOSICAO, resumirListaCompras } from '@/lib/estoque.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -33,6 +34,12 @@ export interface AlertaEstoque {
   saldo: number
   minimo: number
   unidade: string
+  comprometido: number
+  saldo_projetado: number
+  quantidade_repor: number
+  volumes: number
+  custo_estimado: number
+  fornecedor: string | null
 }
 
 export interface ResumoEstoque {
@@ -40,6 +47,7 @@ export interface ResumoEstoque {
   movimentos: MovimentoEstoque[]
   valorEstoqueFilamentos: number
   valorEstoqueInsumos: number
+  resumoCompras: { itens: number; investimento: number }
   lotes: LoteFilamento[]
   filamentos: { id: number; nome: string; peso_rolo_gramas: number; preco_rolo: number }[]
 }
@@ -57,21 +65,28 @@ export interface LoteFilamento {
 }
 
 export async function getResumoEstoque(): Promise<ResumoEstoque> {
-  const alertas = db.prepare(`
-    SELECT 'Filamento' AS tipo_item, id AS item_id,
-      material || ' ' || cor AS nome,
-      COALESCE(estoque_gramas, peso_rolo_gramas) AS saldo,
-      estoque_minimo_gramas AS minimo, 'g' AS unidade
-    FROM filamentos
-    WHERE tenant_id = ? AND ativo = 1
-      AND COALESCE(estoque_gramas, peso_rolo_gramas) <= estoque_minimo_gramas
-    UNION ALL
-    SELECT 'Insumo', id, nome, estoque_atual, estoque_minimo, unidade
-    FROM insumos
-    WHERE tenant_id = ? AND ativo = 1
-      AND estoque_minimo > 0 AND estoque_atual <= estoque_minimo
-    ORDER BY saldo ASC
-  `).all(TENANT_ID, TENANT_ID) as AlertaEstoque[]
+  const itensEstoque = db.prepare(CONSULTA_ITENS_REPOSICAO).all(TENANT_ID, TENANT_ID) as Array<{
+    tipo_item: TipoItemEstoque
+    item_id: number
+    nome: string
+    saldo: number
+    minimo: number
+    unidade: string
+    comprometido: number
+    volume_reposicao: number
+    preco_volume: number
+    fornecedor: string | null
+  }>
+  const alertas = itensEstoque.map((item) => {
+    const sugestao = calcularSugestaoReposicao(item)
+    return {
+      ...item,
+      saldo_projetado: sugestao.saldoProjetado,
+      quantidade_repor: sugestao.quantidadeRepor,
+      volumes: sugestao.volumes,
+      custo_estimado: sugestao.custoEstimado,
+    }
+  }).filter((item) => item.quantidade_repor > 0) as AlertaEstoque[]
 
   const movimentos = db.prepare(`
     SELECT m.*,
@@ -125,6 +140,7 @@ export async function getResumoEstoque(): Promise<ResumoEstoque> {
     movimentos,
     valorEstoqueFilamentos: valores.filamentos,
     valorEstoqueInsumos: valores.insumos,
+    resumoCompras: resumirListaCompras(alertas),
     lotes,
     filamentos,
   }

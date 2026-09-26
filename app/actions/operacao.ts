@@ -91,6 +91,7 @@ export interface PedidoDetalhes {
   total_recebido: number
   saldo_pendente: number
   custo_real: number
+  custo_estimado: number
   lucro_liquido: number
   margem_percentual: number
   falhas_impressao: number
@@ -284,13 +285,19 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
       MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
       (
+        p.custo_filamento + p.custo_insumos + p.custo_energia +
+        p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem +
+        p.frete_pago + p.taxas_comissoes
+      ) AS custo_estimado,
+      (
         COALESCE((SELECT SUM(COALESCE(pf.consumo_real_gramas, pf.peso_gasto_gramas)
           * f.preco_rolo / f.peso_rolo_gramas)
           FROM pedido_filamentos pf JOIN filamentos f ON f.id = pf.filamento_id
           WHERE pf.pedido_id = p.id), 0) +
         COALESCE((SELECT SUM(COALESCE(pi.consumo_real, pi.quantidade) * pi.custo_unitario_snap)
           FROM pedido_insumos pi WHERE pi.pedido_id = p.id), 0) +
-        p.custo_energia +
+        COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) *
+          COALESCE(imp.potencia_w, t.potencia_impressora_w) / 1000 * t.tarifa_energia_kwh +
         COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) *
           CASE WHEN imp.custo_hora > 0 THEN imp.custo_hora ELSE t.custo_hora_maquina END +
         p.taxa_operacional + p.custo_embalagem + p.frete_pago +

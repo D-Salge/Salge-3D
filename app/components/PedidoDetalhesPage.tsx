@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { ArrowLeft, BookmarkPlus, Copy, ExternalLink, FileDown, Link2, MessageCircle, Pencil, Save, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BookmarkPlus, Copy, ExternalLink, FileDown, Link2, MessageCircle, PackageCheck, Pencil, Save, Trash2, X } from 'lucide-react'
 import {
   atualizarStatusOrcamento,
   removerAnexoPedido,
@@ -58,18 +58,57 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
   function salvarOperacao(event: React.FormEvent) {
     event.preventDefault()
     startTransition(async () => {
-      const result = await salvarOperacaoPedido({
+      const result = await salvarOperacaoPedido(montarPayloadOperacao(false))
+      setMensagem(result.message)
+    })
+  }
+
+  function montarPayloadOperacao(usarEstimativas: boolean) {
+    return {
         pedidoId: pedido.id,
         impressoraId: impressoraId ? Number(impressoraId) : null,
         inicioPrevisto,
         fimPrevisto,
-        tempoRealHoras: tempoReal === '' ? null : Number(tempoReal),
+        tempoRealHoras: tempoReal === ''
+          ? (usarEstimativas ? pedido.tempo_impressao_horas : null)
+          : Number(tempoReal),
         custoExtraReal: Number(custoExtra) || 0,
         falhasImpressao: Number(falhas) || 0,
-        materiais: materiais.map((item) => ({ id: item.id, consumoReal: item.consumoReal === '' ? null : Number(item.consumoReal) })),
-        insumos: insumos.map((item) => ({ id: item.id, consumoReal: item.consumoReal === '' ? null : Number(item.consumoReal) })),
-      })
-      setMensagem(result.message)
+        materiais: materiais.map((item, index) => ({
+          id: item.id,
+          consumoReal: item.consumoReal === ''
+            ? (usarEstimativas ? pedido.materiais[index].peso_gasto_gramas : null)
+            : Number(item.consumoReal),
+        })),
+        insumos: insumos.map((item, index) => ({
+          id: item.id,
+          consumoReal: item.consumoReal === ''
+            ? (usarEstimativas ? pedido.insumos[index].quantidade : null)
+            : Number(item.consumoReal),
+        })),
+      }
+  }
+
+  function finalizarComRevisao() {
+    const camposEstimados = [
+      tempoReal === '',
+      ...materiais.map((item) => item.consumoReal === ''),
+      ...insumos.map((item) => item.consumoReal === ''),
+    ].filter(Boolean).length
+    const aviso = camposEstimados > 0
+      ? `${camposEstimados} campo(s) sem valor real serão preenchidos com a estimativa do orçamento. Depois da baixa de estoque, os consumos ficarão bloqueados. Finalizar?`
+      : 'Os consumos reais informados serão usados na baixa de estoque e ficarão bloqueados. Finalizar o pedido?'
+    if (!confirm(aviso)) return
+
+    startTransition(async () => {
+      const operacao = await salvarOperacaoPedido(montarPayloadOperacao(true))
+      if (!operacao.success) {
+        setMensagem(operacao.message)
+        return
+      }
+      const status = await atualizarStatusPedido(pedido.id, 'Finalizado')
+      setMensagem(status.message)
+      if (status.success) router.refresh()
     })
   }
 
@@ -122,13 +161,19 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
         {[['Venda', fmtBRL(pedido.valor_total_cobrado)], ['Custo real', fmtBRL(pedido.custo_real)], ['Lucro líquido', fmtBRL(pedido.lucro_liquido)], ['Margem', `${pedido.margem_percentual.toFixed(1)}%`]].map(([label, value], index) => <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5"><p className="text-xs text-white/35">{label}</p><p className={`mt-2 text-2xl font-semibold ${index >= 2 ? (pedido.lucro_liquido >= 0 ? 'text-[#d8f45a]' : 'text-red-400') : ''}`}>{value}</p></div>)}
       </div>
 
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5"><p className="text-xs text-white/35">Custo orçado</p><p className="mt-2 text-xl font-semibold">{fmtBRL(pedido.custo_estimado)}</p></div>
+        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5"><p className="text-xs text-white/35">Custo após revisão</p><p className="mt-2 text-xl font-semibold">{fmtBRL(pedido.custo_real)}</p></div>
+        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5"><p className="text-xs text-white/35">Variação do custo</p><p className={`mt-2 text-xl font-semibold ${pedido.custo_real > pedido.custo_estimado ? 'text-red-300' : 'text-emerald-400'}`}>{pedido.custo_real > pedido.custo_estimado ? '+' : ''}{fmtBRL(pedido.custo_real - pedido.custo_estimado)}</p></div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
           <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Ciclo do orçamento</h2><p className="mt-1 text-xs text-white/35">Validade: {pedido.validade_orcamento ? new Date(`${pedido.validade_orcamento}T12:00:00`).toLocaleDateString('pt-BR') : 'não definida'}</p></div><div className="flex flex-wrap gap-2">{pedido.orcamento_status === 'Rascunho' && <><button onClick={() => mudarOrcamento('Enviado')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Marcar enviado</button><button onClick={() => mudarOrcamento('Aprovado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Aprovar</button></>}{pedido.orcamento_status === 'Enviado' && <><button onClick={() => mudarOrcamento('Aprovado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Aprovar</button><button onClick={() => mudarOrcamento('Recusado')} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">Recusado</button></>}{pedido.orcamento_status === 'Expirado' && <><button onClick={() => mudarOrcamento('Enviado')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Reenviar</button><button onClick={() => mudarOrcamento('Aprovado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Aprovar mesmo assim</button></>}</div></div></section>
 
-          {pedido.orcamento_status === 'Aprovado' && pedido.status !== 'Cancelado' && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Andamento da produção</h2><p className="mt-1 text-xs text-white/35">Status atual: {pedido.status}</p></div><div className="flex flex-wrap gap-2">{pedido.status === 'Fila' && <button onClick={() => mudarProducao('Imprimindo')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Iniciar impressão</button>}{pedido.status === 'Imprimindo' && <button onClick={() => mudarProducao('Acabamento')} className="rounded-lg bg-violet-500/15 px-3 py-2 text-xs text-violet-300">Enviar ao acabamento</button>}{pedido.status === 'Acabamento' && <button onClick={() => mudarProducao('Finalizado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Finalizar e baixar estoque</button>}<button onClick={() => mudarProducao('Cancelado')} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">Cancelar pedido</button></div></div></section>}
+          {pedido.orcamento_status === 'Aprovado' && pedido.status !== 'Cancelado' && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Andamento da produção</h2><p className="mt-1 text-xs text-white/35">Status atual: {pedido.status}</p></div><div className="flex flex-wrap gap-2">{pedido.status === 'Fila' && <button onClick={() => mudarProducao('Imprimindo')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Iniciar impressão</button>}{pedido.status === 'Imprimindo' && <button onClick={() => mudarProducao('Acabamento')} className="rounded-lg bg-violet-500/15 px-3 py-2 text-xs text-violet-300">Enviar ao acabamento</button>}{pedido.status === 'Acabamento' && <a href="#fechamento" className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Revisar e finalizar</a>}<button onClick={() => mudarProducao('Cancelado')} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">Cancelar pedido</button></div></div></section>}
 
-          <form onSubmit={salvarOperacao} className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><h2 className="mb-5 font-semibold">Planejamento e consumo real</h2><div className="grid gap-4 sm:grid-cols-2">
+          <form id="fechamento" onSubmit={salvarOperacao} className="scroll-mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="mb-5"><h2 className="font-semibold">Planejamento e consumo real</h2><p className="mt-1 text-xs leading-5 text-white/35">Antes de finalizar, informe o que realmente foi usado. Campos vazios serão preenchidos com a estimativa após sua confirmação.</p></div><div className="grid gap-4 sm:grid-cols-2">
             <label className="text-xs text-white/50">Impressora<select value={impressoraId} onChange={(e) => setImpressoraId(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3"><option value="">Não atribuída</option>{impressoras.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
             <label className="text-xs text-white/50">Tempo real (horas)<input type="number" min="0" step="0.1" value={tempoReal} onChange={(e) => setTempoReal(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
             <label className="text-xs text-white/50">Início previsto<input type="datetime-local" value={inicioPrevisto} onChange={(e) => setInicioPrevisto(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
@@ -139,7 +184,8 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
           <div className="mt-6 space-y-3"><p className="text-xs font-medium uppercase text-white/35">Filamentos</p>{pedido.materiais.map((item, index) => <label key={item.id} className="flex items-center justify-between gap-4 rounded-lg bg-white/[0.03] p-3 text-sm"><span>{item.nome}<small className="ml-2 text-white/35">estimado {item.peso_gasto_gramas}g</small></span><input type="number" min="0" step="0.1" placeholder="real (g)" value={materiais[index]?.consumoReal ?? ''} onChange={(e) => setMateriais((lista) => lista.map((valor, i) => i === index ? { ...valor, consumoReal: e.target.value } : valor))} className="h-9 w-28 rounded-lg border border-white/10 bg-[#101114] px-2" /></label>)}</div>
           <div className="mt-6 space-y-3"><p className="text-xs font-medium uppercase text-white/35">Insumos</p>{pedido.insumos.length === 0 && <p className="text-xs text-white/30">Nenhum insumo.</p>}{pedido.insumos.map((item, index) => <label key={item.id} className="flex items-center justify-between gap-4 rounded-lg bg-white/[0.03] p-3 text-sm"><span>{item.nome}<small className="ml-2 text-white/35">estimado {item.quantidade} {item.unidade}</small></span><input type="number" min="0" step="0.1" placeholder="real" value={insumos[index]?.consumoReal ?? ''} onChange={(e) => setInsumos((lista) => lista.map((valor, i) => i === index ? { ...valor, consumoReal: e.target.value } : valor))} className="h-9 w-28 rounded-lg border border-white/10 bg-[#101114] px-2" /></label>)}</div>
           {pedido.status === 'Finalizado' && <p className="mt-5 text-xs text-amber-300">O consumo foi fechado junto com a baixa de estoque e não pode mais ser alterado.</p>}
-          <button disabled={isPending || ['Finalizado', 'Cancelado'].includes(pedido.status)} className="mt-6 flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-50"><Save size={14} /> Salvar operação</button></form>
+          {pedido.status === 'Acabamento' && <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-3 text-xs leading-5 text-amber-100/70"><AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-300" /> A finalização dará baixa definitiva no estoque. Confira os consumos antes de continuar.</div>}
+          <div className="mt-6 flex flex-wrap gap-2"><button disabled={isPending || ['Finalizado', 'Cancelado'].includes(pedido.status)} className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70 disabled:opacity-50"><Save size={14} /> Salvar operação</button>{pedido.status === 'Acabamento' && <button type="button" onClick={finalizarComRevisao} disabled={isPending} className="flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-50"><PackageCheck size={14} /> Revisar e finalizar</button>}</div></form>
         </div>
 
         <div className="space-y-6">
