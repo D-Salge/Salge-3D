@@ -7,6 +7,8 @@ import type { Metadata } from 'next'
 import { getPedidosKanban } from '@/app/actions/pedidos'
 import { KanbanBoard } from '@/app/components/KanbanBoard'
 import { Box } from 'lucide-react'
+import { getPlanejamentoProducao } from '@/app/actions/planejamento'
+import { PlanejamentoProducao } from '@/app/components/PlanejamentoProducao'
 
 export const metadata: Metadata = {
   title: 'Produção · Salge 3D',
@@ -14,7 +16,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ProducaoPage() {
-  const pedidos = await getPedidosKanban()
+  const [pedidos, planejamento] = await Promise.all([getPedidosKanban(), getPlanejamentoProducao()])
 
   return (
     <div className="mx-auto max-w-[1440px] px-6 py-9 lg:px-10 h-full flex flex-col">
@@ -41,6 +43,8 @@ export default async function ProducaoPage() {
           </div>
         </div>
       </div>
+
+      <PlanejamentoProducao plano={planejamento} />
 
       {/* Kanban Board */}
       <KanbanBoard pedidos={pedidos} />

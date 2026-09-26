@@ -116,6 +116,7 @@ export async function getResumoRecebimentos(): Promise<{
       `SELECT COALESCE(SUM(valor), 0) AS total
        FROM recebimentos
        WHERE tenant_id = ? AND estornado_em IS NULL
+         AND date(data_recebimento) <= date('now')
          AND strftime('%Y-%m', data_recebimento) = strftime('%Y-%m', 'now')`
     )
     .get(TENANT_ID) as { total: number }
@@ -139,7 +140,7 @@ export async function getResumoRecebimentos(): Promise<{
 
   const recebidoTotalRow = db.prepare(`
     SELECT COALESCE(SUM(valor), 0) AS total FROM recebimentos
-    WHERE tenant_id = ? AND estornado_em IS NULL
+    WHERE tenant_id = ? AND estornado_em IS NULL AND date(data_recebimento) <= date('now')
   `).get(TENANT_ID) as { total: number }
 
   const vencidoRow = db.prepare(`
