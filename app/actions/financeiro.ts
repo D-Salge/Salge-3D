@@ -2,6 +2,7 @@
 
 import db from '@/lib/db'
 import { projetarFluxoCaixa } from '@/lib/fluxo-caixa.mjs'
+import { listarCompetencias, vencimentoDaRecorrencia } from '@/lib/recorrencias.mjs'
 
 const TENANT_ID = 1
 
@@ -67,9 +68,31 @@ export async function getProjecaoFluxoCaixa(): Promise<ProjecaoFluxoCaixa> {
     WHERE tenant_id = ? AND date(data_movimentacao) > date(?)
   `).all(TENANT_ID, hoje) as Array<{ data: string; tipo: 'Entrada' | 'Saida'; valor: number }>
 
+  const recorrencias = db.prepare(`
+    SELECT valor, dia_vencimento, inicia_em, termina_em, ativo
+    FROM despesas_recorrentes WHERE tenant_id = ? AND ativo = 1
+  `).all(TENANT_ID) as Array<{
+    valor: number
+    dia_vencimento: number
+    inicia_em: string
+    termina_em: string | null
+    ativo: number
+  }>
+  const dataInicio = new Date(`${hoje}T12:00:00Z`)
+  const proximoMes = new Date(Date.UTC(dataInicio.getUTCFullYear(), dataInicio.getUTCMonth() + 1, 1))
+  const ultimoMes = new Date(Date.UTC(dataInicio.getUTCFullYear(), dataInicio.getUTCMonth() + 5, 1))
+  const chave = (data: Date) => `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, '0')}`
+  const competenciasFuturas = listarCompetencias(chave(proximoMes), chave(ultimoMes))
+  const despesasRecorrentes = recorrencias.flatMap((recorrencia) => competenciasFuturas
+    .map((competencia) => {
+      const vencimento = vencimentoDaRecorrencia(recorrencia, competencia)
+      return vencimento ? { data: vencimento, tipo: 'Saida' as const, valor: recorrencia.valor } : null
+    })
+    .filter((movimento): movimento is { data: string; tipo: 'Saida'; valor: number } => movimento !== null))
+
   return projetarFluxoCaixa({
     saldoInicial: caixa.saldo,
-    movimentos: [...contasReceber, ...contasPagar, ...capitalFuturo],
+    movimentos: [...contasReceber, ...contasPagar, ...capitalFuturo, ...despesasRecorrentes],
     inicio: hoje,
     meses: 6,
   }) as ProjecaoFluxoCaixa
