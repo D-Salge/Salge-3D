@@ -8,6 +8,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { gerarParcelas } from '@/lib/financeiro.mjs'
+import { listarCompetencias, vencimentoDaRecorrencia } from '@/lib/recorrencias.mjs'
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 
@@ -43,6 +44,30 @@ export interface DespesaInput {
   parcelas: number
 }
 
+export interface DespesaRecorrente {
+  id: number
+  categoria: string
+  descricao: string
+  valor: number
+  dia_vencimento: number
+  forma_pagamento: string
+  paga_automaticamente: number
+  inicia_em: string
+  termina_em: string | null
+  ativo: number
+}
+
+export interface DespesaRecorrenteInput {
+  categoria: string
+  descricao: string
+  valor: number
+  dia_vencimento: number
+  forma_pagamento: string
+  paga_automaticamente: boolean
+  inicia_em: string
+  termina_em: string | null
+}
+
 export interface FluxoCapital {
   id: number
   tipo: 'Aporte' | 'Retirada'
@@ -54,6 +79,47 @@ export interface FluxoCapital {
 export interface ActionResult {
   success: boolean
   message: string
+}
+
+const CATEGORIAS = ['Filamentos', 'Insumos', 'Equipamento', 'Energia', 'Marketing', 'Software', 'Manutencao', 'Embalagens', 'Frete', 'Outros']
+
+function hojeSaoPaulo() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+}
+
+function materializarDespesasRecorrentes() {
+  const hoje = hojeSaoPaulo()
+  const competenciaAtual = hoje.slice(0, 7)
+  const recorrencias = db.prepare(`
+    SELECT * FROM despesas_recorrentes
+    WHERE tenant_id = ? AND ativo = 1 AND date(inicia_em) <= date(?, 'start of month', '+1 month', '-1 day')
+      AND (termina_em IS NULL OR date(termina_em) >= date(?, 'start of month'))
+  `).all(TENANT_ID, hoje, hoje) as DespesaRecorrente[]
+  const inserir = db.prepare(`
+    INSERT OR IGNORE INTO despesas (
+      tenant_id, usuario_id, categoria, descricao, valor, data_despesa,
+      competencia_em, vencimento_em, pago_em, forma_pagamento,
+      despesa_recorrente_id, competencia_chave
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const gerar = db.transaction(() => {
+    for (const recorrencia of recorrencias) {
+      const inicio = recorrencia.inicia_em.slice(0, 7)
+      for (const competencia of listarCompetencias(inicio, competenciaAtual)) {
+        const vencimento = vencimentoDaRecorrencia(recorrencia, competencia)
+        if (!vencimento) continue
+        const pagoEm = recorrencia.paga_automaticamente === 1 && vencimento <= hoje ? vencimento : null
+        inserir.run(
+          TENANT_ID, USUARIO_ID, recorrencia.categoria, recorrencia.descricao,
+          recorrencia.valor, `${competencia}-01`, `${competencia}-01`, vencimento,
+          pagoEm, recorrencia.forma_pagamento, recorrencia.id, competencia,
+        )
+      }
+    }
+  })
+  gerar.immediate()
 }
 
 // --- Queries de leitura ---
@@ -86,6 +152,17 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
        ORDER BY pago_em IS NOT NULL, date(COALESCE(vencimento_em, data_despesa)), numero_parcela`
     )
     .all(TENANT_ID) as Despesa[]
+}
+
+export async function getDespesasRecorrentes(): Promise<DespesaRecorrente[]> {
+  materializarDespesasRecorrentes()
+  return db.prepare(`
+    SELECT id, categoria, descricao, valor, dia_vencimento, forma_pagamento,
+      paga_automaticamente, inicia_em, termina_em, ativo
+    FROM despesas_recorrentes
+    WHERE tenant_id = ? AND ativo = 1
+    ORDER BY dia_vencimento, descricao
+  `).all(TENANT_ID) as DespesaRecorrente[]
 }
 
 export async function getFluxoCapital(): Promise<FluxoCapital[]> {
@@ -173,8 +250,7 @@ export async function salvarDespesa(
     if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
       return { success: false, message: 'O valor deve ser maior que zero.' }
     }
-    const categorias = ['Filamentos', 'Insumos', 'Equipamento', 'Energia', 'Marketing', 'Software', 'Manutencao', 'Embalagens', 'Frete', 'Outros']
-    if (!categorias.includes(data.categoria)) return { success: false, message: 'Categoria invalida.' }
+    if (!CATEGORIAS.includes(data.categoria)) return { success: false, message: 'Categoria invalida.' }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.data_despesa)) return { success: false, message: 'Data invalida.' }
     if (![data.competencia_em, data.vencimento_em].every((valor) => /^\d{4}-\d{2}-\d{2}$/.test(valor))) {
       return { success: false, message: 'Competência ou vencimento inválido.' }
@@ -260,6 +336,93 @@ export async function salvarDespesa(
   } catch (error) {
     console.error('[salvarDespesa]', error)
     return { success: false, message: 'Erro interno ao salvar despesa.' }
+  }
+}
+
+export async function salvarDespesaRecorrente(
+  id: number | null,
+  data: DespesaRecorrenteInput,
+): Promise<ActionResult> {
+  try {
+    if (!data.descricao.trim() || data.descricao.trim().length > 160) {
+      return { success: false, message: 'Informe uma descrição válida.' }
+    }
+    if (!CATEGORIAS.includes(data.categoria)) return { success: false, message: 'Categoria inválida.' }
+    if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
+      return { success: false, message: 'Valor recorrente inválido.' }
+    }
+    if (!Number.isSafeInteger(data.dia_vencimento) || data.dia_vencimento < 1 || data.dia_vencimento > 31) {
+      return { success: false, message: 'Dia de vencimento inválido.' }
+    }
+    if (!data.forma_pagamento.trim() || data.forma_pagamento.length > 80) {
+      return { success: false, message: 'Forma de pagamento inválida.' }
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.inicia_em) ||
+        (data.termina_em !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data.termina_em))) {
+      return { success: false, message: 'Período da recorrência inválido.' }
+    }
+    if (data.termina_em && data.termina_em < data.inicia_em) {
+      return { success: false, message: 'O término não pode ser anterior ao início.' }
+    }
+
+    let recorrenciaId = id
+    if (id === null) {
+      const result = db.prepare(`
+        INSERT INTO despesas_recorrentes (
+          tenant_id, usuario_id, categoria, descricao, valor, dia_vencimento,
+          forma_pagamento, paga_automaticamente, inicia_em, termina_em
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        TENANT_ID, USUARIO_ID, data.categoria, data.descricao.trim(), data.valor,
+        data.dia_vencimento, data.forma_pagamento.trim(), data.paga_automaticamente ? 1 : 0,
+        data.inicia_em, data.termina_em,
+      )
+      recorrenciaId = Number(result.lastInsertRowid)
+    } else {
+      const result = db.prepare(`
+        UPDATE despesas_recorrentes SET categoria = ?, descricao = ?, valor = ?,
+          dia_vencimento = ?, forma_pagamento = ?, paga_automaticamente = ?,
+          inicia_em = ?, termina_em = ?
+        WHERE id = ? AND tenant_id = ? AND ativo = 1
+      `).run(
+        data.categoria, data.descricao.trim(), data.valor, data.dia_vencimento,
+        data.forma_pagamento.trim(), data.paga_automaticamente ? 1 : 0,
+        data.inicia_em, data.termina_em, id, TENANT_ID,
+      )
+      if (result.changes !== 1) return { success: false, message: 'Despesa recorrente não encontrada.' }
+    }
+    materializarDespesasRecorrentes()
+    registrarAuditoria(db, {
+      entidade: 'DespesaRecorrente', entidadeId: recorrenciaId, acao: id ? 'ATUALIZAR' : 'CRIAR',
+      descricao: `${data.descricao.trim()} · dia ${data.dia_vencimento}`,
+      detalhes: { valor: data.valor, pagaAutomaticamente: data.paga_automaticamente },
+    })
+    revalidatePath('/financeiro')
+    revalidatePath('/')
+    return { success: true, message: id ? 'Despesa recorrente atualizada.' : 'Despesa recorrente criada.' }
+  } catch (error) {
+    console.error('[salvarDespesaRecorrente]', error)
+    return { success: false, message: 'Erro interno ao salvar despesa recorrente.' }
+  }
+}
+
+export async function arquivarDespesaRecorrente(id: number): Promise<ActionResult> {
+  try {
+    if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Despesa recorrente inválida.' }
+    const result = db.prepare(`
+      UPDATE despesas_recorrentes SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1
+    `).run(id, TENANT_ID)
+    if (result.changes !== 1) return { success: false, message: 'Despesa recorrente não encontrada.' }
+    registrarAuditoria(db, {
+      entidade: 'DespesaRecorrente', entidadeId: id, acao: 'ARQUIVAR',
+      descricao: 'Geração de novas competências interrompida',
+    })
+    revalidatePath('/financeiro')
+    revalidatePath('/')
+    return { success: true, message: 'Recorrência encerrada; lançamentos anteriores foram preservados.' }
+  } catch (error) {
+    console.error('[arquivarDespesaRecorrente]', error)
+    return { success: false, message: 'Erro interno ao encerrar recorrência.' }
   }
 }
 

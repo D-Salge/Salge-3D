@@ -47,6 +47,23 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(printerColumns.includes('horas_base'))
     assert.ok(printerColumns.includes('intervalo_manutencao_horas'))
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'manutencoes_impressora'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'despesas_recorrentes'`).get())
+    assert.ok(expenseColumns.includes('despesa_recorrente_id'))
+    assert.ok(expenseColumns.includes('competencia_chave'))
+    const recorrenciaId = Number(db.prepare(`
+      INSERT INTO despesas_recorrentes (
+        tenant_id, usuario_id, categoria, descricao, valor, dia_vencimento,
+        forma_pagamento, inicia_em
+      ) VALUES (1, 1, 'Software', 'Sistema mensal', 20, 10, 'Cartão', '2026-09-01')
+    `).run().lastInsertRowid)
+    const inserirCompetencia = db.prepare(`
+      INSERT INTO despesas (
+        tenant_id, usuario_id, categoria, descricao, valor, data_despesa,
+        despesa_recorrente_id, competencia_chave
+      ) VALUES (1, 1, 'Software', 'Sistema mensal', 20, '2026-09-01', ?, '2026-09')
+    `)
+    inserirCompetencia.run(recorrenciaId)
+    assert.throws(() => inserirCompetencia.run(recorrenciaId), /UNIQUE constraint failed/)
   } finally {
     db.close()
   }

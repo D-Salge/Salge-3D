@@ -3,17 +3,19 @@
 import { useState, useTransition } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react'
 import type { RecebimentoResumo } from '@/app/actions/recebimentos'
-import { alterarPagamentoDespesa, type Despesa, type FluxoCapital } from '@/app/actions/despesas'
+import { alterarPagamentoDespesa, type Despesa, type DespesaRecorrente, type FluxoCapital } from '@/app/actions/despesas'
 import { RecebimentoModal } from './RecebimentoModal'
 import { DespesaModal } from './DespesaModal'
 import { FluxoCapitalModal } from './FluxoCapitalModal'
 import { ProjecaoFluxoCaixa } from './ProjecaoFluxoCaixa'
 import type { ProjecaoFluxoCaixa as Projecao } from '@/app/actions/financeiro'
+import { DespesasRecorrentes } from './DespesasRecorrentes'
 
 export function FinanceiroPage({ 
   pendentes, 
   resumoRecebimentos, 
   despesas, 
+  despesasRecorrentes,
   resumoDespesas, 
   fluxo,
   projecao,
@@ -27,6 +29,7 @@ export function FinanceiroPage({
     receitaCompetenciaMes: number,
   },
   despesas: Despesa[],
+  despesasRecorrentes: DespesaRecorrente[],
   resumoDespesas: {
     totalDespesasMes: number,
     totalDespesasPagas: number,
@@ -123,6 +126,8 @@ export function FinanceiroPage({
       </div>
 
       {mensagem && <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/70">{mensagem}</div>}
+
+      <DespesasRecorrentes itens={despesasRecorrentes} />
 
       <ProjecaoFluxoCaixa projecao={projecao} />
 

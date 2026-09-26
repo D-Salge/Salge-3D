@@ -10,6 +10,9 @@ import {
   getPedidosRecentes,
   type PedidoResumo,
 } from '@/app/actions/pedidos'
+import { getCentralPendencias } from '@/app/actions/pendencias'
+import { CentralPendencias } from '@/app/components/CentralPendencias'
+import { getDespesasRecorrentes } from '@/app/actions/despesas'
 import {
   TrendingUp,
   ReceiptText,
@@ -167,9 +170,12 @@ function TabelaHistorico({ pedidos }: { pedidos: PedidoResumo[] }) {
 
 // ── Página ────────────────────────────────────────────────────────────────────
 export default async function VisaoGeralPage() {
-  const [stats, pedidos] = await Promise.all([
+  // Garante a geração das contas fixas do mês mesmo que o Financeiro não seja aberto.
+  await getDespesasRecorrentes()
+  const [stats, pedidos, pendencias] = await Promise.all([
     getDashboardStats(),
     getPedidosRecentes(10),
+    getCentralPendencias(),
   ])
 
   return (
@@ -241,6 +247,8 @@ export default async function VisaoGeralPage() {
           sub={`${stats.orcamentosPendentes} orçamentos · ${stats.pedidosAtrasados} atrasados`}
         />
       </div>
+
+      <CentralPendencias pendencias={pendencias} />
 
       {/* ── Tabela de histórico ─────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
