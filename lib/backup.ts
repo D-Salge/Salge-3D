@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, stat, unlink } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import db from '@/lib/db'
 import type { SessaoAtual } from '@/lib/session'
@@ -16,7 +16,41 @@ export interface BackupRegistro {
   tamanho_bytes: number
   sha256: string
   integridade: 'Válido' | 'Inválido' | 'Ausente'
+  externo_status: 'Não configurado' | 'Copiado' | 'Falhou'
+  externo_destino: string | null
+  externo_em: string | null
   criado_em: string
+}
+
+async function sincronizarExterno(id: number, tenantId: number, arquivo: string, origem: string) {
+  const configurado = process.env.BACKUP_EXTERNAL_DIR?.trim()
+  if (!configurado) {
+    db.prepare(`UPDATE backups_registro SET externo_status = 'Não configurado',
+      externo_destino = NULL, externo_em = NULL WHERE id = ? AND tenant_id = ?`).run(id, tenantId)
+    return
+  }
+  const pastaExterna = path.resolve(configurado)
+  const destino = path.join(pastaExterna, arquivo)
+  if (pastaExterna === path.resolve(PASTA)) {
+    db.prepare(`UPDATE backups_registro SET externo_status = 'Falhou', externo_destino = ?, externo_em = NULL
+      WHERE id = ? AND tenant_id = ?`).run('A pasta externa não pode ser a pasta local de backups.', id, tenantId)
+    return
+  }
+  try {
+    await mkdir(pastaExterna, { recursive: true })
+    await copyFile(origem, destino)
+    const [original, copia] = await Promise.all([readFile(origem), readFile(destino)])
+    const hashOriginal = createHash('sha256').update(original).digest('hex')
+    const hashCopia = createHash('sha256').update(copia).digest('hex')
+    if (hashOriginal !== hashCopia) throw new Error('HASH_MISMATCH')
+    db.prepare(`UPDATE backups_registro SET externo_status = 'Copiado', externo_destino = ?,
+      externo_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ? AND tenant_id = ?`
+    ).run(destino, id, tenantId)
+  } catch (error) {
+    console.error('[backup-externo]', error)
+    db.prepare(`UPDATE backups_registro SET externo_status = 'Falhou', externo_destino = ?, externo_em = NULL
+      WHERE id = ? AND tenant_id = ?`).run(destino, id, tenantId)
+  }
 }
 
 function nomeSeguro(arquivo: string) {
@@ -60,8 +94,19 @@ export async function criarBackupRegistrado(tipo: 'Automático' | 'Manual', sess
     RETURNING id
   `).get(sessao.tenantId, sessao.usuarioId, tipo, arquivo, tamanho, sha256, valido ? 'Válido' : 'Inválido') as { id: number }
   if (!valido) throw new Error('BACKUP_INVALID')
+  await sincronizarExterno(result.id, sessao.tenantId, arquivo, caminho)
   await aplicarRetencao(sessao.tenantId)
   return db.prepare('SELECT * FROM backups_registro WHERE id = ?').get(result.id) as BackupRegistro
+}
+
+export async function reenviarBackupExterno(tenantId: number, id: number) {
+  const item = db.prepare(`SELECT id, arquivo FROM backups_registro WHERE id = ? AND tenant_id = ? AND integridade = 'Válido'`)
+    .get(id, tenantId) as { id: number; arquivo: string } | undefined
+  if (!item || !nomeSeguro(item.arquivo)) throw new Error('BACKUP_NOT_FOUND')
+  const origem = path.join(PASTA, item.arquivo)
+  if (!existsSync(origem)) throw new Error('BACKUP_FILE_MISSING')
+  await sincronizarExterno(item.id, tenantId, item.arquivo, origem)
+  return db.prepare('SELECT * FROM backups_registro WHERE id = ?').get(item.id) as BackupRegistro
 }
 
 async function aplicarRetencao(tenantId: number) {

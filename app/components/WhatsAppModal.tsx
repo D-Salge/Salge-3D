@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Copy, ExternalLink, MessageCircle, X } from 'lucide-react'
+import { Check, Copy, ExternalLink, MessageCircle, Send, X } from 'lucide-react'
 import {
   criarMensagemWhatsApp,
   criarUrlWhatsApp,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/whatsapp.mjs'
 import {
   registrarContatoWhatsApp,
+  enviarWhatsAppOficial,
   type PedidoWhatsApp,
   type TipoMensagemWhatsApp,
 } from '@/app/actions/whatsapp'
@@ -86,6 +87,14 @@ export function WhatsAppModal({
     })
   }
 
+  function enviarOficial() {
+    startTransition(async () => {
+      const resultado = await enviarWhatsAppOficial({ pedidoId: pedido.id, tipo, mensagem })
+      setRetorno(resultado.message)
+      if (resultado.success) router.refresh()
+    })
+  }
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Mensagem pelo WhatsApp">
       <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#15171b] p-5 shadow-2xl sm:p-6">
@@ -125,8 +134,11 @@ export function WhatsAppModal({
           <button type="button" disabled={!numeroValido || !mensagem.trim() || isPending} onClick={abrirWhatsApp} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-xs font-semibold text-[#07140d] hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-45">
             <ExternalLink size={14} />{isPending ? 'Registrando...' : 'Abrir WhatsApp'}
           </button>
+          <button type="button" disabled={!numeroValido || !mensagem.trim() || isPending} onClick={enviarOficial} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 text-xs font-semibold text-[#15180d] hover:bg-[#e4ff76] disabled:cursor-not-allowed disabled:opacity-45">
+            <Send size={14} />{isPending ? 'Enviando...' : 'Enviar pela API'}
+          </button>
         </div>
-        <p className="mt-3 text-center text-[10px] text-white/25">O ERP registra que a conversa foi aberta; o envio é confirmado por você no WhatsApp.</p>
+        <p className="mt-3 text-center text-[10px] text-white/25">“Abrir WhatsApp” mantém o fluxo manual. “Enviar pela API” usa um template aprovado e acompanha entrega e leitura.</p>
       </div>
     </div>
   )

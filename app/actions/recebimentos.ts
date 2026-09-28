@@ -214,13 +214,18 @@ export async function registrarRecebimento(data: {
 
     const registrar = db.transaction(() => {
       const pedido = db.prepare(`
-        SELECT p.valor_total_cobrado,
+        SELECT p.valor_total_cobrado, p.usuario_id, p.numero_orcamento, p.nome_da_peca,
+          t.mei_natureza_padrao,
           COALESCE((SELECT SUM(r.valor) FROM recebimentos r
             WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido
-        FROM pedidos p
+        FROM pedidos p JOIN tenants t ON t.id = p.tenant_id
         WHERE p.id = ? AND p.tenant_id = ? AND p.status != 'Cancelado'
           AND p.orcamento_status = 'Aprovado'
-      `).get(data.pedido_id, TENANT_ID) as { valor_total_cobrado: number; recebido: number } | undefined
+      `).get(data.pedido_id, TENANT_ID) as {
+        valor_total_cobrado: number; recebido: number; usuario_id: number
+        numero_orcamento: string | null; nome_da_peca: string
+        mei_natureza_padrao: 'Venda' | 'Serviço'
+      } | undefined
       if (!pedido) throw new Error('NOT_FOUND')
       const saldo = Math.round((pedido.valor_total_cobrado - pedido.recebido) * 100) / 100
       if (data.valor > saldo + 0.001) throw new Error(`OVERPAYMENT:${saldo}`)
@@ -245,6 +250,17 @@ export async function registrarRecebimento(data: {
         data.observacao?.trim() || null,
       )
       const recebimentoId = Number(result.lastInsertRowid)
+      db.prepare(`
+        INSERT INTO receitas_fiscais (
+          tenant_id, usuario_id, recebimento_id, data_competencia,
+          natureza, origem, descricao, valor
+        ) VALUES (?, ?, ?, ?, ?, 'ERP', ?, ?)
+      `).run(
+        TENANT_ID, pedido.usuario_id, recebimentoId, dataRecebimento,
+        pedido.mei_natureza_padrao,
+        `Recebimento ${pedido.numero_orcamento || `#${data.pedido_id}`} — ${pedido.nome_da_peca}`,
+        data.valor,
+      )
       const distribuicao = distribuirRecebimento(data.valor, parcelas)
       if (distribuicao.restante > 0.001) throw new Error('INSTALLMENTS_MISMATCH')
       const alocar = db.prepare(`
@@ -296,6 +312,10 @@ export async function deletarRecebimento(id: number): Promise<ActionResult> {
         WHERE id = ? AND tenant_id = ? AND estornado_em IS NULL`)
       .run(id, TENANT_ID)
       if (res.changes === 0) throw new Error('NOT_FOUND')
+      db.prepare(`UPDATE receitas_fiscais
+        SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE recebimento_id = ? AND tenant_id = ? AND cancelada_em IS NULL`
+      ).run(id, TENANT_ID)
       registrarAuditoria(db, {
         entidade: 'Recebimento', entidadeId: id, acao: 'ESTORNAR',
         descricao: 'Recebimento estornado pelo usuário',
