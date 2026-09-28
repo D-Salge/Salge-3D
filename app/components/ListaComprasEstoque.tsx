@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Check, ClipboardCopy, ShoppingCart } from 'lucide-react'
 import type { AlertaEstoque } from '@/app/actions/estoque'
 
@@ -48,10 +49,15 @@ export function ListaComprasEstoque({
           </h2>
           <p className="mt-1 text-xs text-white/40">Considera o estoque atual e o consumo dos pedidos aprovados ainda abertos.</p>
         </div>
-        <button type="button" onClick={copiarLista} className="inline-flex h-9 items-center gap-2 rounded-lg bg-white/[0.06] px-3 text-xs text-white/70 hover:bg-white/[0.1]">
-          {copiado ? <Check size={14} className="text-emerald-400" /> : <ClipboardCopy size={14} />}
-          {copiado ? 'Lista copiada' : 'Copiar lista'}
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={copiarLista} className="inline-flex h-9 items-center gap-2 rounded-lg bg-white/[0.06] px-3 text-xs text-white/70 hover:bg-white/[0.1]">
+            {copiado ? <Check size={14} className="text-emerald-400" /> : <ClipboardCopy size={14} />}
+            {copiado ? 'Lista copiada' : 'Copiar lista'}
+          </button>
+          <Link href="/compras" className="inline-flex h-9 items-center gap-2 rounded-lg bg-amber-300 px-3 text-xs font-semibold text-[#17140a]">
+            <ShoppingCart size={14} /> Gerar compra
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
