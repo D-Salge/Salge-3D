@@ -15,6 +15,9 @@ import { getDashboardStats } from '@/app/actions/pedidos'
 import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { Sidebar } from '@/app/components/Sidebar'
 import { DashboardHeader } from '@/app/components/DashboardHeader'
+import { autenticacaoConfigurada, getSessaoAtual } from '@/lib/session'
+import { redirect } from 'next/navigation'
+import { garantirBackupDiario } from '@/lib/backup'
 
 // O dashboard depende de dados operacionais do SQLite em cada requisição.
 export const dynamic = 'force-dynamic'
@@ -24,6 +27,10 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  if (!autenticacaoConfigurada()) redirect('/setup')
+  const sessao = await getSessaoAtual()
+  if (!sessao) redirect('/login')
+  await garantirBackupDiario(sessao).catch((error) => console.error('[backup-diario]', error))
   const stats = await getDashboardStats()
   const config = await getConfiguracoes()
 
@@ -33,9 +40,10 @@ export default async function DashboardLayout({
         pedidosEmProducao={stats.pedidosEmProducao}
         faturamentoMes={stats.faturamentoBruto}
         metaMensal={config.meta_mensal}
+        perfil={sessao.perfil}
       />
       <div className="flex flex-1 flex-col min-w-0">
-        <DashboardHeader />
+        <DashboardHeader usuario={sessao} />
         <main className="flex-1">
           {children}
         </main>

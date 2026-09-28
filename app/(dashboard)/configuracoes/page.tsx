@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { ConfiguracoesForm } from '@/app/components/ConfiguracoesForm'
+import { exigirPerfil } from '@/lib/session'
 
 export const metadata: Metadata = {
   title: 'Configurações · Salge 3D',
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ConfiguracoesPage() {
+  await exigirPerfil(['admin'])
   const config = await getConfiguracoes()
 
   return (

@@ -2,6 +2,8 @@
 
 import db from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { exigirPerfil } from '@/lib/session'
+import { registrarAuditoria } from '@/lib/auditoria'
 
 const TENANT_ID = 1
 
@@ -226,5 +228,53 @@ export async function deletarCliente(id: number): Promise<ActionResult> {
     }
     console.error('[deletarCliente]', error)
     return { success: false, message: 'Erro interno ao excluir.' }
+  }
+}
+
+export async function anonimizarCliente(id: number): Promise<ActionResult> {
+  try {
+    const sessao = await exigirPerfil(['admin'])
+    if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Cliente inválido.' }
+    const anonimizar = db.transaction(() => {
+      const cliente = db.prepare(`
+        SELECT c.id,
+          MAX(0, COALESCE((SELECT SUM(p.valor_total_cobrado) FROM pedidos p
+            WHERE p.cliente_id = c.id AND p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado'), 0) -
+          COALESCE((SELECT SUM(r.valor) FROM recebimentos r JOIN pedidos p ON p.id = r.pedido_id
+            WHERE p.cliente_id = c.id AND r.estornado_em IS NULL), 0)) AS saldo
+        FROM clientes c WHERE c.id = ? AND c.tenant_id = ? AND c.anonimizado_em IS NULL
+      `).get(id, sessao.tenantId) as { id: number; saldo: number } | undefined
+      if (!cliente) throw new Error('NOT_FOUND')
+      if (cliente.saldo > 0.009) throw new Error(`BALANCE:${cliente.saldo}`)
+      db.prepare(`
+        UPDATE clientes SET nome = ?, telefone = NULL, email = NULL, instagram = NULL,
+          cidade = NULL, origem = 'Outro', observacoes = NULL, ultimo_contato = NULL,
+          codigo_externo = NULL, ativo = 0,
+          anonimizado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ? AND tenant_id = ?
+      `).run(`Cliente anonimizado #${id}`, id, sessao.tenantId)
+      db.prepare(`
+        UPDATE portal_links SET revogado_em = COALESCE(revogado_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        WHERE tenant_id = ? AND pedido_id IN (SELECT id FROM pedidos WHERE cliente_id = ?)
+      `).run(sessao.tenantId, id)
+      registrarAuditoria(db, {
+        tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
+        entidade: 'Cliente', entidadeId: id, acao: 'ANONIMIZAR',
+        descricao: 'Dados pessoais removidos; histórico financeiro preservado',
+      })
+    })
+    try { anonimizar.immediate() } catch (error) {
+      const code = error instanceof Error ? error.message : ''
+      if (code === 'NOT_FOUND') return { success: false, message: 'Cliente não encontrado ou já anonimizado.' }
+      if (code.startsWith('BALANCE:')) return { success: false, message: `Quite o saldo pendente de R$ ${Number(code.split(':')[1]).toFixed(2).replace('.', ',')} antes de anonimizar.` }
+      throw error
+    }
+    revalidatePath('/clientes')
+    revalidatePath(`/clientes/${id}`)
+    return { success: true, message: 'Dados pessoais anonimizados. O histórico financeiro foi preservado.' }
+  } catch (error) {
+    if (error instanceof Error && error.message === 'FORBIDDEN') return { success: false, message: 'Apenas administradores podem anonimizar clientes.' }
+    console.error('[anonimizarCliente]', error)
+    return { success: false, message: 'Não foi possível anonimizar o cliente.' }
   }
 }

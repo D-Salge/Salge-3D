@@ -18,6 +18,10 @@ try {
   const clearDatabase = db.transaction(() => {
     // 1. Apaga os dados operacionais em ordem (filhos -> pais)
     db.prepare('DELETE FROM recebimento_alocacoes').run()
+    db.prepare('DELETE FROM extrato_lancamentos').run()
+    db.prepare('DELETE FROM extrato_importacoes').run()
+    db.prepare('DELETE FROM inventario_itens').run()
+    db.prepare('DELETE FROM inventarios').run()
     db.prepare('DELETE FROM recebimentos').run()
     db.prepare('DELETE FROM parcelas_receber').run()
     db.prepare('DELETE FROM anexos_pedido').run()
@@ -53,6 +57,10 @@ try {
         'pedido_insumos',
         'pedido_filamentos',
         'recebimento_alocacoes',
+        'extrato_lancamentos',
+        'extrato_importacoes',
+        'inventario_itens',
+        'inventarios',
         'recebimentos',
         'parcelas_receber',
         'anexos_pedido',
