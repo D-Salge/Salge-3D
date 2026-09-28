@@ -93,6 +93,9 @@ export interface PedidoResumo {
   validade_orcamento: string | null
   vencimento_em: string | null
   parcelas: number
+  quantidade: number
+  quantidade_produzida: number
+  quantidade_entregue: number
   impressora_nome: string | null
   inicio_previsto: string | null
   fim_previsto: string | null
@@ -347,6 +350,10 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
          p.validade_orcamento,
          p.vencimento_em,
          p.parcelas,
+         p.quantidade,
+         p.quantidade_produzida,
+         COALESCE((SELECT SUM(e.quantidade) FROM entregas_pedido e
+           WHERE e.pedido_id = p.id AND e.cancelada_em IS NULL), 0) AS quantidade_entregue,
          imp.nome AS impressora_nome,
          p.inicio_previsto,
          p.fim_previsto,
@@ -1082,6 +1089,10 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
          p.validade_orcamento,
          p.vencimento_em,
          p.parcelas,
+         p.quantidade,
+         p.quantidade_produzida,
+         COALESCE((SELECT SUM(e.quantidade) FROM entregas_pedido e
+           WHERE e.pedido_id = p.id AND e.cancelada_em IS NULL), 0) AS quantidade_entregue,
          imp.nome AS impressora_nome,
          p.inicio_previsto,
          p.fim_previsto,
@@ -1127,8 +1138,8 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
 
     const atualizar = db.transaction(() => {
       const pedido = db
-        .prepare('SELECT status, orcamento_status FROM pedidos WHERE id = ? AND tenant_id = ?')
-        .get(pedidoId, TENANT_ID) as { status: string; orcamento_status: string } | undefined
+        .prepare('SELECT status, orcamento_status, quantidade, quantidade_produzida FROM pedidos WHERE id = ? AND tenant_id = ?')
+        .get(pedidoId, TENANT_ID) as { status: string; orcamento_status: string; quantidade: number; quantidade_produzida: number } | undefined
 
       if (!pedido) throw new Error('NOT_FOUND')
       if (pedido.orcamento_status !== 'Aprovado') throw new Error('NOT_APPROVED')
@@ -1138,6 +1149,9 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       }
 
       if (novoStatus === 'Finalizado') {
+        if (pedido.quantidade_produzida > 0 && pedido.quantidade_produzida < pedido.quantidade) {
+          throw new Error(`INCOMPLETE_PRODUCTION:${pedido.quantidade_produzida}:${pedido.quantidade}`)
+        }
         const filamentosDoPedido = db
           .prepare(
             `SELECT
@@ -1316,13 +1330,17 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         .prepare(
           `UPDATE pedidos
            SET status = ?,
+               quantidade_produzida = CASE
+                 WHEN ? = 'Finalizado' THEN quantidade
+                 ELSE quantidade_produzida
+               END,
                data_conclusao = CASE
                  WHEN ? = 'Finalizado' THEN strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
                  ELSE data_conclusao
                END
            WHERE id = ? AND tenant_id = ? AND status = ?`,
         )
-        .run(novoStatus, novoStatus, pedidoId, TENANT_ID, pedido.status)
+        .run(novoStatus, novoStatus, novoStatus, pedidoId, TENANT_ID, pedido.status)
 
       if (res.changes !== 1) throw new Error('STATUS_CHANGED')
       db.prepare(`
@@ -1351,6 +1369,10 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       }
       if (message === 'NOT_APPROVED') {
         return { success: false, message: 'Aprove o orçamento antes de iniciar a produção.' }
+      }
+      if (message.startsWith('INCOMPLETE_PRODUCTION:')) {
+        const [, produzida, total] = message.split(':')
+        return { success: false, message: `Ainda existem ${Number(total) - Number(produzida)} unidade(s) para produzir. Atualize o progresso antes de finalizar.` }
       }
       if (message.startsWith('INSUFFICIENT_STOCK:')) {
         return {

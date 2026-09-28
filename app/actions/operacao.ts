@@ -5,6 +5,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { adicionarMeses, dividirEmParcelas } from '@/lib/financeiro.mjs'
 import { calcularIndicadoresQualidade, calcularStatusManutencao } from '@/lib/manutencao.mjs'
 import { revalidatePath } from 'next/cache'
+import type { EntregaPedido } from '@/app/actions/entregas'
 
 const TENANT_ID = 1
 const USUARIO_ID = 1
@@ -114,6 +115,9 @@ export interface PedidoDetalhes {
   validade_orcamento: string | null
   vencimento_em: string | null
   parcelas: number
+  quantidade: number
+  quantidade_produzida: number
+  quantidade_entregue: number
   condicao_pagamento: string | null
   tempo_impressao_horas: number
   tempo_real_horas: number | null
@@ -143,6 +147,7 @@ export interface PedidoDetalhes {
   historico: HistoricoPedido[]
   anexos: AnexoPedido[]
   parcelas_receber: ParcelaPedido[]
+  entregas: EntregaPedido[]
 }
 
 export async function getImpressoras(): Promise<Impressora[]> {
@@ -505,6 +510,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
         WHERE a.tenant_id = p.tenant_id AND a.pedido_id = p.id) AS avaliacao_nota,
       (SELECT a.comentario FROM avaliacoes_pedido a
         WHERE a.tenant_id = p.tenant_id AND a.pedido_id = p.id) AS avaliacao_comentario,
+      COALESCE((SELECT SUM(e.quantidade) FROM entregas_pedido e
+        WHERE e.pedido_id = p.id AND e.cancelada_em IS NULL), 0) AS quantidade_entregue,
       (
         p.custo_filamento + p.custo_insumos + p.custo_energia +
         p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem +
@@ -529,7 +536,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     JOIN tenants t ON t.id = p.tenant_id
     LEFT JOIN impressoras imp ON imp.id = p.impressora_id
     WHERE p.id = ? AND p.tenant_id = ?
-  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'parcelas_receber' | 'lucro_liquido' | 'margem_percentual'> & {
+  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'parcelas_receber' | 'entregas' | 'lucro_liquido' | 'margem_percentual'> & {
     custo_real: number
   }) | undefined
   if (!pedido) return null
@@ -578,6 +585,14 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
       END AS situacao
     FROM dados ORDER BY numero
   `).all(pedidoId) as ParcelaPedido[]
+  const entregas = db.prepare(`
+    SELECT e.id, e.quantidade, e.valor_referente, e.entregue_em, e.observacao,
+      e.recebimento_id, r.valor AS valor_recebido, r.forma_pagamento
+    FROM entregas_pedido e
+    LEFT JOIN recebimentos r ON r.id = e.recebimento_id AND r.estornado_em IS NULL
+    WHERE e.pedido_id = ? AND e.cancelada_em IS NULL
+    ORDER BY date(e.entregue_em) DESC, e.id DESC
+  `).all(pedidoId) as EntregaPedido[]
 
   const lucroLiquido = Math.round((pedido.valor_total_cobrado - pedido.custo_real) * 100) / 100
   const margemPercentual = pedido.valor_total_cobrado > 0
@@ -592,6 +607,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     historico,
     anexos,
     parcelas_receber: parcelasReceber,
+    entregas,
   }
 }
 
