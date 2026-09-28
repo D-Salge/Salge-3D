@@ -9,6 +9,9 @@ import { KanbanBoard } from '@/app/components/KanbanBoard'
 import { Box } from 'lucide-react'
 import { getPlanejamentoProducao } from '@/app/actions/planejamento'
 import { PlanejamentoProducao } from '@/app/components/PlanejamentoProducao'
+import { getLotesProducao } from '@/app/actions/lotes-producao'
+import { getImpressoras } from '@/app/actions/operacao'
+import { LotesProducao } from '@/app/components/LotesProducao'
 
 export const metadata: Metadata = {
   title: 'Produção · Salge 3D',
@@ -16,7 +19,9 @@ export const metadata: Metadata = {
 }
 
 export default async function ProducaoPage() {
-  const [pedidos, planejamento] = await Promise.all([getPedidosKanban(), getPlanejamentoProducao()])
+  const [pedidos, planejamento, controleLotes, impressoras] = await Promise.all([
+    getPedidosKanban(), getPlanejamentoProducao(), getLotesProducao(), getImpressoras(),
+  ])
 
   return (
     <div className="mx-auto max-w-[1440px] px-6 py-9 lg:px-10 h-full flex flex-col">
@@ -45,6 +50,8 @@ export default async function ProducaoPage() {
       </div>
 
       <PlanejamentoProducao plano={planejamento} />
+
+      <LotesProducao lotes={controleLotes.lotes} pedidos={controleLotes.pedidos} impressoras={impressoras.map(({ id, nome }) => ({ id, nome }))} />
 
       {/* Kanban Board */}
       <KanbanBoard pedidos={pedidos} />

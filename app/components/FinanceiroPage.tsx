@@ -10,6 +10,8 @@ import { FluxoCapitalModal } from './FluxoCapitalModal'
 import { ProjecaoFluxoCaixa } from './ProjecaoFluxoCaixa'
 import type { ProjecaoFluxoCaixa as Projecao } from '@/app/actions/financeiro'
 import { DespesasRecorrentes } from './DespesasRecorrentes'
+import Link from 'next/link'
+import { Landmark } from 'lucide-react'
 
 export function FinanceiroPage({ 
   pendentes, 
@@ -62,13 +64,14 @@ export function FinanceiroPage({
 
   return (
     <>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
             <span>Sistema</span><span>/</span><span className="text-white/65">Financeiro</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">Financeiro</h1>
         </div>
+        <Link href="/financeiro/conciliacao" className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-500/10 px-4 text-xs font-medium text-blue-300"><Landmark size={15} /> Conciliar banco</Link>
       </div>
 
       <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-6">
