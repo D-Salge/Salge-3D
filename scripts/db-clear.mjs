@@ -22,6 +22,9 @@ try {
     db.prepare('DELETE FROM parcelas_receber').run()
     db.prepare('DELETE FROM anexos_pedido').run()
     db.prepare('DELETE FROM historico_pedidos').run()
+    db.prepare('DELETE FROM expedicoes').run()
+    db.prepare('DELETE FROM ocorrencias_qualidade').run()
+    db.prepare('DELETE FROM tarefas_agenda').run()
     db.prepare('DELETE FROM pedido_insumos').run()
     db.prepare('DELETE FROM pedido_filamentos').run()
     db.prepare('DELETE FROM movimentos_estoque').run()
@@ -30,6 +33,9 @@ try {
     db.prepare('DELETE FROM compras').run()
     db.prepare('DELETE FROM fluxo_capital').run()
     db.prepare('DELETE FROM pedidos').run()
+    db.prepare('DELETE FROM produto_versao_itens').run()
+    db.prepare('DELETE FROM produto_versoes').run()
+    db.prepare('DELETE FROM produtos_catalogo').run()
     db.prepare('DELETE FROM lotes_filamento').run()
     db.prepare('DELETE FROM clientes').run()
     db.prepare('DELETE FROM insumos').run()
@@ -51,8 +57,14 @@ try {
         'parcelas_receber',
         'anexos_pedido',
         'historico_pedidos',
+        'expedicoes',
+        'ocorrencias_qualidade',
+        'tarefas_agenda',
         'movimentos_estoque',
         'pedidos',
+        'produto_versao_itens',
+        'produto_versoes',
+        'produtos_catalogo',
         'lotes_filamento',
         'clientes',
         'insumos',
