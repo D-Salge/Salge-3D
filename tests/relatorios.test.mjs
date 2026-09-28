@@ -1,44 +1,27 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { agruparVendasPorProduto } from '../lib/relatorios.mjs'
+import { calcularConversaoFunil, montarDreMensal, percentualMeta, ultimasCompetencias, variacaoPercentual } from '../lib/relatorios.mjs'
 
-test('agrupa vendas do mesmo produto ignorando acentos, caixa e espaços', () => {
-  const produtos = agruparVendasPorProduto([
-    {
-      id: 1,
-      nome_da_peca: 'Espremedor de Pasta de Dente',
-      cliente_id: 10,
-      quantidade: 3,
-      valor_total_cobrado: 57,
-      custo_total: 30,
-      data_pedido: '2026-09-20T12:00:00Z',
-    },
-    {
-      id: 2,
-      nome_da_peca: '  ESPREMEDOR de pasta de dênte ',
-      cliente_id: 11,
-      quantidade: 2,
-      valor_total_cobrado: 40,
-      custo_total: 20,
-      data_pedido: '2026-09-22T12:00:00Z',
-    },
-  ])
-
-  assert.equal(produtos.length, 1)
-  assert.equal(produtos[0].pedidos, 2)
-  assert.equal(produtos[0].unidades, 5)
-  assert.equal(produtos[0].clientes, 2)
-  assert.equal(produtos[0].faturamento, 97)
-  assert.equal(produtos[0].lucro, 47)
-  assert.equal(produtos[0].receita_media_unidade, 19.4)
-  assert.equal(produtos[0].ultimo_pedido_id, 2)
+test('gera as últimas competências atravessando a virada do ano', () => {
+  assert.deepEqual(ultimasCompetencias('2026-02-15', 4), ['2025-11', '2025-12', '2026-01', '2026-02'])
 })
 
-test('ordena produtos pelo maior faturamento', () => {
-  const produtos = agruparVendasPorProduto([
-    { id: 1, nome_da_peca: 'Produto A', cliente_id: 1, quantidade: 1, valor_total_cobrado: 20, custo_total: 10, data_pedido: '2026-09-20' },
-    { id: 2, nome_da_peca: 'Produto B', cliente_id: 1, quantidade: 1, valor_total_cobrado: 50, custo_total: 20, data_pedido: '2026-09-21' },
-  ])
-  assert.equal(produtos[0].nome, 'Produto B')
-  assert.equal(produtos[1].nome, 'Produto A')
+test('combina vendas e despesas sem omitir meses vazios', () => {
+  const dre = montarDreMensal(
+    ['2026-08', '2026-09'],
+    [{ competencia: '2026-09', pedidos: 2, receita: 300, custosPedidos: 120 }],
+    [{ competencia: '2026-09', despesasAdministrativas: 30, comprasInvestimentos: 80 }],
+  )
+  assert.deepEqual(dre[0], { competencia: '2026-08', pedidos: 0, receita: 0, custosPedidos: 0, lucroPedidos: 0, despesasAdministrativas: 0, comprasInvestimentos: 0, resultadoGerencial: 0, margem: 0 })
+  assert.equal(dre[1].resultadoGerencial, 150)
+  assert.equal(dre[1].margem, 50)
+})
+
+test('calcula progresso, variação e conversão com bases vazias', () => {
+  assert.equal(percentualMeta(750, 1000), 75)
+  assert.equal(percentualMeta(10, 0), 0)
+  assert.equal(variacaoPercentual(200, 100), 100)
+  assert.equal(variacaoPercentual(50, 0), 100)
+  assert.equal(calcularConversaoFunil({ aprovados: 6, recusados: 2, expirados: 2 }), 60)
+  assert.equal(calcularConversaoFunil({}), 0)
 })

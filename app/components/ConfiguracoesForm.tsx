@@ -19,6 +19,9 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
       const res = await salvarConfiguracoes({
         nome:                   form.nome,
         meta_mensal:           Number(form.meta_mensal),
+        meta_lucro_mensal:     Number(form.meta_lucro_mensal),
+        meta_pedidos_mensal:   Number(form.meta_pedidos_mensal),
+        dias_cliente_inativo:  Number(form.dias_cliente_inativo),
         taxa_operacional:      Number(form.taxa_operacional),
         custo_hora_maquina:    Number(form.custo_hora_maquina),
         tarifa_energia_kwh:    Number(form.tarifa_energia_kwh),
@@ -70,6 +73,12 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
             <span className="text-xs font-medium text-white/55">Nome do negócio</span>
             <input required value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60" />
           </label>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Meta de lucro mensal (R$)</span><input required type="number" step="0.01" min="0" value={form.meta_lucro_mensal} onChange={e => setForm(f => ({ ...f, meta_lucro_mensal: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /></label>
+            <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Meta de pedidos/mês</span><input required type="number" step="1" min="0" value={form.meta_pedidos_mensal} onChange={e => setForm(f => ({ ...f, meta_pedidos_mensal: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /></label>
+            <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Cliente inativo após (dias)</span><input required type="number" step="1" min="1" max="3650" value={form.dias_cliente_inativo} onChange={e => setForm(f => ({ ...f, dias_cliente_inativo: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /></label>
+          </div>
           
           <label className="flex flex-col gap-2">
             <span className="text-xs font-medium text-white/55">Meta Mensal (R$)</span>

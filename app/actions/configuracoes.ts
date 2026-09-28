@@ -8,6 +8,9 @@ const TENANT_ID = 1
 export interface ConfiguracoesTenant {
   nome: string
   meta_mensal: number
+  meta_lucro_mensal: number
+  meta_pedidos_mensal: number
+  dias_cliente_inativo: number
   taxa_operacional: number
   custo_hora_maquina: number
   tarifa_energia_kwh: number
@@ -31,7 +34,8 @@ export interface ActionResult {
 export async function getConfiguracoes(): Promise<ConfiguracoesTenant> {
   return db
     .prepare(
-      `SELECT nome, meta_mensal, taxa_operacional, custo_hora_maquina,
+      `SELECT nome, meta_mensal, meta_lucro_mensal, meta_pedidos_mensal,
+              dias_cliente_inativo, taxa_operacional, custo_hora_maquina,
               tarifa_energia_kwh, potencia_impressora_w, saldo_inicial_caixa,
               margem_perdas_padrao, taxa_venda_padrao, valor_hora_trabalho,
               fator_b2c_personalizado, fator_b2c_lote, fator_b2b_piloto,
@@ -45,7 +49,8 @@ export async function getConfiguracoes(): Promise<ConfiguracoesTenant> {
 export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<ActionResult> {
   try {
     const nonNegative = [
-      data.meta_mensal, data.taxa_operacional, data.custo_hora_maquina,
+      data.meta_mensal, data.meta_lucro_mensal, data.meta_pedidos_mensal,
+      data.dias_cliente_inativo, data.taxa_operacional, data.custo_hora_maquina,
       data.tarifa_energia_kwh, data.potencia_impressora_w, data.saldo_inicial_caixa,
       data.margem_perdas_padrao, data.taxa_venda_padrao, data.valor_hora_trabalho,
       data.pedido_minimo_b2b,
@@ -57,11 +62,19 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
     if (data.margem_perdas_padrao > 1 || data.taxa_venda_padrao > 1) {
       return { success: false, message: 'Margem de perdas e taxa de venda devem ficar entre 0 e 1.' }
     }
+    if (!Number.isSafeInteger(data.meta_pedidos_mensal) ||
+        !Number.isSafeInteger(data.dias_cliente_inativo) ||
+        data.dias_cliente_inativo < 1 || data.dias_cliente_inativo > 3650) {
+      return { success: false, message: 'Metas de pedidos ou período de reativação inválidos.' }
+    }
 
     db.prepare(`
       UPDATE tenants
       SET nome                  = ?,
           meta_mensal           = ?,
+          meta_lucro_mensal     = ?,
+          meta_pedidos_mensal   = ?,
+          dias_cliente_inativo  = ?,
           taxa_operacional      = ?,
           custo_hora_maquina    = ?,
           tarifa_energia_kwh    = ?,
@@ -79,6 +92,9 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
     `).run(
       data.nome.trim(),
       data.meta_mensal,
+      data.meta_lucro_mensal,
+      data.meta_pedidos_mensal,
+      data.dias_cliente_inativo,
       data.taxa_operacional,
       data.custo_hora_maquina,
       data.tarifa_energia_kwh,
@@ -98,6 +114,7 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
     revalidatePath('/')
     revalidatePath('/configuracoes')
     revalidatePath('/orcamentos')
+    revalidatePath('/relatorios')
 
     return { success: true, message: 'Configuracoes salvas com sucesso!' }
   } catch (error) {
