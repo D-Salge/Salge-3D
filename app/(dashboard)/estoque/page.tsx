@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { AlertTriangle, ArrowDown, ArrowUp, Boxes, History } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Barcode, Boxes, History } from 'lucide-react'
 import { getResumoEstoque } from '@/app/actions/estoque'
 import { LotesFilamento } from '@/app/components/LotesFilamento'
 import { ListaComprasEstoque } from '@/app/components/ListaComprasEstoque'
@@ -22,6 +22,7 @@ export default async function EstoquePage() {
           <p className="mt-2 text-sm text-white/40">Entradas, consumos, ajustes e estornos com rastreabilidade.</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/estoque/inventario" className="inline-flex items-center gap-2 rounded-lg bg-blue-500/10 px-4 py-2.5 text-xs text-blue-300"><Barcode size={14} /> Inventário</Link>
           <Link href="/filamentos" className="rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70">Filamentos</Link>
           <Link href="/insumos" className="rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]">Insumos</Link>
         </div>
