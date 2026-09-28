@@ -20,6 +20,7 @@ import {
   TrendingUp,
   CalendarDays,
   ShoppingCart,
+  ShieldAlert,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -91,6 +92,7 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
         <NavItem href="/produtos" icon={<BarChart3 size={15} />} label="Produtos e Vendas" active={pathname === '/produtos'} />
         <NavItem href="/relatorios" icon={<TrendingUp size={15} />} label="Relatórios" active={pathname === '/relatorios'} />
         <NavItem href="/agenda" icon={<CalendarDays size={15} />} label="Agenda" active={pathname === '/agenda'} />
+        <NavItem href="/atendimento" icon={<ShieldAlert size={15} />} label="Qualidade e Entrega" active={pathname === '/atendimento'} />
       </div>
 
       <div className="mt-9 flex flex-col gap-1">

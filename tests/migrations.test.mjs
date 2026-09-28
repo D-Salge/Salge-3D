@@ -12,12 +12,18 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
       .filter((line) => !line.trim().toUpperCase().startsWith('PRAGMA'))
       .join('\n')
     db.exec(schema)
-    db.prepare(`INSERT INTO clientes (tenant_id, usuario_id, nome) VALUES (1, 1, 'Cliente teste')`).run()
-    db.prepare(`
+    const clienteId = Number(db.prepare(`INSERT INTO clientes (tenant_id, usuario_id, nome) VALUES (1, 1, 'Cliente teste')`).run().lastInsertRowid)
+    const filamentoId = Number(db.prepare(`
       INSERT INTO filamentos (
         tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas
       ) VALUES (1, 1, 'PLA', 'Preto', 1000, 90, 750)
-    `).run()
+    `).run().lastInsertRowid)
+    const pedidoId = Number(db.prepare(`INSERT INTO pedidos (
+      tenant_id, usuario_id, cliente_id, nome_da_peca, tempo_impressao_horas, valor_total_cobrado
+    ) VALUES (1, 1, ?, 'Ímã Bem-Estar', 10, 35)`).run(clienteId).lastInsertRowid)
+    db.prepare(`INSERT INTO pedido_filamentos
+      (pedido_id, filamento_id, peso_gasto_gramas, custo_calculado) VALUES (?, ?, 100, 9)`)
+      .run(pedidoId, filamentoId)
 
     applyMigrations(db)
     applyMigrations(db)
@@ -80,6 +86,19 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(expenseColumns.includes('compra_id'))
     const purchaseColumns = db.prepare(`PRAGMA table_info(compras)`).all().map((column) => column.name)
     assert.ok(purchaseColumns.includes('parcelas'))
+    assert.ok(columns.includes('produto_id'))
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'produtos_catalogo'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'produto_versoes'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'produto_versao_itens'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ocorrencias_qualidade'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'expedicoes'`).get())
+    const occurrenceColumns = db.prepare(`PRAGMA table_info(ocorrencias_qualidade)`).all().map((column) => column.name)
+    assert.ok(occurrenceColumns.includes('tarefa_id'))
+    const produtoMigrado = db.prepare(`SELECT id FROM produtos_catalogo WHERE nome = 'Ímã Bem-Estar'`).get()
+    assert.ok(produtoMigrado)
+    assert.equal(db.prepare('SELECT produto_id FROM pedidos WHERE id = ?').get(pedidoId).produto_id, produtoMigrado.id)
+    assert.equal(db.prepare('SELECT COUNT(*) AS total FROM produto_versoes WHERE produto_id = ?').get(produtoMigrado.id).total, 1)
+    assert.equal(db.prepare(`SELECT quantidade_por_unidade FROM produto_versao_itens WHERE tipo_item = 'Filamento'`).get().quantidade_por_unidade, 100)
   } finally {
     db.close()
   }

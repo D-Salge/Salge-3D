@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Copy, DollarSign, PackageSearch, Search, ShoppingBag, TrendingUp, Users } from 'lucide-react'
 import type { ResumoProduto } from '@/app/actions/produtos'
+import type { CatalogoDados } from '@/app/actions/catalogo'
+import { CatalogoTecnico } from '@/app/components/CatalogoTecnico'
 
 type Ordenacao = 'faturamento' | 'lucro' | 'unidades' | 'margem' | 'recente'
 
@@ -11,7 +13,7 @@ function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export function ProdutosPage({ produtos }: { produtos: ResumoProduto[] }) {
+export function ProdutosPage({ produtos, catalogo }: { produtos: ResumoProduto[]; catalogo: CatalogoDados }) {
   const [busca, setBusca] = useState('')
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('faturamento')
 
@@ -54,7 +56,9 @@ export function ProdutosPage({ produtos }: { produtos: ResumoProduto[] }) {
 
       {campeao && <div className="mb-6 rounded-xl border border-[#d8f45a]/15 bg-[#d8f45a]/[0.04] px-4 py-3 text-xs text-white/55"><strong className="text-[#d8f45a]">Mais vendido:</strong> {campeao.nome}, com {campeao.unidades} unidade{campeao.unidades === 1 ? '' : 's'} em {campeao.pedidos} pedido{campeao.pedidos === 1 ? '' : 's'}.</div>}
 
-      <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 sm:p-6">
+      <CatalogoTecnico dados={catalogo} />
+
+      <section className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 className="font-semibold">Desempenho por produto</h2><p className="mt-1 text-xs text-white/35">Agrupado mesmo quando há diferenças de acento, maiúsculas ou espaços no nome.</p></div>
           <div className="flex flex-col gap-2 sm:flex-row">
