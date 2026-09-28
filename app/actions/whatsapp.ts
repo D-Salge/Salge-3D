@@ -13,7 +13,7 @@ import { revalidatePath } from 'next/cache'
 const TENANT_ID = 1
 const USUARIO_ID = 1
 
-export type TipoMensagemWhatsApp = 'orcamento' | 'cobranca' | 'producao' | 'pronto'
+export type TipoMensagemWhatsApp = 'orcamento' | 'followup' | 'cobranca' | 'producao' | 'pronto' | 'pos_venda'
 
 export interface PedidoWhatsApp {
   id: number
@@ -151,6 +151,7 @@ export async function registrarContatoWhatsApp(dados: {
     revalidatePath('/clientes')
     revalidatePath(`/clientes/${pedido.cliente_id}`)
     revalidatePath(`/pedidos/${pedido.id}`)
+    revalidatePath('/agenda')
     return { success: true, message: 'Contato registrado no histórico do pedido.' }
   } catch (error) {
     console.error('[registrarContatoWhatsApp]', error)

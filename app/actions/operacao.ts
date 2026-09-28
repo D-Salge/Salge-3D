@@ -132,6 +132,8 @@ export interface PedidoDetalhes {
   lucro_liquido: number
   margem_percentual: number
   falhas_impressao: number
+  avaliacao_nota: number | null
+  avaliacao_comentario: string | null
   impressora_id: number | null
   impressora_nome: string | null
   inicio_previsto: string | null
@@ -499,6 +501,10 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
       MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
+      (SELECT a.nota FROM avaliacoes_pedido a
+        WHERE a.tenant_id = p.tenant_id AND a.pedido_id = p.id) AS avaliacao_nota,
+      (SELECT a.comentario FROM avaliacoes_pedido a
+        WHERE a.tenant_id = p.tenant_id AND a.pedido_id = p.id) AS avaliacao_comentario,
       (
         p.custo_filamento + p.custo_insumos + p.custo_energia +
         p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem +
