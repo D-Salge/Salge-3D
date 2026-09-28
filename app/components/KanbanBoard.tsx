@@ -86,6 +86,7 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
                     </Link>
                     <p className="mt-0.5 text-xs text-white/50">{pedido.cliente_nome}</p>
                     <p className="mt-1 text-[10px] text-white/30">{pedido.impressora_nome || 'Impressora não atribuída'}</p>
+                    {pedido.quantidade > 1 && <div className="mt-3 space-y-2 rounded-lg bg-white/[0.025] p-2.5"><div><div className="mb-1 flex justify-between text-[9px] text-white/35"><span>Produzido</span><span>{pedido.quantidade_produzida}/{pedido.quantidade}</span></div><div className="h-1 overflow-hidden rounded bg-white/10"><div className="h-full bg-blue-400" style={{ width: `${Math.min(100, (pedido.quantidade_produzida / pedido.quantidade) * 100)}%` }} /></div></div><div><div className="mb-1 flex justify-between text-[9px] text-white/35"><span>Entregue</span><span>{pedido.quantidade_entregue}/{pedido.quantidade}</span></div><div className="h-1 overflow-hidden rounded bg-white/10"><div className="h-full bg-[#d8f45a]" style={{ width: `${Math.min(100, (pedido.quantidade_entregue / pedido.quantidade) * 100)}%` }} /></div></div></div>}
                   </div>
 
                   {/* Materiais - Badges com verificação de estoque */}
