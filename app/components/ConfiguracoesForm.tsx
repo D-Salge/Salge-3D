@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Settings2, Save, Download, FileSpreadsheet, Upload, Shield, Users } from 'lucide-react'
+import { Settings2, Save, Download, FileSpreadsheet, Upload, Shield, Users, CloudCog } from 'lucide-react'
 import Link from 'next/link'
 import { salvarConfiguracoes, type ConfiguracoesTenant } from '@/app/actions/configuracoes'
 
@@ -164,6 +164,7 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Link href="/configuracoes/usuarios" className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 py-2.5 text-xs text-blue-300"><Users size={14} /> Usuários</Link>
           <Link href="/configuracoes/seguranca" className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 py-2.5 text-xs text-blue-300"><Shield size={14} /> Segurança e backups</Link>
+          <Link href="/configuracoes/integracoes" className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 py-2.5 text-xs text-blue-300"><CloudCog size={14} /> Integrações e hospedagem</Link>
           <Link href="/configuracoes/importar-planilha" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]">
             <Upload size={14} /> Importar planilha
           </Link>

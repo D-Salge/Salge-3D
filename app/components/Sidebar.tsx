@@ -21,6 +21,7 @@ import {
   CalendarDays,
   ShoppingCart,
   ShieldAlert,
+  Landmark,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -109,6 +110,7 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
       <div className="mt-9 flex flex-col gap-1">
         <p className="px-3 pb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">Financeiro</p>
         <NavItem href="/financeiro" icon={<DollarSign size={15} />} label="Painel Financeiro" active={pathname === '/financeiro'} />
+        <NavItem href="/financeiro/fiscal" icon={<Landmark size={15} />} label="Fiscal e MEI" active={pathname === '/financeiro/fiscal'} />
       </div>
 
       <div className="mt-9 flex flex-col gap-1">

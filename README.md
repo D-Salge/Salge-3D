@@ -17,6 +17,10 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.
 - Restauração validada de backup e trilha de auditoria.
 - Importação validada da planilha Salge 3D, com prévia, backup e reconciliação de saldos.
+- Controle fiscal do MEI com vendas, serviços, receitas externas, DAS, relatório mensal e DASN.
+- WhatsApp Cloud API opcional com templates aprovados, webhook assinado e estados de entrega/leitura.
+- Backup externo opcional para pasta sincronizada, com conferência SHA-256.
+- Diagnóstico de segurança e prontidão para uma implantação em rede.
 
 ## Instalação
 
@@ -43,6 +47,39 @@ npm run build
 ```
 
 O comando `db:migrate` preserva os registros existentes. Não use `db:reset` em um banco com dados reais.
+
+## Integrações e hospedagem
+
+Abra **Configurações → Integrações e hospedagem** para verificar cada requisito. Os segredos ficam somente em `.env.local` ou nas variáveis protegidas do servidor.
+
+```dotenv
+APP_URL=https://seu-dominio.com
+AUTH_COOKIE_SECURE=true
+BACKUP_EXTERNAL_DIR=D:\OneDrive\Salge3D\Backups
+
+WHATSAPP_GRAPH_VERSION=vXX.X
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_VERIFY_TOKEN=
+META_APP_SECRET=
+WHATSAPP_TEMPLATE_LANGUAGE=pt_BR
+WHATSAPP_TEMPLATE_ORCAMENTO=salge_orcamento
+WHATSAPP_TEMPLATE_FOLLOWUP=salge_followup
+WHATSAPP_TEMPLATE_COBRANCA=salge_cobranca
+WHATSAPP_TEMPLATE_PRODUCAO=salge_producao
+WHATSAPP_TEMPLATE_PRONTO=salge_pronto
+WHATSAPP_TEMPLATE_POS_VENDA=salge_pos_venda
+```
+
+Cada template do WhatsApp deve ser aprovado na Meta e conter uma variável de corpo (`{{1}}`), preenchida com a mensagem revisada no ERP. Configure o webhook público em `https://seu-dominio.com/api/webhooks/whatsapp`.
+
+O SQLite atende vários usuários conectados à mesma instância do Salge 3D, mas a hospedagem deve manter **uma única instância do servidor** e um **disco persistente**. Antes de escalar horizontalmente, migre o banco para PostgreSQL.
+
+## Fiscal e MEI
+
+Abra **Financeiro → Fiscal e MEI**. Os recebimentos registrados no ERP entram automaticamente no relatório; receitas do mesmo CNPJ que ocorrerem fora do ERP, como trabalho PJ, devem ser lançadas em **Receita fora do ERP**. A tela separa vendas de serviços, acompanha o limite anual configurável e exporta CSV.
+
+O módulo é gerencial: pagamento do DAS, emissão de notas e entrega da DASN-SIMEI continuam nos portais oficiais.
 
 ## Banco de dados
 

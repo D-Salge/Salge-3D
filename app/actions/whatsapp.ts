@@ -4,11 +4,14 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import {
   contatoWhatsAppJaRegistrado,
+  normalizarTelefoneWhatsApp,
   ROTULOS_MENSAGEM_WHATSAPP,
   sugerirTipoMensagemWhatsApp,
   TIPOS_MENSAGEM_WHATSAPP,
 } from '@/lib/whatsapp.mjs'
 import { revalidatePath } from 'next/cache'
+import { exigirSessao } from '@/lib/session'
+import { configuracaoWhatsApp, nomeTemplateWhatsApp, payloadTemplateWhatsApp } from '@/lib/whatsapp-cloud.mjs'
 
 const TENANT_ID = 1
 const USUARIO_ID = 1
@@ -157,4 +160,142 @@ export async function registrarContatoWhatsApp(dados: {
     console.error('[registrarContatoWhatsApp]', error)
     return { success: false, message: 'Não foi possível registrar o contato.' }
   }
+}
+
+export interface EnvioWhatsAppOficial {
+  id: number
+  pedido_id: number
+  numero_orcamento: string | null
+  cliente_nome: string
+  telefone: string
+  tipo: string
+  template_nome: string
+  status: 'Fila' | 'Enviando' | 'Enviado' | 'Entregue' | 'Lido' | 'Falhou'
+  tentativas: number
+  erro: string | null
+  criado_em: string
+}
+
+async function processarEnvio(id: number, tenantId: number) {
+  const config = configuracaoWhatsApp()
+  if (!config.configurado) throw new Error(`CONFIG:${config.ausentes.join(', ')}`)
+  const envio = db.prepare(`SELECT id, telefone, template_nome, template_idioma, mensagem
+    FROM whatsapp_envios WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as {
+      id: number; telefone: string; template_nome: string; template_idioma: string; mensagem: string
+    } | undefined
+  if (!envio) throw new Error('NOT_FOUND')
+  db.prepare(`UPDATE whatsapp_envios SET status = 'Enviando', tentativas = tentativas + 1, erro = NULL
+    WHERE id = ? AND tenant_id = ?`).run(id, tenantId)
+  try {
+    const response = await fetch(`https://graph.facebook.com/${config.graphVersion}/${config.phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloadTemplateWhatsApp({
+        telefone: envio.telefone, template: envio.template_nome,
+        idioma: envio.template_idioma, mensagem: envio.mensagem,
+      })),
+      cache: 'no-store',
+    })
+    const resposta = await response.json().catch(() => ({})) as {
+      messages?: Array<{ id?: string }>; error?: { message?: string; code?: number }
+    }
+    const wamid = resposta.messages?.[0]?.id
+    if (!response.ok || !wamid) {
+      const detalhe = resposta.error?.message || `HTTP ${response.status}`
+      throw new Error(detalhe.slice(0, 500))
+    }
+    db.prepare(`UPDATE whatsapp_envios SET status = 'Enviado', wamid = ?,
+      enviado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), erro = NULL WHERE id = ? AND tenant_id = ?`
+    ).run(wamid, id, tenantId)
+    return wamid
+  } catch (error) {
+    const mensagem = error instanceof Error ? error.message : 'Falha desconhecida'
+    db.prepare(`UPDATE whatsapp_envios SET status = 'Falhou', erro = ? WHERE id = ? AND tenant_id = ?`)
+      .run(mensagem.slice(0, 500), id, tenantId)
+    throw error
+  }
+}
+
+export async function enviarWhatsAppOficial(dados: {
+  pedidoId: number
+  tipo: TipoMensagemWhatsApp
+  mensagem: string
+}): Promise<{ success: boolean; message: string }> {
+  let envioId: number | null = null
+  try {
+    const sessao = await exigirSessao()
+    if (!Number.isSafeInteger(dados.pedidoId) || dados.pedidoId <= 0 || !TIPOS_MENSAGEM_WHATSAPP.includes(dados.tipo)) {
+      return { success: false, message: 'Dados do envio inválidos.' }
+    }
+    const mensagem = dados.mensagem.trim()
+    if (!mensagem || mensagem.length > 2_000) return { success: false, message: 'A mensagem deve ter entre 1 e 2.000 caracteres.' }
+    const config = configuracaoWhatsApp()
+    if (!config.configurado) return { success: false, message: `Integração oficial ainda não configurada: ${config.ausentes.join(', ')}.` }
+    const template = nomeTemplateWhatsApp(dados.tipo)
+    if (!template.nome) return { success: false, message: `Configure ${template.chave} com o nome do template aprovado pela Meta.` }
+    const pedido = db.prepare(`SELECT p.id, p.numero_orcamento, p.cliente_id,
+        c.telefone, c.nome AS cliente_nome
+      FROM pedidos p JOIN clientes c ON c.id = p.cliente_id AND c.tenant_id = p.tenant_id
+      WHERE p.id = ? AND p.tenant_id = ?`
+    ).get(dados.pedidoId, sessao.tenantId) as {
+      id: number; numero_orcamento: string | null; cliente_id: number; telefone: string | null; cliente_nome: string
+    } | undefined
+    if (!pedido) return { success: false, message: 'Pedido não encontrado.' }
+    const telefone = normalizarTelefoneWhatsApp(pedido.telefone)
+    if (!telefone) return { success: false, message: 'Cliente sem telefone brasileiro válido.' }
+    const result = db.prepare(`INSERT INTO whatsapp_envios (
+      tenant_id, usuario_id, pedido_id, cliente_id, telefone, tipo, mensagem,
+      template_nome, template_idioma
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(sessao.tenantId, sessao.usuarioId, pedido.id, pedido.cliente_id, telefone,
+      dados.tipo, mensagem, template.nome, config.languageCode)
+    envioId = Number(result.lastInsertRowid)
+    const wamid = await processarEnvio(envioId, sessao.tenantId)
+    db.transaction(() => {
+      db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
+        VALUES (?, ?, ?, ?, ?)`
+      ).run(sessao.tenantId, pedido.id, sessao.usuarioId,
+        `WhatsApp: ${ROTULOS_MENSAGEM_WHATSAPP[dados.tipo]}`,
+        `Mensagem enviada pela API oficial. Identificador: ${wamid}`)
+      db.prepare(`UPDATE clientes SET ultimo_contato = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ? AND tenant_id = ?`).run(pedido.cliente_id, sessao.tenantId)
+      registrarAuditoria(db, { entidade: 'WhatsAppEnvio', entidadeId: envioId!, acao: 'ENVIAR', descricao: `${pedido.numero_orcamento || `#${pedido.id}`} para ${pedido.cliente_nome}` })
+    })()
+    revalidatePath('/')
+    revalidatePath('/configuracoes/integracoes')
+    revalidatePath(`/pedidos/${pedido.id}`)
+    return { success: true, message: 'Mensagem aceita pela API oficial. A entrega será atualizada pelo webhook.' }
+  } catch (error) {
+    console.error('[enviarWhatsAppOficial]', error)
+    const detalhe = error instanceof Error ? error.message : ''
+    return { success: false, message: envioId ? `Envio registrado, mas falhou: ${detalhe}` : 'Não foi possível enviar pela API oficial.' }
+  }
+}
+
+export async function reenviarWhatsAppOficial(id: number) {
+  try {
+    const sessao = await exigirSessao()
+    const envio = db.prepare(`SELECT status FROM whatsapp_envios WHERE id = ? AND tenant_id = ?`)
+      .get(id, sessao.tenantId) as { status: string } | undefined
+    if (!envio) return { success: false, message: 'Envio não encontrado.' }
+    if (envio.status !== 'Falhou' && envio.status !== 'Fila') {
+      return { success: false, message: `O envio já está com status “${envio.status}” e não será duplicado.` }
+    }
+    await processarEnvio(id, sessao.tenantId)
+    revalidatePath('/configuracoes/integracoes')
+    return { success: true, message: 'Mensagem reenviada para a API oficial.' }
+  } catch (error) {
+    console.error('[reenviarWhatsAppOficial]', error)
+    return { success: false, message: `Não foi possível reenviar: ${error instanceof Error ? error.message : 'erro desconhecido'}` }
+  }
+}
+
+export async function getEnviosWhatsAppOficial(): Promise<EnvioWhatsAppOficial[]> {
+  const sessao = await exigirSessao()
+  return db.prepare(`SELECT w.id, w.pedido_id, p.numero_orcamento, c.nome AS cliente_nome,
+      w.telefone, w.tipo, w.template_nome, w.status, w.tentativas, w.erro, w.criado_em
+    FROM whatsapp_envios w JOIN pedidos p ON p.id = w.pedido_id
+    JOIN clientes c ON c.id = w.cliente_id
+    WHERE w.tenant_id = ? ORDER BY w.criado_em DESC, w.id DESC LIMIT 100`
+  ).all(sessao.tenantId) as EnvioWhatsAppOficial[]
 }
