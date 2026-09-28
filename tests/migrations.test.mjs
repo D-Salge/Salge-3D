@@ -74,6 +74,12 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'avaliacoes_pedido'`).get())
     assert.ok(columns.includes('quantidade_produzida'))
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'entregas_pedido'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'fornecedores'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'compras'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'compra_itens'`).get())
+    assert.ok(expenseColumns.includes('compra_id'))
+    const purchaseColumns = db.prepare(`PRAGMA table_info(compras)`).all().map((column) => column.name)
+    assert.ok(purchaseColumns.includes('parcelas'))
   } finally {
     db.close()
   }

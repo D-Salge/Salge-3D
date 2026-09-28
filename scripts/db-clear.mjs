@@ -26,6 +26,8 @@ try {
     db.prepare('DELETE FROM pedido_filamentos').run()
     db.prepare('DELETE FROM movimentos_estoque').run()
     db.prepare('DELETE FROM despesas').run()
+    db.prepare('DELETE FROM compra_itens').run()
+    db.prepare('DELETE FROM compras').run()
     db.prepare('DELETE FROM fluxo_capital').run()
     db.prepare('DELETE FROM pedidos').run()
     db.prepare('DELETE FROM lotes_filamento').run()
@@ -34,6 +36,7 @@ try {
     db.prepare('DELETE FROM filamentos').run()
     db.prepare('DELETE FROM importacao_linhas').run()
     db.prepare('DELETE FROM importacoes_planilha').run()
+    db.prepare('DELETE FROM fornecedores').run()
     db.prepare('DELETE FROM auditoria').run()
 
     // 2. Reseta a contagem de IDs automáticos para essas tabelas
@@ -55,6 +58,9 @@ try {
         'insumos',
         'filamentos',
         'despesas',
+        'compra_itens',
+        'compras',
+        'fornecedores',
         'fluxo_capital',
         'importacao_linhas',
         'importacoes_planilha',

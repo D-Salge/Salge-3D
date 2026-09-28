@@ -19,6 +19,7 @@ import {
   BarChart3,
   TrendingUp,
   CalendarDays,
+  ShoppingCart,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -98,6 +99,7 @@ export function Sidebar({ pedidosEmProducao = 0, faturamentoMes = 0, metaMensal 
         <NavItem href="/filamentos" icon={<Database size={15} />} label="Filamentos" active={pathname === '/filamentos'} />
         <NavItem href="/insumos" icon={<Package size={15} />} label="Insumos" active={pathname === '/insumos'} />
         <NavItem href="/estoque" icon={<Boxes size={15} />} label="Movimentações" active={pathname === '/estoque'} badge={undefined} />
+        <NavItem href="/compras" icon={<ShoppingCart size={15} />} label="Compras" active={pathname === '/compras'} />
         <NavItem href="/impressoras" icon={<Printer size={15} />} label="Impressoras" active={pathname === '/impressoras'} />
       </div>
 
