@@ -2,6 +2,7 @@
 
 import db from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { exigirPerfil } from '@/lib/session'
 
 const TENANT_ID = 1
 
@@ -51,6 +52,7 @@ export async function getConfiguracoes(): Promise<ConfiguracoesTenant> {
 
 export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<ActionResult> {
   try {
+    await exigirPerfil(['admin'])
     const nonNegative = [
       data.meta_mensal, data.meta_lucro_mensal, data.meta_pedidos_mensal,
       data.dias_cliente_inativo, data.dias_followup_orcamento, data.dias_pos_venda,

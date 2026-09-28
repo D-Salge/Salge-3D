@@ -6,9 +6,10 @@
  * Client Component — gera data dinâmica no cliente para evitar hydration mismatch.
  */
 
-import { Bell, Box, ChevronDown } from 'lucide-react'
+import { Bell, Box, LogOut } from 'lucide-react'
+import type { SessaoAtual } from '@/lib/session'
 
-export function DashboardHeader() {
+export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
   const hoje = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: 'numeric',
@@ -29,7 +30,7 @@ export function DashboardHeader() {
       {/* Saudação desktop */}
       <div className="hidden lg:block">
         <p className="text-xs text-white/35">{hojeFormatado}</p>
-        <p className="mt-1 text-sm font-medium text-white/75">Olá, Daniel 👋</p>
+        <p className="mt-1 text-sm font-medium text-white/75">Olá, {usuario.nome.split(/\s+/)[0]} 👋</p>
       </div>
 
       {/* Ações */}
@@ -44,13 +45,13 @@ export function DashboardHeader() {
 
         <div className="flex items-center gap-3 border-l border-white/[0.08] pl-4">
           <div className="flex size-8 items-center justify-center rounded-full bg-[#2e3540] text-xs font-semibold text-[#d8f45a]">
-            DS
+            {usuario.nome.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase()}
           </div>
           <div className="hidden text-left sm:block">
-            <p className="text-xs font-medium">Daniel Salge</p>
-            <p className="text-[10px] text-white/35">Administrador</p>
+            <p className="text-xs font-medium">{usuario.nome}</p>
+            <p className="text-[10px] text-white/35">{usuario.perfil === 'admin' ? 'Administrador' : usuario.perfil === 'operador' ? 'Operador' : 'Visualizador'}</p>
           </div>
-          <ChevronDown size={14} className="text-white/35" />
+          <a href="/logout" title="Sair" aria-label="Sair" className="rounded-lg p-2 text-white/35 hover:bg-white/[0.06] hover:text-white"><LogOut size={14} /></a>
         </div>
       </div>
     </header>

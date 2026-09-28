@@ -15,6 +15,8 @@ import {
   UserRound,
 } from 'lucide-react'
 import { getClienteDetalhes } from '@/app/actions/clientes'
+import { PrivacidadeCliente } from '@/app/components/PrivacidadeCliente'
+import { getSessaoAtual } from '@/lib/session'
 
 export const metadata: Metadata = { title: 'Ficha do cliente · Salge 3D' }
 
@@ -31,7 +33,7 @@ export default async function ClienteDetalhesPage({ params }: { params: Promise<
   const { id } = await params
   const clienteId = Number(id)
   if (!Number.isSafeInteger(clienteId) || clienteId <= 0) notFound()
-  const cliente = await getClienteDetalhes(clienteId)
+  const [cliente, sessao] = await Promise.all([getClienteDetalhes(clienteId), getSessaoAtual()])
   if (!cliente) notFound()
 
   return (
@@ -95,6 +97,7 @@ export default async function ClienteDetalhesPage({ params }: { params: Promise<
             <div className="mt-5 flex flex-wrap gap-2"><span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-white/50">{cliente.tipo_cliente || 'Tipo não informado'}</span><span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-white/50">Origem: {cliente.origem || 'não informada'}</span></div>
           </section>
           <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 sm:p-6"><h2 className="mb-3 font-semibold">Observações</h2><p className="whitespace-pre-wrap text-sm leading-6 text-white/45">{cliente.observacoes || 'Nenhuma observação cadastrada.'}</p></section>
+          {sessao?.perfil === 'admin' && <PrivacidadeCliente clienteId={cliente.id} saldoPendente={cliente.saldo_pendente} />}
         </aside>
       </div>
     </div>

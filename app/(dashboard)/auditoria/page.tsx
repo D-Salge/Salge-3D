@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import { ShieldCheck } from 'lucide-react'
 import { getEventosAuditoria } from '@/app/actions/auditoria'
+import { exigirPerfil } from '@/lib/session'
 
 export const metadata: Metadata = { title: 'Auditoria · Salge 3D' }
 
 export default async function AuditoriaPage() {
+  await exigirPerfil(['admin'])
   const eventos = await getEventosAuditoria()
   return <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
     <div className="mb-8">

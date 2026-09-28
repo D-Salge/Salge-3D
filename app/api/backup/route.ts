@@ -1,11 +1,14 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 import db from '@/lib/db'
+import { getSessaoAtual } from '@/lib/session'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const sessao = await getSessaoAtual()
+  if (!sessao || sessao.perfil !== 'admin') return new Response('Não autorizado', { status: 401 })
   db.pragma('wal_checkpoint(TRUNCATE)')
   const file = readFileSync(path.join(process.cwd(), 'database', 'salge3d.sqlite'))
   const date = new Date().toISOString().slice(0, 10)
