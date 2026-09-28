@@ -58,6 +58,7 @@ AUTH_COOKIE_SECURE=true
 BACKUP_EXTERNAL_DIR=D:\OneDrive\Salge3D\Backups
 
 WHATSAPP_GRAPH_VERSION=vXX.X
+WHATSAPP_TEST_MODE=true
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
@@ -72,6 +73,8 @@ WHATSAPP_TEMPLATE_POS_VENDA=salge_pos_venda
 ```
 
 Cada template do WhatsApp deve ser aprovado na Meta e conter uma variável de corpo (`{{1}}`), preenchida com a mensagem revisada no ERP. Configure o webhook público em `https://seu-dominio.com/api/webhooks/whatsapp`.
+
+Durante a homologação com o número de teste da Meta, mantenha `WHATSAPP_TEST_MODE=true`. Nesse modo o ERP envia o template padrão `hello_world` em `en_US`, sem o texto editado. Depois de cadastrar o número real e aprovar os seis templates, remova a variável (ou use `false`) para liberar as mensagens personalizadas.
 
 O SQLite atende vários usuários conectados à mesma instância do Salge 3D, mas a hospedagem deve manter **uma única instância do servidor** e um **disco persistente**. Antes de escalar horizontalmente, migre o banco para PostgreSQL.
 

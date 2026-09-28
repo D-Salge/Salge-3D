@@ -41,12 +41,11 @@ export function diagnosticarSistema(): DiagnosticoSistema {
   itens.push({ id: 'backup-external', titulo: 'Destino externo', detalhe: backupExternoConfigurado ? 'BACKUP_EXTERNAL_DIR configurado; novas cópias serão verificadas por SHA-256.' : 'Configure uma pasta sincronizada por OneDrive, Google Drive ou NAS.', status: backupExternoConfigurado ? 'Pronto' : 'Atenção' })
 
   const whatsapp = configuracaoWhatsApp()
-  const templatesAusentes = TIPOS_MENSAGEM_WHATSAPP.map((tipo) => nomeTemplateWhatsApp(tipo)).filter((item) => !item.nome).map((item) => item.chave)
+  const templatesAusentes = whatsapp.testMode ? [] : TIPOS_MENSAGEM_WHATSAPP.map((tipo) => nomeTemplateWhatsApp(tipo)).filter((item) => !item.nome).map((item) => item.chave)
   itens.push({ id: 'whatsapp-api', titulo: 'WhatsApp Cloud API', detalhe: whatsapp.configurado ? 'Credenciais principais configuradas sem exposição no navegador.' : `Variáveis ausentes: ${whatsapp.ausentes.join(', ')}.`, status: whatsapp.configurado ? 'Pronto' : 'Atenção' })
-  itens.push({ id: 'whatsapp-templates', titulo: 'Templates do WhatsApp', detalhe: templatesAusentes.length === 0 ? 'Todos os seis modelos possuem template configurado.' : `Ainda faltam ${templatesAusentes.length} templates.`, status: templatesAusentes.length === 0 ? 'Pronto' : 'Atenção' })
+  itens.push({ id: 'whatsapp-templates', titulo: 'Templates do WhatsApp', detalhe: whatsapp.testMode ? 'Modo de teste ativo: será enviado o template hello_world da Meta, sem o texto editado no ERP.' : templatesAusentes.length === 0 ? 'Todos os seis modelos possuem template configurado.' : `Ainda faltam ${templatesAusentes.length} templates.`, status: templatesAusentes.length === 0 ? 'Pronto' : 'Atenção' })
   return {
     prontoParaRede: !itens.some((item) => item.status === 'Bloqueio'), itens,
     whatsappAusentes: whatsapp.ausentes, templatesAusentes, backupExternoConfigurado,
   }
 }
-

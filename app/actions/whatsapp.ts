@@ -264,7 +264,12 @@ export async function enviarWhatsAppOficial(dados: {
     revalidatePath('/')
     revalidatePath('/configuracoes/integracoes')
     revalidatePath(`/pedidos/${pedido.id}`)
-    return { success: true, message: 'Mensagem aceita pela API oficial. A entrega será atualizada pelo webhook.' }
+    return {
+      success: true,
+      message: config.testMode
+        ? 'Teste aceito pela API oficial. A Meta enviará o template hello_world; o texto editado no ERP só será usado após a aprovação dos templates próprios.'
+        : 'Mensagem aceita pela API oficial. A entrega será atualizada pelo webhook.',
+    }
   } catch (error) {
     console.error('[enviarWhatsAppOficial]', error)
     const detalhe = error instanceof Error ? error.message : ''

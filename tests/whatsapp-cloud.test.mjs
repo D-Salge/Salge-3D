@@ -19,3 +19,21 @@ test('resolve template e status do webhook', () => {
   assert.equal(traduzirStatusWebhook('delivered'), 'Entregue')
   assert.equal(traduzirStatusWebhook('desconhecido'), null)
 })
+
+test('usa o hello_world sem parâmetros no modo de teste da Meta', () => {
+  const env = { WHATSAPP_TEST_MODE: 'true' }
+  const config = configuracaoWhatsApp(env)
+  const template = nomeTemplateWhatsApp('cobranca', env)
+  const payload = payloadTemplateWhatsApp({
+    telefone: '5511999999999',
+    template: template.nome,
+    idioma: config.languageCode,
+    mensagem: 'Este texto não pode ser enviado pelo hello_world.',
+  })
+
+  assert.equal(config.testMode, true)
+  assert.equal(config.languageCode, 'en_US')
+  assert.equal(template.nome, 'hello_world')
+  assert.equal(payload.template.language.code, 'en_US')
+  assert.equal('components' in payload.template, false)
+})
