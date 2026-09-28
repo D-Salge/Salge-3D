@@ -64,6 +64,10 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     `)
     inserirCompetencia.run(recorrenciaId)
     assert.throws(() => inserirCompetencia.run(recorrenciaId), /UNIQUE constraint failed/)
+    const tenantColumns = db.prepare(`PRAGMA table_info(tenants)`).all().map((column) => column.name)
+    assert.ok(tenantColumns.includes('meta_lucro_mensal'))
+    assert.ok(tenantColumns.includes('meta_pedidos_mensal'))
+    assert.ok(tenantColumns.includes('dias_cliente_inativo'))
   } finally {
     db.close()
   }
