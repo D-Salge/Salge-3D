@@ -8,8 +8,10 @@ import { WhatsAppModal } from './WhatsAppModal'
 const CONFIG = {
   cobranca: { label: 'Cobrar pagamento', cor: 'text-amber-300 bg-amber-400/10' },
   orcamento: { label: 'Retomar orçamento', cor: 'text-blue-300 bg-blue-400/10' },
+  followup: { label: 'Acompanhar orçamento', cor: 'text-cyan-300 bg-cyan-400/10' },
   pronto: { label: 'Avisar que está pronto', cor: 'text-[#d8f45a] bg-[#d8f45a]/10' },
   producao: { label: 'Atualizar produção', cor: 'text-violet-300 bg-violet-400/10' },
+  pos_venda: { label: 'Pós-venda', cor: 'text-fuchsia-300 bg-fuchsia-400/10' },
 } as const
 
 function fmtBRL(valor: number) {

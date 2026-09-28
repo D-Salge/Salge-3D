@@ -54,6 +54,15 @@ test('não repete uma pendência do WhatsApp que já foi contatada', () => {
   assert.equal(contatoWhatsAppJaRegistrado('pronto', eventos), false)
 })
 
+test('gera mensagens específicas de follow-up e pós-venda', () => {
+  const pedido = {
+    clienteNome: 'Helen Solis', numeroOrcamento: 'ORC-10', nomeDaPeca: 'Espremedor',
+    valorTotal: 57, saldoPendente: 0, status: 'Finalizado', vencimentoEm: null,
+  }
+  assert.match(criarMensagemWhatsApp('followup', pedido), /analisar o orçamento/)
+  assert.match(criarMensagemWhatsApp('pos_venda', pedido), /De 1 a 5/)
+})
+
 test('pedido finalizado não volta a ser tratado como retomada de orçamento', () => {
   assert.equal(sugerirTipoMensagemWhatsApp({
     orcamentoStatus: 'Enviado',
@@ -66,4 +75,3 @@ test('pedido finalizado não volta a ser tratado como retomada de orçamento', (
     saldoPendente: 57,
   }), 'cobranca')
 })
-

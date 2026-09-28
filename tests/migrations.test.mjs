@@ -68,6 +68,10 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(tenantColumns.includes('meta_lucro_mensal'))
     assert.ok(tenantColumns.includes('meta_pedidos_mensal'))
     assert.ok(tenantColumns.includes('dias_cliente_inativo'))
+    assert.ok(tenantColumns.includes('dias_followup_orcamento'))
+    assert.ok(tenantColumns.includes('dias_pos_venda'))
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tarefas_agenda'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'avaliacoes_pedido'`).get())
   } finally {
     db.close()
   }

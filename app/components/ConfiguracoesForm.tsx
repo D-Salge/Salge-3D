@@ -22,6 +22,8 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
         meta_lucro_mensal:     Number(form.meta_lucro_mensal),
         meta_pedidos_mensal:   Number(form.meta_pedidos_mensal),
         dias_cliente_inativo:  Number(form.dias_cliente_inativo),
+        dias_followup_orcamento: Number(form.dias_followup_orcamento),
+        dias_pos_venda:        Number(form.dias_pos_venda),
         taxa_operacional:      Number(form.taxa_operacional),
         custo_hora_maquina:    Number(form.custo_hora_maquina),
         tarifa_energia_kwh:    Number(form.tarifa_energia_kwh),
@@ -78,6 +80,11 @@ export function ConfiguracoesForm({ initialData }: { initialData: ConfiguracoesT
             <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Meta de lucro mensal (R$)</span><input required type="number" step="0.01" min="0" value={form.meta_lucro_mensal} onChange={e => setForm(f => ({ ...f, meta_lucro_mensal: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /></label>
             <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Meta de pedidos/mês</span><input required type="number" step="1" min="0" value={form.meta_pedidos_mensal} onChange={e => setForm(f => ({ ...f, meta_pedidos_mensal: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /></label>
             <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Cliente inativo após (dias)</span><input required type="number" step="1" min="1" max="3650" value={form.dias_cliente_inativo} onChange={e => setForm(f => ({ ...f, dias_cliente_inativo: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /></label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Follow-up do orçamento após (dias)</span><input required type="number" step="1" min="1" max="30" value={form.dias_followup_orcamento} onChange={e => setForm(f => ({ ...f, dias_followup_orcamento: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /><span className="text-[10px] text-white/30">Cria uma pendência quando o orçamento enviado ainda não teve resposta.</span></label>
+            <label className="flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Pós-venda após finalizar (dias)</span><input required type="number" step="1" min="1" max="90" value={form.dias_pos_venda} onChange={e => setForm(f => ({ ...f, dias_pos_venda: Number(e.target.value) }))} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm" /><span className="text-[10px] text-white/30">Lembra de confirmar a satisfação do cliente depois da entrega.</span></label>
           </div>
           
           <label className="flex flex-col gap-2">

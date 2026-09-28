@@ -11,6 +11,8 @@ export interface ConfiguracoesTenant {
   meta_lucro_mensal: number
   meta_pedidos_mensal: number
   dias_cliente_inativo: number
+  dias_followup_orcamento: number
+  dias_pos_venda: number
   taxa_operacional: number
   custo_hora_maquina: number
   tarifa_energia_kwh: number
@@ -35,7 +37,8 @@ export async function getConfiguracoes(): Promise<ConfiguracoesTenant> {
   return db
     .prepare(
       `SELECT nome, meta_mensal, meta_lucro_mensal, meta_pedidos_mensal,
-              dias_cliente_inativo, taxa_operacional, custo_hora_maquina,
+              dias_cliente_inativo, dias_followup_orcamento, dias_pos_venda,
+              taxa_operacional, custo_hora_maquina,
               tarifa_energia_kwh, potencia_impressora_w, saldo_inicial_caixa,
               margem_perdas_padrao, taxa_venda_padrao, valor_hora_trabalho,
               fator_b2c_personalizado, fator_b2c_lote, fator_b2b_piloto,
@@ -50,7 +53,8 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
   try {
     const nonNegative = [
       data.meta_mensal, data.meta_lucro_mensal, data.meta_pedidos_mensal,
-      data.dias_cliente_inativo, data.taxa_operacional, data.custo_hora_maquina,
+      data.dias_cliente_inativo, data.dias_followup_orcamento, data.dias_pos_venda,
+      data.taxa_operacional, data.custo_hora_maquina,
       data.tarifa_energia_kwh, data.potencia_impressora_w, data.saldo_inicial_caixa,
       data.margem_perdas_padrao, data.taxa_venda_padrao, data.valor_hora_trabalho,
       data.pedido_minimo_b2b,
@@ -64,8 +68,12 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
     }
     if (!Number.isSafeInteger(data.meta_pedidos_mensal) ||
         !Number.isSafeInteger(data.dias_cliente_inativo) ||
-        data.dias_cliente_inativo < 1 || data.dias_cliente_inativo > 3650) {
-      return { success: false, message: 'Metas de pedidos ou período de reativação inválidos.' }
+        !Number.isSafeInteger(data.dias_followup_orcamento) ||
+        !Number.isSafeInteger(data.dias_pos_venda) ||
+        data.dias_cliente_inativo < 1 || data.dias_cliente_inativo > 3650 ||
+        data.dias_followup_orcamento < 1 || data.dias_followup_orcamento > 30 ||
+        data.dias_pos_venda < 1 || data.dias_pos_venda > 90) {
+      return { success: false, message: 'Metas ou períodos de relacionamento inválidos.' }
     }
 
     db.prepare(`
@@ -75,6 +83,8 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
           meta_lucro_mensal     = ?,
           meta_pedidos_mensal   = ?,
           dias_cliente_inativo  = ?,
+          dias_followup_orcamento = ?,
+          dias_pos_venda        = ?,
           taxa_operacional      = ?,
           custo_hora_maquina    = ?,
           tarifa_energia_kwh    = ?,
@@ -95,6 +105,8 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
       data.meta_lucro_mensal,
       data.meta_pedidos_mensal,
       data.dias_cliente_inativo,
+      data.dias_followup_orcamento,
+      data.dias_pos_venda,
       data.taxa_operacional,
       data.custo_hora_maquina,
       data.tarifa_energia_kwh,
@@ -115,6 +127,7 @@ export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<Ac
     revalidatePath('/configuracoes')
     revalidatePath('/orcamentos')
     revalidatePath('/relatorios')
+    revalidatePath('/agenda')
 
     return { success: true, message: 'Configuracoes salvas com sucesso!' }
   } catch (error) {

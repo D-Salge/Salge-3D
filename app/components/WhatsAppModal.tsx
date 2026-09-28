@@ -16,7 +16,7 @@ import {
   type TipoMensagemWhatsApp,
 } from '@/app/actions/whatsapp'
 
-const TIPOS: TipoMensagemWhatsApp[] = ['orcamento', 'cobranca', 'producao', 'pronto']
+const TIPOS: TipoMensagemWhatsApp[] = ['orcamento', 'followup', 'cobranca', 'producao', 'pronto', 'pos_venda']
 
 function dadosMensagem(pedido: PedidoWhatsApp) {
   return {
