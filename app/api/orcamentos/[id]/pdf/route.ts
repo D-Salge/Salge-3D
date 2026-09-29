@@ -48,16 +48,25 @@ export async function GET(_request: Request, context: RouteContext<'/api/orcamen
   linha('Pagamento', `${pedido.condicao_pagamento || 'A combinar'} · ${pedido.parcelas}x`)
   y -= 14
 
-  page.drawText('Composição', { x: 46, y, size: 13, font: bold, color: dark })
+  page.drawText('Resumo comercial', { x: 46, y, size: 13, font: bold, color: dark })
   y -= 26
-  for (const item of pedido.materiais) {
-    linha(`${item.nome} (${item.peso_gasto_gramas} g)`, moeda(item.custo_calculado))
+  linha('Quantidade', `${pedido.quantidade.toLocaleString('pt-BR')} unidade(s)`)
+  const valorUnitario = pedido.preco_unitario ?? (
+    pedido.quantidade > 0 ? (pedido.valor_total_cobrado - pedido.frete_cobrado + pedido.desconto) / pedido.quantidade : 0
+  )
+  linha('Valor por unidade', moeda(valorUnitario))
+  if (pedido.desconto > 0) linha('Desconto', `- ${moeda(pedido.desconto)}`)
+  if (pedido.frete_cobrado > 0) linha('Frete', moeda(pedido.frete_cobrado))
+  if (pedido.descricao) {
+    y -= 8
+    page.drawText('Descrição', { x: 46, y, size: 9, font: regular, color: rgb(0.35, 0.35, 0.35) })
+    const descricao = pedido.descricao.replace(/\s+/g, ' ').trim()
+    const linhas = descricao.match(/.{1,82}(?:\s|$)/g)?.slice(0, 3) ?? [descricao.slice(0, 82)]
+    for (const texto of linhas) {
+      page.drawText(texto.trim(), { x: 190, y, size: 9, font: regular, color: dark })
+      y -= 15
+    }
   }
-  for (const item of pedido.insumos) {
-    linha(`${item.nome} (${item.quantidade} ${item.unidade})`, moeda(item.custo_calculado))
-  }
-  linha('Tempo estimado', `${pedido.tempo_impressao_horas} horas`)
-  linha('Embalagem', moeda(pedido.custo_embalagem))
   y -= 10
   linha('VALOR TOTAL', moeda(pedido.valor_total_cobrado), true)
 

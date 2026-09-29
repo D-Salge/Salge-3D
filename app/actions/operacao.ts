@@ -117,6 +117,17 @@ export interface ChecklistPedidoItem {
   concluido_em: string | null
 }
 
+export interface PerfilTecnicoPedido {
+  versao: number
+  impressora_nome: string | null
+  diametro_bico_mm: number | null
+  altura_camada_mm: number | null
+  unidades_por_placa: number | null
+  perfil_fatiamento: string | null
+  placa_referencia: string | null
+  observacoes: string | null
+}
+
 export interface ParcelaPedido {
   id: number
   numero: number
@@ -145,6 +156,9 @@ export interface PedidoDetalhes {
   quantidade: number
   quantidade_produzida: number
   quantidade_entregue: number
+  preco_unitario: number | null
+  desconto: number
+  frete_cobrado: number
   condicao_pagamento: string | null
   tempo_impressao_horas: number
   tempo_real_horas: number | null
@@ -167,6 +181,7 @@ export interface PedidoDetalhes {
   avaliacao_comentario: string | null
   impressora_id: number | null
   produto_id: number | null
+  produto_versao_id: number | null
   impressora_nome: string | null
   inicio_previsto: string | null
   fim_previsto: string | null
@@ -176,6 +191,7 @@ export interface PedidoDetalhes {
   anexos: AnexoPedido[]
   arquivos_producao: ArquivoProducaoPedido[]
   checklist: ChecklistPedidoItem[]
+  perfil_tecnico: PerfilTecnicoPedido | null
   desvios: {
     nivel: 'Dentro' | 'Atenção' | 'Crítico'
     completude: number
@@ -572,7 +588,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     JOIN tenants t ON t.id = p.tenant_id
     LEFT JOIN impressoras imp ON imp.id = p.impressora_id
     WHERE p.id = ? AND p.tenant_id = ?
-  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'desvios' | 'parcelas_receber' | 'entregas' | 'lucro_liquido' | 'margem_percentual'> & {
+  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'perfil_tecnico' | 'desvios' | 'parcelas_receber' | 'entregas' | 'lucro_liquido' | 'margem_percentual'> & {
     custo_real: number
   }) | undefined
   if (!pedido) return null
@@ -625,6 +641,18 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     WHERE pci.tenant_id = ? AND pci.ativo = 1
     ORDER BY CASE pci.etapa WHEN 'Produção' THEN 0 ELSE 1 END, pci.ordem, pci.id
   `).all(pedidoId, TENANT_ID) as ChecklistPedidoItem[]
+  const perfilTecnico = db.prepare(`
+    SELECT pv.versao, imp.nome AS impressora_nome, pv.diametro_bico_mm,
+      pv.altura_camada_mm, pv.unidades_por_placa, pv.perfil_fatiamento,
+      pv.placa_referencia, pv.observacoes
+    FROM produto_versoes pv
+    LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id
+    WHERE pv.id = COALESCE(?, (
+      SELECT ativa.id FROM produto_versoes ativa
+      WHERE ativa.produto_id = ? AND ativa.ativa = 1
+      ORDER BY ativa.versao DESC LIMIT 1
+    ))
+  `).get(pedido.produto_versao_id, pedido.produto_id) as PerfilTecnicoPedido | undefined
   const parcelasReceber = db.prepare(`
     WITH dados AS (
       SELECT pr.*,
@@ -686,6 +714,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     anexos,
     arquivos_producao: arquivosProducao,
     checklist,
+    perfil_tecnico: perfilTecnico ?? null,
     desvios,
     parcelas_receber: parcelasReceber,
     entregas,

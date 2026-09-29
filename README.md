@@ -15,8 +15,10 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Checklists reutilizáveis de produção e qualidade por produto.
 - Comparação automática entre custos, tempo e materiais previstos e realizados.
 - Perfil versionado de impressão por produto, com impressora, bico, camada e capacidade por placa.
+- Versão técnica fixada no pedido, com histórico restaurável sem alterar vendas antigas.
 - Geração automática de lotes/placas e indicadores reais de desempenho do produto.
 - Portal do cliente limitado a dados comerciais e logísticos, sem expor gramagem ou insumos internos.
+- PDF comercial separado da ordem interna de produção com materiais, arquivos e checklist.
 - Backup SQLite e exportação CSV.
 - Parcelas com vencimentos individuais, caixa versus competência e despesas pendentes.
 - Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.

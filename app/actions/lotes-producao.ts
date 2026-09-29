@@ -64,7 +64,11 @@ export async function getLotesProducao(): Promise<{ lotes: LoteProducao[]; pedid
       COALESCE((SELECT SUM(l.quantidade_planejada) FROM lotes_producao l
         WHERE l.pedido_id = p.id AND l.status != 'Cancelado'), 0) AS quantidade_planejada
     FROM pedidos p JOIN clientes c ON c.id = p.cliente_id
-    LEFT JOIN produto_versoes pv ON pv.produto_id = p.produto_id AND pv.ativa = 1
+    LEFT JOIN produto_versoes pv ON pv.id = COALESCE(p.produto_versao_id, (
+      SELECT pv_ativa.id FROM produto_versoes pv_ativa
+      WHERE pv_ativa.produto_id = p.produto_id AND pv_ativa.ativa = 1
+      ORDER BY pv_ativa.versao DESC LIMIT 1
+    ))
     LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id AND imp.tenant_id = p.tenant_id AND imp.ativo = 1
     WHERE p.tenant_id = ? AND p.orcamento_status = 'Aprovado'
       AND p.status IN ('Fila', 'Imprimindo', 'Acabamento')
@@ -83,7 +87,11 @@ export async function criarLotesAutomaticos(pedidoId: number): Promise<{ success
           p.orcamento_status, pv.unidades_por_placa, pv.impressora_preferida_id,
           pv.placa_referencia
         FROM pedidos p
-        LEFT JOIN produto_versoes pv ON pv.produto_id = p.produto_id AND pv.ativa = 1
+        LEFT JOIN produto_versoes pv ON pv.id = COALESCE(p.produto_versao_id, (
+          SELECT pv_ativa.id FROM produto_versoes pv_ativa
+          WHERE pv_ativa.produto_id = p.produto_id AND pv_ativa.ativa = 1
+          ORDER BY pv_ativa.versao DESC LIMIT 1
+        ))
         WHERE p.id = ? AND p.tenant_id = ?`
       ).get(pedidoId, TENANT_ID) as {
         id: number; quantidade: number; quantidade_produzida: number; status: string; orcamento_status: string

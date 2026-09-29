@@ -21,12 +21,16 @@ import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
 
-function buscarProdutoCatalogo(nome: string): number | null {
-  const produto = db.prepare(`SELECT id FROM produtos_catalogo
-    WHERE tenant_id = ? AND ativo = 1
-      AND (nome_chave = ? OR nome = ? COLLATE NOCASE)
-    LIMIT 1`).get(TENANT_ID, normalizarChaveTexto(nome), nome.trim()) as { id: number } | undefined
-  return produto?.id ?? null
+function buscarProdutoCatalogo(nome: string): { produtoId: number; produtoVersaoId: number | null } | null {
+  const produto = db.prepare(`SELECT pc.id,
+      (SELECT pv.id FROM produto_versoes pv
+        WHERE pv.produto_id = pc.id AND pv.ativa = 1
+        ORDER BY pv.versao DESC LIMIT 1) AS versao_id
+    FROM produtos_catalogo pc
+    WHERE pc.tenant_id = ? AND pc.ativo = 1
+      AND (pc.nome_chave = ? OR pc.nome = ? COLLATE NOCASE)
+    LIMIT 1`).get(TENANT_ID, normalizarChaveTexto(nome), nome.trim()) as { id: number; versao_id: number | null } | undefined
+  return produto ? { produtoId: produto.id, produtoVersaoId: produto.versao_id } : null
 }
 
 function expirarOrcamentosVencidos() {
@@ -740,14 +744,14 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       calculo.reservaPerdas + calculo.materiaisAvulsos + calculo.maoObraAtiva + calculo.setupProjeto,
     )
     const taxasComissoes = arredondarMoeda(valorTotal * configuracao.taxa_venda_padrao)
-    const produtoId = buscarProdutoCatalogo(nome_da_peca)
+    const produtoCatalogo = buscarProdutoCatalogo(nome_da_peca)
 
     const inserir = db.transaction(() => {
       // 1. Insere o pedido
       const pedidoResult = db
         .prepare(
           `INSERT INTO pedidos (
-            tenant_id, usuario_id, cliente_id, produto_id,
+            tenant_id, usuario_id, cliente_id, produto_id, produto_versao_id,
             nome_da_peca, tempo_impressao_horas,
             custo_filamento, custo_insumos, custo_energia,
             valor_reserva_maquina, taxa_operacional, custo_embalagem,
@@ -756,12 +760,13 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             parcelas, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
             materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
             orcamento_status, status
-          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
+          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           TENANT_ID,
           cliente_id,
-          produtoId,
+          produtoCatalogo?.produtoId ?? null,
+          produtoCatalogo?.produtoVersaoId ?? null,
           nome_da_peca.trim(),
           tempo_impressao_horas,
           calculo.filamentoSemPerdas,
@@ -985,7 +990,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
     }
     const custosAdicionais = arredondarMoeda(calculo.reservaPerdas + calculo.materiaisAvulsos + calculo.maoObraAtiva + calculo.setupProjeto)
     const taxasComissoes = arredondarMoeda(valorTotal * configuracao.taxa_venda_padrao)
-    const produtoId = buscarProdutoCatalogo(nome_da_peca)
+    const produtoCatalogo = buscarProdutoCatalogo(nome_da_peca)
 
     const atualizar = db.transaction(() => {
       const atual = db.prepare(`SELECT numero_orcamento, orcamento_status, status,
@@ -999,14 +1004,15 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
       }
 
       db.prepare(`UPDATE pedidos SET
-        cliente_id = ?, produto_id = ?, nome_da_peca = ?, tempo_impressao_horas = ?, custo_filamento = ?,
+        cliente_id = ?, produto_id = ?, produto_versao_id = ?, nome_da_peca = ?, tempo_impressao_horas = ?, custo_filamento = ?,
         custo_insumos = ?, custo_energia = ?, valor_reserva_maquina = ?, taxa_operacional = ?,
         custo_embalagem = ?, desconto = ?, frete_cobrado = ?, frete_pago = ?, valor_total_cobrado = ?,
         data_entrega = ?, validade_orcamento = ?, vencimento_em = ?, parcelas = ?, condicao_pagamento = ?,
         quantidade = ?, preco_unitario = ?, tipo_venda = ?, taxas_comissoes = ?, impressora_id = ?,
         materiais_avulsos_por_unidade = ?, horas_trabalho_ativo = ?, setup_projeto = ?, margem_perdas = ?
         WHERE id = ? AND tenant_id = ?`).run(
-          cliente_id, produtoId, nome_da_peca.trim(), tempo_impressao_horas, calculo.filamentoSemPerdas,
+          cliente_id, produtoCatalogo?.produtoId ?? null, produtoCatalogo?.produtoVersaoId ?? null,
+          nome_da_peca.trim(), tempo_impressao_horas, calculo.filamentoSemPerdas,
           arredondarMoeda(custoInsumosBruto), calculo.energia, calculo.reservaMaquina, custosAdicionais,
           arredondarMoeda(custo_embalagem), arredondarMoeda(desconto), arredondarMoeda(frete_cobrado),
           arredondarMoeda(frete_pago), valorTotal, data_entrega ?? null, validade_orcamento ?? null,
