@@ -31,6 +31,10 @@ export function IntegracoesPage({ diagnostico, envios }: { diagnostico: Diagnost
 AUTH_COOKIE_SECURE=true
 BACKUP_EXTERNAL_DIR=D:\\OneDrive\\Salge3D\\Backups
 
+MERCADO_PAGO_TEST_MODE=true
+MERCADO_PAGO_ACCESS_TOKEN=
+MERCADO_PAGO_WEBHOOK_SECRET=
+
 WHATSAPP_GRAPH_VERSION=vXX.X
 WHATSAPP_TEST_MODE=true
 WHATSAPP_PHONE_NUMBER_ID=
@@ -43,7 +47,7 @@ WHATSAPP_TEMPLATE_FOLLOWUP=salge_followup
 WHATSAPP_TEMPLATE_COBRANCA=salge_cobranca
 WHATSAPP_TEMPLATE_PRODUCAO=salge_producao
 WHATSAPP_TEMPLATE_PRONTO=salge_pronto
-WHATSAPP_TEMPLATE_POS_VENDA=salge_pos_venda`}</pre><p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-amber-200/60"><AlertTriangle size={13} className="mt-0.5 shrink-0" /> Cada template precisa estar aprovado e ter uma variável no corpo. A URL pública do webhook é <code>/api/webhooks/whatsapp</code>.</p></div>
+WHATSAPP_TEMPLATE_POS_VENDA=salge_pos_venda`}</pre><p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-amber-200/60"><AlertTriangle size={13} className="mt-0.5 shrink-0" /> Nunca envie tokens ao GitHub. Webhooks públicos: <code>/api/webhooks/mercado-pago</code> e <code>/api/webhooks/whatsapp</code>.</p></div>
 
     <div className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b]"><div className="p-5 sm:p-6"><h2 className="text-sm font-semibold">Envios oficiais recentes</h2><p className="mt-1 text-xs text-white/35">Estados “Entregue” e “Lido” chegam automaticamente pelo webhook assinado.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-y border-white/[0.06] text-white/35"><tr><th className="px-5 py-3">Pedido</th><th>Cliente</th><th>Template</th><th>Status</th><th>Tentativas</th><th className="pr-5 text-right">Ação</th></tr></thead><tbody className="divide-y divide-white/[0.05]">{envios.map((envio) => <tr key={envio.id}><td className="px-5 py-3"><Link className="text-[#d8f45a]" href={`/pedidos/${envio.pedido_id}`}>{envio.numero_orcamento || `#${envio.pedido_id}`}</Link></td><td>{envio.cliente_nome}</td><td className="text-white/45">{envio.template_nome}</td><td><span className={`rounded px-2 py-1 text-[10px] ${envio.status === 'Falhou' ? 'bg-red-500/10 text-red-300' : envio.status === 'Lido' || envio.status === 'Entregue' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-blue-500/10 text-blue-300'}`}>{envio.status}</span>{envio.erro && <p className="mt-1 max-w-[260px] truncate text-[10px] text-red-300/60" title={envio.erro}>{envio.erro}</p>}</td><td>{envio.tentativas}</td><td className="pr-5 text-right">{envio.status === 'Falhou' && <button disabled={isPending} onClick={() => reenviar(envio.id)} className="rounded p-2 text-white/50 hover:bg-white/[0.06]" title="Tentar novamente"><RefreshCw size={14} /></button>}</td></tr>)}{envios.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-white/30">Nenhum envio pela API oficial.</td></tr>}</tbody></table></div></div>
   </div>

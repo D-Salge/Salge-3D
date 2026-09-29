@@ -201,6 +201,17 @@ export interface PedidoDetalhes {
   }
   parcelas_receber: ParcelaPedido[]
   entregas: EntregaPedido[]
+  cobranca_mercado_pago: {
+    id: number
+    valor: number
+    status: string
+    init_point: string
+    pagamento_id: string | null
+    forma_pagamento: string | null
+    pago_em: string | null
+    criado_em: string
+  } | null
+  link_pagamento: string | null
 }
 
 export async function getImpressoras(): Promise<Impressora[]> {
@@ -592,7 +603,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     JOIN tenants t ON t.id = p.tenant_id
     LEFT JOIN impressoras imp ON imp.id = p.impressora_id
     WHERE p.id = ? AND p.tenant_id = ?
-  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'perfil_tecnico' | 'desvios' | 'parcelas_receber' | 'entregas' | 'lucro_liquido' | 'margem_percentual'> & {
+  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'perfil_tecnico' | 'desvios' | 'parcelas_receber' | 'entregas' | 'cobranca_mercado_pago' | 'link_pagamento' | 'lucro_liquido' | 'margem_percentual'> & {
     custo_real: number
   }) | undefined
   if (!pedido) return null
@@ -688,6 +699,12 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     WHERE e.pedido_id = ? AND e.cancelada_em IS NULL
     ORDER BY date(e.entregue_em) DESC, e.id DESC
   `).all(pedidoId) as EntregaPedido[]
+  const cobrancaMercadoPago = db.prepare(`
+    SELECT id, valor, status, init_point, pagamento_id, forma_pagamento, pago_em, criado_em
+    FROM mercado_pago_cobrancas
+    WHERE tenant_id = ? AND pedido_id = ?
+    ORDER BY id DESC LIMIT 1
+  `).get(TENANT_ID, pedidoId) as PedidoDetalhes['cobranca_mercado_pago']
 
   const lucroLiquido = Math.round((pedido.valor_total_cobrado - pedido.custo_real) * 100) / 100
   const margemPercentual = pedido.valor_total_cobrado > 0
@@ -722,6 +739,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     desvios,
     parcelas_receber: parcelasReceber,
     entregas,
+    cobranca_mercado_pago: cobrancaMercadoPago ?? null,
+    link_pagamento: cobrancaMercadoPago?.status === 'Pendente' ? cobrancaMercadoPago.init_point : null,
   }
 }
 

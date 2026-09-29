@@ -30,6 +30,7 @@ export interface PedidoWhatsApp {
   orcamento_status: string
   status: string
   vencimento_em: string | null
+  link_pagamento?: string | null
 }
 
 export interface PendenciaWhatsApp extends PedidoWhatsApp {

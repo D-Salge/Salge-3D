@@ -22,6 +22,8 @@ export interface OrcamentoPortal {
   data_entrega: string | null
   validade_orcamento: string | null
   orcamento_status: string
+  saldo_pendente: number
+  link_pagamento: string | null
   expira_em: string
   resposta: string | null
   respondido_em: string | null
@@ -73,7 +75,12 @@ export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal
     SELECT pl.token, pl.expira_em, pl.resposta, pl.respondido_em,
       p.id, p.numero_orcamento, p.nome_da_peca, p.descricao, c.nome AS cliente_nome,
       p.quantidade, COALESCE(p.preco_unitario, p.valor_total_cobrado / MAX(p.quantidade, 1)) AS preco_unitario,
-      p.valor_total_cobrado, p.frete_cobrado, p.data_entrega, p.validade_orcamento, p.orcamento_status
+      p.valor_total_cobrado, p.frete_cobrado, p.data_entrega, p.validade_orcamento, p.orcamento_status,
+      MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
+      (SELECT mc.init_point FROM mercado_pago_cobrancas mc
+        WHERE mc.tenant_id = p.tenant_id AND mc.pedido_id = p.id AND mc.status = 'Pendente'
+        ORDER BY mc.id DESC LIMIT 1) AS link_pagamento
     FROM portal_links pl
     JOIN pedidos p ON p.id = pl.pedido_id AND p.tenant_id = pl.tenant_id
     JOIN clientes c ON c.id = p.cliente_id
@@ -102,6 +109,8 @@ export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal
     data_entrega: pedido.data_entrega,
     validade_orcamento: pedido.validade_orcamento,
     orcamento_status: pedido.orcamento_status,
+    saldo_pendente: pedido.saldo_pendente,
+    link_pagamento: pedido.link_pagamento,
     expira_em: pedido.expira_em,
     resposta: pedido.resposta,
     respondido_em: pedido.respondido_em,

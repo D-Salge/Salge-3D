@@ -5,7 +5,7 @@ import db from '@/lib/db'
 type PerfilUsuario = 'admin' | 'operador' | 'visualizador'
 const COOKIE_SESSAO = 'salge_session'
 
-const PUBLICOS = ['/login', '/setup', '/portal', '/api/health', '/api/webhooks/whatsapp']
+const PUBLICOS = ['/login', '/setup', '/portal', '/pagamento/retorno', '/api/health', '/api/webhooks/whatsapp', '/api/webhooks/mercado-pago']
 
 function sessaoDaRequisicao(request: NextRequest) {
   const token = request.cookies.get(COOKIE_SESSAO)?.value

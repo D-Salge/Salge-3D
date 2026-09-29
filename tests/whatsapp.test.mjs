@@ -75,3 +75,13 @@ test('pedido finalizado não volta a ser tratado como retomada de orçamento', (
     saldoPendente: 57,
   }), 'cobranca')
 })
+
+test('inclui link de pagamento na cobrança quando disponível', () => {
+  const mensagem = criarMensagemWhatsApp('cobranca', {
+    clienteNome: 'Maria Silva', numeroOrcamento: 'ORC-10', nomeDaPeca: 'Ímãs',
+    valorTotal: 350, saldoPendente: 140, status: 'Imprimindo',
+    linkPagamento: 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=abc',
+  })
+  assert.match(mensagem, /mercadopago\.com\.br/)
+  assert.match(mensagem, /R\$\s*140,00/)
+})
