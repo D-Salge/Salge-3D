@@ -7,6 +7,8 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Dashboard com faturamento, lucro, margem, pendências e alertas de estoque.
 - Orçamentos com validade, PDF, aprovação e conversão para produção.
 - Produção em Kanban, planejamento por impressora e registro de falhas.
+- Prioridade e ordem manual da fila, com distribuição automática dos pedidos sem impressora.
+- Planejamento que respeita bloqueios de máquina e intervalos de preparação entre impressões.
 - Custos estimados e consumo real de filamentos e insumos.
 - Histórico de movimentações com baixa e estorno automáticos.
 - Clientes, filamentos, insumos e equipamentos.

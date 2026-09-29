@@ -108,6 +108,8 @@ export interface PedidoResumo {
   quantidade: number
   quantidade_produzida: number
   quantidade_entregue: number
+  prioridade_producao: 'Normal' | 'Alta' | 'Urgente'
+  ordem_fila: number | null
   impressora_nome: string | null
   inicio_previsto: string | null
   fim_previsto: string | null
@@ -364,6 +366,8 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
          p.parcelas,
          p.quantidade,
          p.quantidade_produzida,
+         p.prioridade_producao,
+         p.ordem_fila,
          COALESCE((SELECT SUM(e.quantidade) FROM entregas_pedido e
            WHERE e.pedido_id = p.id AND e.cancelada_em IS NULL), 0) AS quantidade_entregue,
          imp.nome AS impressora_nome,
@@ -1108,6 +1112,8 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
          p.parcelas,
          p.quantidade,
          p.quantidade_produzida,
+         p.prioridade_producao,
+         p.ordem_fila,
          COALESCE((SELECT SUM(e.quantidade) FROM entregas_pedido e
            WHERE e.pedido_id = p.id AND e.cancelada_em IS NULL), 0) AS quantidade_entregue,
          imp.nome AS impressora_nome,
@@ -1132,7 +1138,9 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
        WHERE p.tenant_id = ?
          AND p.orcamento_status = 'Aprovado'
          AND p.status IN ('Fila', 'Imprimindo', 'Acabamento', 'Finalizado')
-       ORDER BY p.data_pedido ASC`
+       ORDER BY CASE p.status WHEN 'Imprimindo' THEN 0 WHEN 'Fila' THEN 1 WHEN 'Acabamento' THEN 2 ELSE 3 END,
+         CASE p.prioridade_producao WHEN 'Urgente' THEN 0 WHEN 'Alta' THEN 1 ELSE 2 END,
+         COALESCE(p.ordem_fila, p.id), p.data_pedido ASC`
     )
     .all(TENANT_ID) as PedidoResumo[]
 }
