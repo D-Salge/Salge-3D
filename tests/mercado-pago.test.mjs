@@ -24,6 +24,17 @@ test('monta preferência com saldo, referência, retornos e webhook', () => {
   assert.equal(payload.back_urls.success, 'https://erp.example.com/pagamento/retorno?resultado=sucesso')
 })
 
+test('omite webhook individual no sandbox e preserva retornos', () => {
+  const payload = montarPreferenciaMercadoPago({
+    pedido: { id: 42, numero_orcamento: 'ORC-42', nome_da_peca: 'Ímãs', saldo_pendente: 140, cliente_email: null },
+    externalReference: 'salge-1-42-sandbox',
+    appUrl: 'https://erp.example.com',
+    incluirWebhook: false,
+  })
+  assert.equal('notification_url' in payload, false)
+  assert.equal(payload.back_urls.pending, 'https://erp.example.com/pagamento/retorno?resultado=pendente')
+})
+
 test('valida assinatura HMAC do webhook e rejeita conteúdo alterado', () => {
   const secret = 'segredo-de-teste'
   const dataId = '123456'

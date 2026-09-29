@@ -6,10 +6,15 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { exigirPerfil } from '@/lib/session'
 import {
+  buscarPagamentosMercadoPago,
   configuracaoMercadoPago,
   criarPreferenciaMercadoPago,
   montarPreferenciaMercadoPago,
 } from '@/lib/mercado-pago.mjs'
+import {
+  processarPagamentoMercadoPago,
+  type PagamentoMercadoPago,
+} from '@/lib/mercado-pago-processamento'
 
 export interface CobrancaMercadoPago {
   id: number
@@ -57,7 +62,14 @@ export async function gerarCobrancaMercadoPago(pedidoId: number): Promise<{
     const externalReference = `salge-${sessao.tenantId}-${pedido.id}-${randomUUID()}`
     const idempotencyKey = randomUUID()
     const preferencia = await criarPreferenciaMercadoPago(
-      montarPreferenciaMercadoPago({ pedido, externalReference, appUrl: config.appUrl }),
+      montarPreferenciaMercadoPago({
+        pedido,
+        externalReference,
+        appUrl: config.appUrl,
+        // O Mercado Pago não envia webhooks automáticos para pagamentos criados
+        // com credenciais de teste. No sandbox a consulta manual usa a referência.
+        incluirWebhook: !config.testMode,
+      }),
       config.accessToken,
       idempotencyKey,
     ) as { id?: string; init_point?: string; sandbox_init_point?: string }
@@ -86,5 +98,74 @@ export async function gerarCobrancaMercadoPago(pedidoId: number): Promise<{
       ? error.message.replace('MERCADO_PAGO_API:', '')
       : null
     return { success: false, message: detalhe ? `Mercado Pago recusou a solicitação: ${detalhe}` : 'Não foi possível criar a cobrança.' }
+  }
+}
+
+export async function sincronizarCobrancaMercadoPago(pedidoId: number): Promise<{
+  success: boolean
+  message: string
+}> {
+  try {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
+      return { success: false, message: 'Pedido inválido.' }
+    }
+    const config = configuracaoMercadoPago()
+    if (!config.configurado) {
+      return { success: false, message: `Integração incompleta: ${config.ausentes.join(', ')}.` }
+    }
+    const cobranca = db.prepare(`
+      SELECT id, external_reference, status, pagamento_id
+      FROM mercado_pago_cobrancas
+      WHERE pedido_id = ? AND tenant_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(pedidoId, sessao.tenantId) as {
+      id: number
+      external_reference: string
+      status: string
+      pagamento_id: string | null
+    } | undefined
+    if (!cobranca) return { success: false, message: 'Este pedido ainda não possui cobrança do Mercado Pago.' }
+    if (cobranca.status === 'Aprovado') {
+      return { success: true, message: 'O pagamento já está aprovado e registrado.' }
+    }
+
+    const busca = await buscarPagamentosMercadoPago(
+      cobranca.external_reference,
+      config.accessToken,
+    ) as { results?: PagamentoMercadoPago[] }
+    const pagamentos = (busca.results || []).filter((item) =>
+      item.external_reference === cobranca.external_reference,
+    )
+    if (pagamentos.length === 0) {
+      return { success: false, message: 'O Mercado Pago ainda não encontrou pagamento para esta cobrança.' }
+    }
+    const pagamento = pagamentos.find((item) => item.status === 'approved') || pagamentos[0]
+    const resultado = processarPagamentoMercadoPago(
+      pagamento,
+      { source: 'manual_sync', payment_id: pagamento.id },
+      'manual.sync',
+    )
+    revalidatePath(`/pedidos/${pedidoId}`)
+    if (resultado.status === 'Aprovado') {
+      return { success: true, message: resultado.duplicado
+        ? 'O pagamento já havia sido sincronizado.'
+        : 'Pagamento aprovado e registrado automaticamente.' }
+    }
+    return {
+      success: true,
+      message: `Status atualizado pelo Mercado Pago: ${resultado.status}.`,
+    }
+  } catch (error) {
+    console.error('[sincronizarCobrancaMercadoPago]', error)
+    const detalhe = error instanceof Error && error.message.startsWith('MERCADO_PAGO_API:')
+      ? error.message.replace('MERCADO_PAGO_API:', '')
+      : null
+    return {
+      success: false,
+      message: detalhe
+        ? `Não foi possível consultar o Mercado Pago: ${detalhe}`
+        : 'Não foi possível sincronizar esta cobrança.',
+    }
   }
 }
