@@ -33,6 +33,7 @@ export interface ProdutoCatalogo {
   total_pedidos: number
   unidades_vendidas: number
   itens: ItemFichaTecnica[]
+  checklist: Array<{ id: number; etapa: 'Produção' | 'Qualidade'; texto: string; ordem: number }>
 }
 
 export interface CatalogoDados {
@@ -74,7 +75,7 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
     WHERE pc.tenant_id = ? AND pc.ativo = 1
     GROUP BY pc.id, pv.id
     ORDER BY pc.nome
-  `).all(TENANT_ID) as Array<Omit<ProdutoCatalogo, 'itens'>>
+  `).all(TENANT_ID) as Array<Omit<ProdutoCatalogo, 'itens' | 'checklist'>>
 
   const buscarItens = db.prepare(`
     SELECT pvi.id, pvi.tipo_item, pvi.item_id, pvi.quantidade_por_unidade,
@@ -88,6 +89,9 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
       ), 0) ELSE COALESCE((SELECT i.custo_unitario FROM insumos i WHERE i.id = pvi.item_id), 0) END AS custo_unitario
     FROM produto_versao_itens pvi WHERE pvi.versao_id = ? ORDER BY pvi.tipo_item, pvi.id
   `)
+  const buscarChecklist = db.prepare(`SELECT id, etapa, texto, ordem
+    FROM produto_checklist_itens WHERE tenant_id = ? AND produto_id = ? AND ativo = 1
+    ORDER BY CASE etapa WHEN 'Produção' THEN 0 ELSE 1 END, ordem, id`)
 
   const materiais = db.prepare(`
     SELECT 'Filamento' AS tipo_item, id AS item_id, material || ' ' || cor AS nome,
@@ -103,6 +107,7 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
     produtos: produtos.map(produto => ({
       ...produto,
       itens: produto.versao_id ? buscarItens.all(produto.versao_id) as ItemFichaTecnica[] : [],
+      checklist: buscarChecklist.all(TENANT_ID, produto.id) as ProdutoCatalogo['checklist'],
     })),
     materiais,
   }

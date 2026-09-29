@@ -11,7 +11,10 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Histórico de movimentações com baixa e estorno automáticos.
 - Clientes, filamentos, insumos e equipamentos.
 - Contas a receber, pagamentos parciais, despesas e fluxo de capital.
-- Detalhe do pedido com arquivos por link e histórico de alterações.
+- Detalhe do pedido com arquivos reais de produção, versionamento e histórico de alterações.
+- Checklists reutilizáveis de produção e qualidade por produto.
+- Comparação automática entre custos, tempo e materiais previstos e realizados.
+- Portal do cliente limitado a dados comerciais e logísticos, sem expor gramagem ou insumos internos.
 - Backup SQLite e exportação CSV.
 - Parcelas com vencimentos individuais, caixa versus competência e despesas pendentes.
 - Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.

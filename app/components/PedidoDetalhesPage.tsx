@@ -18,6 +18,9 @@ import { salvarModeloOrcamento } from '@/app/actions/modelos-orcamento'
 import { WhatsAppModal } from './WhatsAppModal'
 import { EntregasPedido } from './EntregasPedido'
 import { PortalPedido } from './PortalPedido'
+import { AnaliseDesviosPedido } from './AnaliseDesviosPedido'
+import { ArquivosProducaoPedido } from './ArquivosProducaoPedido'
+import { ChecklistPedido } from './ChecklistPedido'
 
 function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -92,14 +95,18 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
   }
 
   function finalizarComRevisao() {
+    const checklistPendente = pedido.checklist.filter((item) => !item.concluido).length
     const camposEstimados = [
       tempoReal === '',
       ...materiais.map((item) => item.consumoReal === ''),
       ...insumos.map((item) => item.consumoReal === ''),
     ].filter(Boolean).length
-    const aviso = camposEstimados > 0
+    const avisoBase = camposEstimados > 0
       ? `${camposEstimados} campo(s) sem valor real serão preenchidos com a estimativa do orçamento. Depois da baixa de estoque, os consumos ficarão bloqueados. Finalizar?`
       : 'Os consumos reais informados serão usados na baixa de estoque e ficarão bloqueados. Finalizar o pedido?'
+    const aviso = checklistPendente > 0
+      ? `Ainda existem ${checklistPendente} item(ns) de checklist pendentes. ${avisoBase}`
+      : avisoBase
     if (!confirm(aviso)) return
 
     startTransition(async () => {
@@ -169,6 +176,8 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5"><p className="text-xs text-white/35">Variação do custo</p><p className={`mt-2 text-xl font-semibold ${pedido.custo_real > pedido.custo_estimado ? 'text-red-300' : 'text-emerald-400'}`}>{pedido.custo_real > pedido.custo_estimado ? '+' : ''}{fmtBRL(pedido.custo_real - pedido.custo_estimado)}</p></div>
       </div>
 
+      <AnaliseDesviosPedido desvios={pedido.desvios} />
+
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
           <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Ciclo do orçamento</h2><p className="mt-1 text-xs text-white/35">Validade: {pedido.validade_orcamento ? new Date(`${pedido.validade_orcamento}T12:00:00`).toLocaleDateString('pt-BR') : 'não definida'}</p></div><div className="flex flex-wrap gap-2">{pedido.orcamento_status === 'Rascunho' && <><button onClick={() => mudarOrcamento('Enviado')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Marcar enviado</button><button onClick={() => mudarOrcamento('Aprovado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Aprovar</button></>}{pedido.orcamento_status === 'Enviado' && <><button onClick={() => mudarOrcamento('Aprovado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Aprovar</button><button onClick={() => mudarOrcamento('Recusado')} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">Recusado</button></>}{pedido.orcamento_status === 'Expirado' && <><button onClick={() => mudarOrcamento('Enviado')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Reenviar</button><button onClick={() => mudarOrcamento('Aprovado')} className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Aprovar mesmo assim</button></>}</div></div></section>
@@ -176,6 +185,8 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
           {pedido.orcamento_status === 'Aprovado' && pedido.status !== 'Cancelado' && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Andamento da produção</h2><p className="mt-1 text-xs text-white/35">Status atual: {pedido.status}</p></div><div className="flex flex-wrap gap-2">{pedido.status === 'Fila' && <button onClick={() => mudarProducao('Imprimindo')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-300">Iniciar impressão</button>}{pedido.status === 'Imprimindo' && <button onClick={() => mudarProducao('Acabamento')} className="rounded-lg bg-violet-500/15 px-3 py-2 text-xs text-violet-300">Enviar ao acabamento</button>}{pedido.status === 'Acabamento' && <a href="#fechamento" className="rounded-lg bg-[#d8f45a] px-3 py-2 text-xs font-semibold text-[#15180d]">Revisar e finalizar</a>}<button onClick={() => mudarProducao('Cancelado')} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">Cancelar pedido</button></div></div></section>}
 
           {pedido.orcamento_status === 'Aprovado' && <EntregasPedido pedido={pedido} />}
+
+          {pedido.orcamento_status === 'Aprovado' && <ChecklistPedido pedidoId={pedido.id} itens={pedido.checklist} />}
 
           <form id="fechamento" onSubmit={salvarOperacao} className="scroll-mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="mb-5"><h2 className="font-semibold">Planejamento e consumo real</h2><p className="mt-1 text-xs leading-5 text-white/35">Antes de finalizar, informe o que realmente foi usado. Campos vazios serão preenchidos com a estimativa após sua confirmação.</p></div><div className="grid gap-4 sm:grid-cols-2">
             <label className="text-xs text-white/50">Impressora<select value={impressoraId} onChange={(e) => setImpressoraId(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3"><option value="">Não atribuída</option>{impressoras.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
@@ -194,6 +205,7 @@ export function PedidoDetalhesPage({ pedido, impressoras }: { pedido: PedidoDeta
 
         <div className="space-y-6">
           {pedido.avaliacao_nota !== null && <section className="rounded-2xl border border-violet-400/15 bg-violet-500/[0.05] p-6"><h2 className="font-semibold">Avaliação do cliente</h2><p className="mt-3 text-2xl font-semibold text-violet-200">{'★'.repeat(pedido.avaliacao_nota)}<span className="ml-2 text-sm text-white/35">{pedido.avaliacao_nota}/5</span></p>{pedido.avaliacao_comentario && <p className="mt-3 text-sm leading-6 text-white/55">{pedido.avaliacao_comentario}</p>}</section>}
+          <ArquivosProducaoPedido pedidoId={pedido.id} arquivos={pedido.arquivos_producao} />
           <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><h2 className="mb-4 font-semibold">Financeiro</h2><div className="space-y-2 text-sm"><p className="flex justify-between text-white/50"><span>Recebido</span><b className="text-emerald-400">{fmtBRL(pedido.total_recebido)}</b></p><p className="flex justify-between text-white/50"><span>Pendente</span><b className="text-amber-400">{fmtBRL(pedido.saldo_pendente)}</b></p></div><div className="mt-5 space-y-2">{pedido.parcelas_receber.map((parcela) => <div key={parcela.id} className="rounded-lg bg-white/[0.03] p-3 text-xs"><div className="flex justify-between"><span>Parcela {parcela.numero}/{pedido.parcelas}</span><b>{fmtBRL(parcela.valor)}</b></div><div className="mt-1 flex justify-between text-white/40"><span>{new Date(`${parcela.vencimento_em}T12:00:00`).toLocaleDateString('pt-BR')}</span><span className={parcela.situacao === 'Pago' ? 'text-emerald-400' : parcela.situacao === 'Atrasado' ? 'text-red-400' : 'text-amber-300'}>{parcela.situacao}{parcela.saldo > 0 ? ` · ${fmtBRL(parcela.saldo)}` : ''}</span></div></div>)}</div></section>
 
           <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><h2 className="mb-4 flex items-center gap-2 font-semibold"><Link2 size={15} /> Arquivos e links</h2><form onSubmit={adicionarAnexo} className="space-y-3"><input required placeholder="Nome: Projeto 3MF" value={anexoNome} onChange={(e) => setAnexoNome(e.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /><input required type="url" placeholder="https://..." value={anexoUrl} onChange={(e) => setAnexoUrl(e.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /><button className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs">Adicionar link</button></form><div className="mt-4 space-y-2">{pedido.anexos.map((anexo) => <div key={anexo.id} className="flex items-center justify-between rounded-lg bg-white/[0.03] p-3"><a href={anexo.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-blue-300">{anexo.nome}<ExternalLink size={11} /></a><button onClick={() => startTransition(async () => setMensagem((await removerAnexoPedido(anexo.id, pedido.id)).message))} className="text-red-400/60"><Trash2 size={13} /></button></div>)}</div></section>

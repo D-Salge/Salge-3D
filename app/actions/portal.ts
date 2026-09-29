@@ -25,7 +25,6 @@ export interface OrcamentoPortal {
   expira_em: string
   resposta: string | null
   respondido_em: string | null
-  itens: Array<{ nome: string; quantidade: number; unidade: string }>
   entregas: Array<{ quantidade: number; entregue_em: string }>
   expedicao: { modalidade: string; status: string; codigo_rastreio: string | null; url_rastreio: string | null; previsao_entrega: string | null } | null
 }
@@ -79,16 +78,9 @@ export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal
     JOIN pedidos p ON p.id = pl.pedido_id AND p.tenant_id = pl.tenant_id
     JOIN clientes c ON c.id = p.cliente_id
     WHERE pl.token = ? AND pl.revogado_em IS NULL AND datetime(pl.expira_em) > datetime('now')
-  `).get(token) as (Omit<OrcamentoPortal, 'itens' | 'entregas' | 'expedicao'> & { id: number }) | undefined
+  `).get(token) as (Omit<OrcamentoPortal, 'entregas' | 'expedicao'> & { id: number }) | undefined
   if (!pedido) return null
   db.prepare(`UPDATE portal_links SET visualizado_em = COALESCE(visualizado_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')) WHERE token = ?`).run(token)
-  const itens = db.prepare(`
-    SELECT f.material || ' ' || f.cor AS nome, pf.peso_gasto_gramas AS quantidade, 'g' AS unidade
-    FROM pedido_filamentos pf JOIN filamentos f ON f.id = pf.filamento_id WHERE pf.pedido_id = ?
-    UNION ALL
-    SELECT i.nome, pi.quantidade, i.unidade
-    FROM pedido_insumos pi JOIN insumos i ON i.id = pi.insumo_id WHERE pi.pedido_id = ?
-  `).all(pedido.id, pedido.id) as OrcamentoPortal['itens']
   const entregas = db.prepare(`
     SELECT quantidade, entregue_em FROM entregas_pedido
     WHERE pedido_id = ? AND cancelada_em IS NULL ORDER BY entregue_em, id
@@ -113,7 +105,6 @@ export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal
     expira_em: pedido.expira_em,
     resposta: pedido.resposta,
     respondido_em: pedido.respondido_em,
-    itens,
     entregas,
     expedicao: expedicao ?? null,
   }

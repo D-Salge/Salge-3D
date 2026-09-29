@@ -6,6 +6,7 @@ import { adicionarMeses, dividirEmParcelas } from '@/lib/financeiro.mjs'
 import { calcularIndicadoresQualidade, calcularStatusManutencao } from '@/lib/manutencao.mjs'
 import { revalidatePath } from 'next/cache'
 import type { EntregaPedido } from '@/app/actions/entregas'
+import { calcularDesviosOperacao } from '@/lib/desvios-operacao.mjs'
 
 const TENANT_ID = 1
 const USUARIO_ID = 1
@@ -64,6 +65,7 @@ export interface PedidoMaterialDetalhe {
   peso_gasto_gramas: number
   consumo_real_gramas: number | null
   custo_calculado: number
+  custo_real_calculado: number
 }
 
 export interface PedidoInsumoDetalhe {
@@ -74,6 +76,7 @@ export interface PedidoInsumoDetalhe {
   quantidade: number
   consumo_real: number | null
   custo_calculado: number
+  custo_real_calculado: number
 }
 
 export interface HistoricoPedido {
@@ -88,6 +91,30 @@ export interface AnexoPedido {
   nome: string
   url: string
   criado_em: string
+}
+
+export interface ArquivoProducaoPedido {
+  id: number
+  nome_logico: string
+  nome_original: string
+  extensao: string
+  mime_type: string
+  tamanho_bytes: number
+  sha256: string
+  versao: number
+  observacoes: string | null
+  ativo: number
+  produto_versao: number | null
+  criado_em: string
+}
+
+export interface ChecklistPedidoItem {
+  id: number
+  etapa: 'Produção' | 'Qualidade'
+  texto: string
+  ordem: number
+  concluido: number
+  concluido_em: string | null
 }
 
 export interface ParcelaPedido {
@@ -139,6 +166,7 @@ export interface PedidoDetalhes {
   avaliacao_nota: number | null
   avaliacao_comentario: string | null
   impressora_id: number | null
+  produto_id: number | null
   impressora_nome: string | null
   inicio_previsto: string | null
   fim_previsto: string | null
@@ -146,6 +174,14 @@ export interface PedidoDetalhes {
   insumos: PedidoInsumoDetalhe[]
   historico: HistoricoPedido[]
   anexos: AnexoPedido[]
+  arquivos_producao: ArquivoProducaoPedido[]
+  checklist: ChecklistPedidoItem[]
+  desvios: {
+    nivel: 'Dentro' | 'Atenção' | 'Crítico'
+    completude: number
+    usandoEstimativas: boolean
+    itens: Array<{ rotulo: string; previsto: number; realizado: number; diferenca: number; percentual: number; unidade: string; nivel: 'Dentro' | 'Atenção' | 'Crítico' }>
+  }
   parcelas_receber: ParcelaPedido[]
   entregas: EntregaPedido[]
 }
@@ -536,21 +572,23 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     JOIN tenants t ON t.id = p.tenant_id
     LEFT JOIN impressoras imp ON imp.id = p.impressora_id
     WHERE p.id = ? AND p.tenant_id = ?
-  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'parcelas_receber' | 'entregas' | 'lucro_liquido' | 'margem_percentual'> & {
+  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'desvios' | 'parcelas_receber' | 'entregas' | 'lucro_liquido' | 'margem_percentual'> & {
     custo_real: number
   }) | undefined
   if (!pedido) return null
 
   const materiais = db.prepare(`
     SELECT pf.id, pf.filamento_id, f.material || ' ' || f.cor AS nome,
-      pf.peso_gasto_gramas, pf.consumo_real_gramas, pf.custo_calculado
+      pf.peso_gasto_gramas, pf.consumo_real_gramas, pf.custo_calculado,
+      COALESCE(pf.consumo_real_gramas, pf.peso_gasto_gramas) * f.preco_rolo / f.peso_rolo_gramas AS custo_real_calculado
     FROM pedido_filamentos pf
     JOIN filamentos f ON f.id = pf.filamento_id
     WHERE pf.pedido_id = ? ORDER BY pf.id
   `).all(pedidoId) as PedidoMaterialDetalhe[]
   const insumos = db.prepare(`
     SELECT pi.id, pi.insumo_id, i.nome, i.unidade, pi.quantidade,
-      pi.consumo_real, pi.custo_calculado
+      pi.consumo_real, pi.custo_calculado,
+      COALESCE(pi.consumo_real, pi.quantidade) * pi.custo_unitario_snap AS custo_real_calculado
     FROM pedido_insumos pi JOIN insumos i ON i.id = pi.insumo_id
     WHERE pi.pedido_id = ? ORDER BY pi.id
   `).all(pedidoId) as PedidoInsumoDetalhe[]
@@ -562,6 +600,31 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     SELECT id, nome, url, criado_em FROM anexos_pedido
     WHERE pedido_id = ? ORDER BY criado_em DESC
   `).all(pedidoId) as AnexoPedido[]
+  const arquivosProducao = db.prepare(`
+    SELECT ap.id, ap.nome_logico, ap.nome_original, ap.extensao, ap.mime_type,
+      ap.tamanho_bytes, ap.sha256, ap.versao, ap.observacoes, ap.ativo,
+      pv.versao AS produto_versao, ap.criado_em
+    FROM arquivos_producao ap
+    LEFT JOIN produto_versoes pv ON pv.id = ap.produto_versao_id
+    WHERE ap.tenant_id = ? AND (
+      ap.pedido_id = ? OR (
+        ap.produto_id IS NOT NULL AND ap.produto_id = (
+          SELECT produto_id FROM pedidos WHERE id = ? AND tenant_id = ?
+        )
+      )
+    )
+    ORDER BY ap.nome_chave, ap.versao DESC, ap.id DESC
+  `).all(TENANT_ID, pedidoId, pedidoId, TENANT_ID) as ArquivoProducaoPedido[]
+  const checklist = db.prepare(`
+    SELECT pci.id, pci.etapa, pci.texto, pci.ordem,
+      COALESCE(pcr.concluido, 0) AS concluido, pcr.concluido_em
+    FROM produto_checklist_itens pci
+    JOIN pedidos p ON p.produto_id = pci.produto_id AND p.id = ? AND p.tenant_id = pci.tenant_id
+    LEFT JOIN pedido_checklist_respostas pcr
+      ON pcr.checklist_item_id = pci.id AND pcr.pedido_id = p.id
+    WHERE pci.tenant_id = ? AND pci.ativo = 1
+    ORDER BY CASE pci.etapa WHEN 'Produção' THEN 0 ELSE 1 END, pci.ordem, pci.id
+  `).all(pedidoId, TENANT_ID) as ChecklistPedidoItem[]
   const parcelasReceber = db.prepare(`
     WITH dados AS (
       SELECT pr.*,
@@ -598,6 +661,21 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
   const margemPercentual = pedido.valor_total_cobrado > 0
     ? Math.round((lucroLiquido / pedido.valor_total_cobrado) * 10000) / 100
     : 0
+  const filamentoPrevisto = materiais.reduce((total, item) => total + item.peso_gasto_gramas, 0)
+  const filamentoReal = materiais.reduce((total, item) => total + (item.consumo_real_gramas ?? item.peso_gasto_gramas), 0)
+  const custoMateriaisPrevisto = [...materiais, ...insumos].reduce((total, item) => total + item.custo_calculado, 0)
+  const custoMateriaisReal = [...materiais, ...insumos].reduce((total, item) => total + item.custo_real_calculado, 0)
+  const camposTotais = 1 + materiais.length + insumos.length
+  const camposReais = (pedido.tempo_real_horas !== null ? 1 : 0) +
+    materiais.filter((item) => item.consumo_real_gramas !== null).length +
+    insumos.filter((item) => item.consumo_real !== null).length
+  const desvios = calcularDesviosOperacao({
+    custoPrevisto: pedido.custo_estimado, custoReal: pedido.custo_real,
+    horasPrevistas: pedido.tempo_impressao_horas,
+    horasReais: pedido.tempo_real_horas ?? pedido.tempo_impressao_horas,
+    filamentoPrevisto, filamentoReal, custoMateriaisPrevisto, custoMateriaisReal,
+    camposReais, camposTotais,
+  }) as PedidoDetalhes['desvios']
   return {
     ...pedido,
     lucro_liquido: lucroLiquido,
@@ -606,6 +684,9 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     insumos,
     historico,
     anexos,
+    arquivos_producao: arquivosProducao,
+    checklist,
+    desvios,
     parcelas_receber: parcelasReceber,
     entregas,
   }
