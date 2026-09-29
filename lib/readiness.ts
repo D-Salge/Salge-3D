@@ -3,6 +3,7 @@ import path from 'node:path'
 import db from '@/lib/db'
 import { configuracaoWhatsApp, nomeTemplateWhatsApp } from '@/lib/whatsapp-cloud.mjs'
 import { TIPOS_MENSAGEM_WHATSAPP } from '@/lib/whatsapp.mjs'
+import { configuracaoMercadoPago } from '@/lib/mercado-pago.mjs'
 
 export interface DiagnosticoItem {
   id: string
@@ -44,6 +45,8 @@ export function diagnosticarSistema(): DiagnosticoSistema {
   const templatesAusentes = whatsapp.testMode ? [] : TIPOS_MENSAGEM_WHATSAPP.map((tipo) => nomeTemplateWhatsApp(tipo)).filter((item) => !item.nome).map((item) => item.chave)
   itens.push({ id: 'whatsapp-api', titulo: 'WhatsApp Cloud API', detalhe: whatsapp.configurado ? 'Credenciais principais configuradas sem exposição no navegador.' : `Variáveis ausentes: ${whatsapp.ausentes.join(', ')}.`, status: whatsapp.configurado ? 'Pronto' : 'Atenção' })
   itens.push({ id: 'whatsapp-templates', titulo: 'Templates do WhatsApp', detalhe: whatsapp.testMode ? 'Modo de teste ativo: será enviado o template hello_world da Meta, sem o texto editado no ERP.' : templatesAusentes.length === 0 ? 'Todos os seis modelos possuem template configurado.' : `Ainda faltam ${templatesAusentes.length} templates.`, status: templatesAusentes.length === 0 ? 'Pronto' : 'Atenção' })
+  const mercadoPago = configuracaoMercadoPago()
+  itens.push({ id: 'mercado-pago', titulo: 'Mercado Pago', detalhe: mercadoPago.configurado ? `Checkout e webhook configurados${mercadoPago.testMode ? ' em modo de teste' : ' para produção'}.` : `Variáveis ausentes: ${mercadoPago.ausentes.join(', ')}.`, status: mercadoPago.configurado ? 'Pronto' : 'Atenção' })
   return {
     prontoParaRede: !itens.some((item) => item.status === 'Bloqueio'), itens,
     whatsappAusentes: whatsapp.ausentes, templatesAusentes, backupExternoConfigurado,

@@ -8,6 +8,7 @@ test('portal público não consulta nem exibe materiais internos', () => {
 
   assert.doesNotMatch(acao, /pedido_filamentos|pedido_insumos|gramas/i)
   assert.doesNotMatch(pagina, /filamento|insumo|gramagem|gramas|materiais previstos/i)
+  assert.match(pagina, /Pagar com Mercado Pago/)
 })
 
 test('PDF comercial não expõe ficha técnica ou custos internos', () => {

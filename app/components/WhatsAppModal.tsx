@@ -28,6 +28,7 @@ function dadosMensagem(pedido: PedidoWhatsApp) {
     saldoPendente: pedido.saldo_pendente,
     status: pedido.status,
     vencimentoEm: pedido.vencimento_em,
+    linkPagamento: pedido.link_pagamento,
   }
 }
 
