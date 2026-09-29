@@ -87,6 +87,7 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     const purchaseColumns = db.prepare(`PRAGMA table_info(compras)`).all().map((column) => column.name)
     assert.ok(purchaseColumns.includes('parcelas'))
     assert.ok(columns.includes('produto_id'))
+    assert.ok(columns.includes('produto_versao_id'))
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'produtos_catalogo'`).get())
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'produto_versoes'`).get())
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'produto_versao_itens'`).get())
@@ -130,6 +131,7 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     const produtoMigrado = db.prepare(`SELECT id FROM produtos_catalogo WHERE nome = 'Ímã Bem-Estar'`).get()
     assert.ok(produtoMigrado)
     assert.equal(db.prepare('SELECT produto_id FROM pedidos WHERE id = ?').get(pedidoId).produto_id, produtoMigrado.id)
+    assert.ok(db.prepare('SELECT produto_versao_id FROM pedidos WHERE id = ?').get(pedidoId).produto_versao_id)
     assert.equal(db.prepare('SELECT COUNT(*) AS total FROM produto_versoes WHERE produto_id = ?').get(produtoMigrado.id).total, 1)
     assert.equal(db.prepare(`SELECT quantidade_por_unidade FROM produto_versao_itens WHERE tipo_item = 'Filamento'`).get().quantidade_por_unidade, 100)
   } finally {

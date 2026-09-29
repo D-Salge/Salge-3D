@@ -18,6 +18,22 @@ export interface ItemFichaTecnica {
   custo_unitario: number
 }
 
+export interface ProdutoVersaoHistorico {
+  id: number
+  versao: number
+  preco_base_unitario: number
+  tempo_impressao_horas_unidade: number
+  observacoes: string | null
+  impressora_preferida_nome: string | null
+  diametro_bico_mm: number | null
+  altura_camada_mm: number | null
+  unidades_por_placa: number | null
+  perfil_fatiamento: string | null
+  placa_referencia: string | null
+  ativa: number
+  criado_em: string
+}
+
 export interface ProdutoCatalogo {
   id: number
   codigo: string
@@ -44,6 +60,7 @@ export interface ProdutoCatalogo {
   pedidos_com_falha: number
   itens: ItemFichaTecnica[]
   checklist: Array<{ id: number; etapa: 'Produção' | 'Qualidade'; texto: string; ordem: number }>
+  versoes: ProdutoVersaoHistorico[]
 }
 
 export interface CatalogoDados {
@@ -103,7 +120,7 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
     WHERE pc.tenant_id = ? AND pc.ativo = 1
     GROUP BY pc.id, pv.id
     ORDER BY pc.nome
-  `).all(TENANT_ID) as Array<Omit<ProdutoCatalogo, 'itens' | 'checklist'>>
+  `).all(TENANT_ID) as Array<Omit<ProdutoCatalogo, 'itens' | 'checklist' | 'versoes'>>
 
   const buscarItens = db.prepare(`
     SELECT pvi.id, pvi.tipo_item, pvi.item_id, pvi.quantidade_por_unidade,
@@ -120,6 +137,16 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
   const buscarChecklist = db.prepare(`SELECT id, etapa, texto, ordem
     FROM produto_checklist_itens WHERE tenant_id = ? AND produto_id = ? AND ativo = 1
     ORDER BY CASE etapa WHEN 'Produção' THEN 0 ELSE 1 END, ordem, id`)
+  const buscarVersoes = db.prepare(`
+    SELECT pv.id, pv.versao, pv.preco_base_unitario, pv.tempo_impressao_horas_unidade,
+      pv.observacoes, imp.nome AS impressora_preferida_nome, pv.diametro_bico_mm,
+      pv.altura_camada_mm, pv.unidades_por_placa, pv.perfil_fatiamento,
+      pv.placa_referencia, pv.ativa, pv.criado_em
+    FROM produto_versoes pv
+    LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id
+    WHERE pv.produto_id = ?
+    ORDER BY pv.versao DESC
+  `)
 
   const materiais = db.prepare(`
     SELECT 'Filamento' AS tipo_item, id AS item_id, material || ' ' || cor AS nome,
@@ -139,6 +166,7 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
       ...produto,
       itens: produto.versao_id ? buscarItens.all(produto.versao_id) as ItemFichaTecnica[] : [],
       checklist: buscarChecklist.all(TENANT_ID, produto.id) as ProdutoCatalogo['checklist'],
+      versoes: buscarVersoes.all(produto.id) as ProdutoVersaoHistorico[],
     })),
     materiais,
     impressoras,
@@ -249,4 +277,52 @@ export async function arquivarProdutoCatalogo(id: number): Promise<ActionResult>
   registrarAuditoria(db, { entidade: 'ProdutoCatalogo', entidadeId: id, acao: 'ARQUIVAR', descricao: 'Ficha arquivada' })
   revalidatePath('/produtos')
   return { success: true, message: 'Produto arquivado; vendas e versões anteriores foram preservadas.' }
+}
+
+export async function restaurarVersaoProduto(produtoId: number, versaoId: number): Promise<ActionResult> {
+  if (!Number.isSafeInteger(produtoId) || produtoId <= 0 || !Number.isSafeInteger(versaoId) || versaoId <= 0) {
+    return { success: false, message: 'Produto ou versão inválida.' }
+  }
+  try {
+    let origemVersao = 0
+    let novaVersao = 0
+    const restaurar = db.transaction(() => {
+      const origem = db.prepare(`
+        SELECT pv.* FROM produto_versoes pv
+        JOIN produtos_catalogo pc ON pc.id = pv.produto_id
+        WHERE pv.id = ? AND pv.produto_id = ? AND pc.tenant_id = ? AND pc.ativo = 1
+      `).get(versaoId, produtoId, TENANT_ID) as {
+        id: number; versao: number; preco_base_unitario: number; tempo_impressao_horas_unidade: number
+        observacoes: string | null; impressora_preferida_id: number | null; diametro_bico_mm: number | null
+        altura_camada_mm: number | null; unidades_por_placa: number | null
+        perfil_fatiamento: string | null; placa_referencia: string | null
+      } | undefined
+      if (!origem) throw new Error('NOT_FOUND')
+      origemVersao = origem.versao
+      novaVersao = (db.prepare('SELECT COALESCE(MAX(versao), 0) + 1 AS valor FROM produto_versoes WHERE produto_id = ?')
+        .get(produtoId) as { valor: number }).valor
+      db.prepare('UPDATE produto_versoes SET ativa = 0 WHERE produto_id = ? AND ativa = 1').run(produtoId)
+      const nova = db.prepare(`INSERT INTO produto_versoes (
+          produto_id, versao, preco_base_unitario, tempo_impressao_horas_unidade, observacoes,
+          impressora_preferida_id, diametro_bico_mm, altura_camada_mm, unidades_por_placa,
+          perfil_fatiamento, placa_referencia
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(produtoId, novaVersao, origem.preco_base_unitario, origem.tempo_impressao_horas_unidade,
+        origem.observacoes, origem.impressora_preferida_id, origem.diametro_bico_mm,
+        origem.altura_camada_mm, origem.unidades_por_placa, origem.perfil_fatiamento, origem.placa_referencia)
+      db.prepare(`INSERT INTO produto_versao_itens (versao_id, tipo_item, item_id, quantidade_por_unidade)
+        SELECT ?, tipo_item, item_id, quantidade_por_unidade FROM produto_versao_itens WHERE versao_id = ?`
+      ).run(Number(nova.lastInsertRowid), origem.id)
+      registrarAuditoria(db, { entidade: 'ProdutoCatalogo', entidadeId: produtoId, acao: 'RESTAURAR_VERSAO',
+        descricao: `Versão ${origemVersao} restaurada como versão ${novaVersao}` })
+    })
+    restaurar.immediate()
+    revalidatePath('/produtos')
+    revalidatePath('/producao')
+    return { success: true, message: `Versão ${origemVersao} restaurada como nova versão ${novaVersao}.` }
+  } catch (error) {
+    if (error instanceof Error && error.message === 'NOT_FOUND') return { success: false, message: 'Versão não encontrada.' }
+    console.error('[restaurarVersaoProduto]', error)
+    return { success: false, message: 'Erro interno ao restaurar a versão.' }
+  }
 }

@@ -31,8 +31,9 @@ export async function POST(request: Request, context: RouteContext<'/api/pedidos
     if (!nomeChave) return Response.json({ message: 'Informe um nome identificável para o arquivo.' }, { status: 400 })
     const sha256 = createHash('sha256').update(bytes).digest('hex')
 
-    const pedido = db.prepare(`SELECT p.id, p.produto_id,
-        (SELECT pv.id FROM produto_versoes pv WHERE pv.produto_id = p.produto_id AND pv.ativa = 1 LIMIT 1) AS produto_versao_id
+    const pedido = db.prepare(`SELECT p.id, p.produto_id, COALESCE(p.produto_versao_id,
+        (SELECT pv.id FROM produto_versoes pv WHERE pv.produto_id = p.produto_id AND pv.ativa = 1
+          ORDER BY pv.versao DESC LIMIT 1)) AS produto_versao_id
       FROM pedidos p WHERE p.id = ? AND p.tenant_id = ?`
     ).get(pedidoId, sessao.tenantId) as { id: number; produto_id: number | null; produto_versao_id: number | null } | undefined
     if (!pedido) return Response.json({ message: 'Pedido não encontrado.' }, { status: 404 })
