@@ -19,7 +19,7 @@ const tiposManutencao = ['Preventiva', 'Limpeza', 'Lubrificacao', 'Troca de bico
 
 type FormImpressora = Pick<Impressora,
   'id' | 'nome' | 'modelo' | 'potencia_w' | 'custo_hora' | 'bico_atual' |
-  'horas_base' | 'intervalo_manutencao_horas' | 'status'>
+  'horas_base' | 'intervalo_manutencao_horas' | 'intervalo_entre_trabalhos_minutos' | 'status'>
 
 const formVazio: FormImpressora = {
   id: 0,
@@ -30,6 +30,7 @@ const formVazio: FormImpressora = {
   bico_atual: '',
   horas_base: 0,
   intervalo_manutencao_horas: 250,
+  intervalo_entre_trabalhos_minutos: 15,
   status: 'Disponivel',
 }
 
@@ -92,6 +93,7 @@ export function ImpressorasPage({
       bico_atual: impressora.bico_atual,
       horas_base: impressora.horas_base,
       intervalo_manutencao_horas: impressora.intervalo_manutencao_horas,
+      intervalo_entre_trabalhos_minutos: impressora.intervalo_entre_trabalhos_minutos,
       status: impressora.status,
     } : formVazio)
     setModal(true)
@@ -123,6 +125,7 @@ export function ImpressorasPage({
         bico_atual: form.bico_atual,
         horas_base: Number(form.horas_base),
         intervalo_manutencao_horas: Number(form.intervalo_manutencao_horas),
+        intervalo_entre_trabalhos_minutos: Number(form.intervalo_entre_trabalhos_minutos),
         status: form.status,
       })
       if (result.success) setModal(false)
@@ -252,6 +255,7 @@ export function ImpressorasPage({
                 <label className="text-xs text-white/55">Revisão a cada (h)<input required type="number" step="1" min="1" value={form.intervalo_manutencao_horas} onChange={(e) => setForm({ ...form, intervalo_manutencao_horas: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
               </div>
               <label className="block text-xs text-white/55">Horímetro inicial (h)<input type="number" step="0.1" min="0" value={form.horas_base} onChange={(e) => setForm({ ...form, horas_base: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /><span className="mt-1 block text-[10px] text-white/25">Use para informar as horas acumuladas antes de começar a registrar pedidos no ERP.</span></label>
+              <label className="block text-xs text-white/55">Intervalo entre impressões (min)<input required type="number" step="1" min="0" max="1440" value={form.intervalo_entre_trabalhos_minutos} onChange={(e) => setForm({ ...form, intervalo_entre_trabalhos_minutos: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /><span className="mt-1 block text-[10px] text-white/25">Tempo para retirar a placa, limpar e preparar a próxima impressão.</span></label>
               <label className="block text-xs text-white/55">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Impressora['status'] })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm">{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
               {erro && <p className="text-xs text-red-400">{erro}</p>}
               <button disabled={isPending} className="w-full rounded-lg bg-[#d8f45a] py-3 text-sm font-semibold text-[#15180d] disabled:opacity-50">{isPending ? 'Salvando...' : 'Salvar'}</button>

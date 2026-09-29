@@ -6,10 +6,12 @@
  */
 
 import { useTransition } from 'react'
-import { Clock3, Play, CheckCircle2, PackageCheck } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Clock3, Flag, PackageCheck, Play } from 'lucide-react'
 import type { PedidoResumo } from '@/app/actions/pedidos'
 import { atualizarStatusPedido } from '@/app/actions/pedidos'
+import { atualizarPrioridadeProducao, moverPedidoNaFila } from '@/app/actions/planejamento'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface KanbanBoardProps {
   pedidos: PedidoResumo[]
@@ -24,6 +26,7 @@ const COLUNAS = [
 
 export function KanbanBoard({ pedidos }: KanbanBoardProps) {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleAvancarStatus(pedidoId: number, statusAtual: string) {
     let proximo = ''
@@ -36,6 +39,23 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
     startTransition(async () => {
       const result = await atualizarStatusPedido(pedidoId, proximo)
       if (!result.success) alert(result.message)
+      else router.refresh()
+    })
+  }
+
+  function alterarPrioridade(pedidoId: number, prioridade: PedidoResumo['prioridade_producao']) {
+    startTransition(async () => {
+      const result = await atualizarPrioridadeProducao(pedidoId, prioridade)
+      if (!result.success) alert(result.message)
+      router.refresh()
+    })
+  }
+
+  function mover(pedidoId: number, direcao: 'subir' | 'descer') {
+    startTransition(async () => {
+      const result = await moverPedidoNaFila(pedidoId, direcao)
+      if (!result.success && !result.message.includes('limite')) alert(result.message)
+      router.refresh()
     })
   }
 
@@ -86,6 +106,11 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
                     </Link>
                     <p className="mt-0.5 text-xs text-white/50">{pedido.cliente_nome}</p>
                     <p className="mt-1 text-[10px] text-white/30">{pedido.impressora_nome || 'Impressora não atribuída'}</p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Flag size={11} className={pedido.prioridade_producao === 'Urgente' ? 'text-red-300' : pedido.prioridade_producao === 'Alta' ? 'text-amber-300' : 'text-white/25'} />
+                      <select disabled={isPending || pedido.status === 'Finalizado'} value={pedido.prioridade_producao} onChange={(event) => alterarPrioridade(pedido.id, event.target.value as PedidoResumo['prioridade_producao'])} className="h-7 flex-1 rounded-md border border-white/[0.08] bg-[#101114] px-2 text-[10px] text-white/55 disabled:opacity-40"><option>Normal</option><option>Alta</option><option>Urgente</option></select>
+                      {pedido.status === 'Fila' && <div className="flex"><button type="button" disabled={isPending} onClick={() => mover(pedido.id, 'subir')} className="rounded-l-md border border-white/[0.08] p-1.5 text-white/35 hover:text-white" aria-label="Subir na fila"><ChevronUp size={11} /></button><button type="button" disabled={isPending} onClick={() => mover(pedido.id, 'descer')} className="rounded-r-md border border-l-0 border-white/[0.08] p-1.5 text-white/35 hover:text-white" aria-label="Descer na fila"><ChevronDown size={11} /></button></div>}
+                    </div>
                     {pedido.quantidade > 1 && <div className="mt-3 space-y-2 rounded-lg bg-white/[0.025] p-2.5"><div><div className="mb-1 flex justify-between text-[9px] text-white/35"><span>Produzido</span><span>{pedido.quantidade_produzida}/{pedido.quantidade}</span></div><div className="h-1 overflow-hidden rounded bg-white/10"><div className="h-full bg-blue-400" style={{ width: `${Math.min(100, (pedido.quantidade_produzida / pedido.quantidade) * 100)}%` }} /></div></div><div><div className="mb-1 flex justify-between text-[9px] text-white/35"><span>Entregue</span><span>{pedido.quantidade_entregue}/{pedido.quantidade}</span></div><div className="h-1 overflow-hidden rounded bg-white/10"><div className="h-full bg-[#d8f45a]" style={{ width: `${Math.min(100, (pedido.quantidade_entregue / pedido.quantidade) * 100)}%` }} /></div></div></div>}
                   </div>
 

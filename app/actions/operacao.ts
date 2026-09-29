@@ -20,6 +20,7 @@ export interface Impressora {
   bico_atual: string | null
   horas_base: number
   intervalo_manutencao_horas: number
+  intervalo_entre_trabalhos_minutos: number
   status: 'Disponivel' | 'Em uso' | 'Manutencao' | 'Inativa'
   pedidos_ativos?: number
   horas_planejadas?: number
@@ -205,7 +206,8 @@ export interface PedidoDetalhes {
 export async function getImpressoras(): Promise<Impressora[]> {
   const impressoras = db.prepare(`
     SELECT imp.id, imp.nome, imp.modelo, imp.potencia_w, imp.custo_hora,
-      imp.bico_atual, imp.horas_base, imp.intervalo_manutencao_horas, imp.status,
+      imp.bico_atual, imp.horas_base, imp.intervalo_manutencao_horas,
+      imp.intervalo_entre_trabalhos_minutos, imp.status,
       COUNT(CASE WHEN p.status IN ('Fila', 'Imprimindo', 'Acabamento')
         AND p.orcamento_status = 'Aprovado' THEN 1 END) AS pedidos_ativos,
       COALESCE(SUM(CASE WHEN p.status IN ('Fila', 'Imprimindo', 'Acabamento')
@@ -304,14 +306,16 @@ export async function salvarImpressora(
   id: number | null,
   data: Pick<Impressora,
     'nome' | 'modelo' | 'potencia_w' | 'custo_hora' | 'bico_atual' |
-    'horas_base' | 'intervalo_manutencao_horas' | 'status'>,
+    'horas_base' | 'intervalo_manutencao_horas' | 'intervalo_entre_trabalhos_minutos' | 'status'>,
 ): Promise<{ success: boolean; message: string }> {
   try {
     if (!data.nome.trim()) return { success: false, message: 'Informe o nome da impressora.' }
     if (!Number.isFinite(data.potencia_w) || data.potencia_w < 0 ||
         !Number.isFinite(data.custo_hora) || data.custo_hora < 0 ||
         !Number.isFinite(data.horas_base) || data.horas_base < 0 ||
-        !Number.isFinite(data.intervalo_manutencao_horas) || data.intervalo_manutencao_horas <= 0) {
+        !Number.isFinite(data.intervalo_manutencao_horas) || data.intervalo_manutencao_horas <= 0 ||
+        !Number.isSafeInteger(data.intervalo_entre_trabalhos_minutos) ||
+        data.intervalo_entre_trabalhos_minutos < 0 || data.intervalo_entre_trabalhos_minutos > 1440) {
       return { success: false, message: 'Potência, custos ou horas de manutenção inválidos.' }
     }
     if ((data.bico_atual?.trim().length ?? 0) > 40) return { success: false, message: 'Descrição do bico muito longa.' }
@@ -322,24 +326,24 @@ export async function salvarImpressora(
     if (id) {
       const result = db.prepare(`
         UPDATE impressoras SET nome = ?, modelo = ?, potencia_w = ?, custo_hora = ?, status = ?,
-          bico_atual = ?, horas_base = ?, intervalo_manutencao_horas = ?
+          bico_atual = ?, horas_base = ?, intervalo_manutencao_horas = ?, intervalo_entre_trabalhos_minutos = ?
         WHERE id = ? AND tenant_id = ? AND ativo = 1
       `).run(
         data.nome.trim(), data.modelo?.trim() || null, data.potencia_w,
         data.custo_hora, data.status, data.bico_atual?.trim() || null,
-        data.horas_base, data.intervalo_manutencao_horas, id, TENANT_ID,
+        data.horas_base, data.intervalo_manutencao_horas, data.intervalo_entre_trabalhos_minutos, id, TENANT_ID,
       )
       if (result.changes !== 1) return { success: false, message: 'Impressora não encontrada.' }
     } else {
       db.prepare(`
         INSERT INTO impressoras (
           tenant_id, nome, modelo, potencia_w, custo_hora, status,
-          bico_atual, horas_base, intervalo_manutencao_horas
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          bico_atual, horas_base, intervalo_manutencao_horas, intervalo_entre_trabalhos_minutos
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         TENANT_ID, data.nome.trim(), data.modelo?.trim() || null,
         data.potencia_w, data.custo_hora, data.status, data.bico_atual?.trim() || null,
-        data.horas_base, data.intervalo_manutencao_horas,
+        data.horas_base, data.intervalo_manutencao_horas, data.intervalo_entre_trabalhos_minutos,
       )
     }
     revalidatePath('/impressoras')
