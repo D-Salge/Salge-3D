@@ -2,7 +2,7 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { validarQuantidadeLote } from '@/lib/lotes-producao.mjs'
+import { dividirQuantidadeEmPlacas, validarQuantidadeLote } from '@/lib/lotes-producao.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -36,6 +36,10 @@ export interface PedidoParaLote {
   quantidade: number
   quantidade_planejada: number
   quantidade_produzida: number
+  unidades_por_placa: number | null
+  impressora_preferida_id: number | null
+  impressora_preferida_nome: string | null
+  placa_referencia_padrao: string | null
 }
 
 export async function getLotesProducao(): Promise<{ lotes: LoteProducao[]; pedidos: PedidoParaLote[] }> {
@@ -55,14 +59,97 @@ export async function getLotesProducao(): Promise<{ lotes: LoteProducao[]; pedid
   const pedidos = db.prepare(`
     SELECT p.id, p.numero_orcamento, p.nome_da_peca, c.nome AS cliente_nome,
       p.quantidade, p.quantidade_produzida,
+      pv.unidades_por_placa, pv.impressora_preferida_id,
+      imp.nome AS impressora_preferida_nome, pv.placa_referencia AS placa_referencia_padrao,
       COALESCE((SELECT SUM(l.quantidade_planejada) FROM lotes_producao l
         WHERE l.pedido_id = p.id AND l.status != 'Cancelado'), 0) AS quantidade_planejada
     FROM pedidos p JOIN clientes c ON c.id = p.cliente_id
+    LEFT JOIN produto_versoes pv ON pv.produto_id = p.produto_id AND pv.ativa = 1
+    LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id AND imp.tenant_id = p.tenant_id AND imp.ativo = 1
     WHERE p.tenant_id = ? AND p.orcamento_status = 'Aprovado'
       AND p.status IN ('Fila', 'Imprimindo', 'Acabamento')
     ORDER BY p.data_entrega IS NULL, p.data_entrega, p.id
   `).all(TENANT_ID) as PedidoParaLote[]
   return { lotes, pedidos }
+}
+
+export async function criarLotesAutomaticos(pedidoId: number): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return { success: false, message: 'Pedido inválido.' }
+    let criados = 0
+    let capacidade = 0
+    const criar = db.transaction(() => {
+      const pedido = db.prepare(`SELECT p.id, p.quantidade, p.quantidade_produzida, p.status,
+          p.orcamento_status, pv.unidades_por_placa, pv.impressora_preferida_id,
+          pv.placa_referencia
+        FROM pedidos p
+        LEFT JOIN produto_versoes pv ON pv.produto_id = p.produto_id AND pv.ativa = 1
+        WHERE p.id = ? AND p.tenant_id = ?`
+      ).get(pedidoId, TENANT_ID) as {
+        id: number; quantidade: number; quantidade_produzida: number; status: string; orcamento_status: string
+        unidades_por_placa: number | null; impressora_preferida_id: number | null; placa_referencia: string | null
+      } | undefined
+      if (!pedido) throw new Error('NOT_FOUND')
+      if (pedido.orcamento_status !== 'Aprovado' || ['Finalizado', 'Cancelado'].includes(pedido.status)) throw new Error('INVALID_STATUS')
+      if (!pedido.unidades_por_placa) throw new Error('NO_PROFILE')
+      if (!Number.isSafeInteger(pedido.quantidade)) throw new Error('NON_INTEGER')
+      capacidade = pedido.unidades_por_placa
+
+      const resumo = db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(quantidade_planejada), 0) AS planejada
+        FROM lotes_producao WHERE pedido_id = ? AND tenant_id = ? AND status != 'Cancelado'`
+      ).get(pedidoId, TENANT_ID) as { total: number; planejada: number }
+      if (resumo.total === 0 && pedido.quantidade_produzida > 0) {
+        db.prepare(`INSERT INTO lotes_producao (
+          tenant_id, usuario_id, pedido_id, codigo, quantidade_planejada,
+          quantidade_produzida, status, observacoes, fim_em
+        ) VALUES (?, ?, ?, ?, ?, ?, 'Concluído', ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`
+        ).run(TENANT_ID, USUARIO_ID, pedidoId, `LOTE-${String(pedidoId).padStart(6, '0')}-BASE`,
+          pedido.quantidade_produzida, pedido.quantidade_produzida,
+          'Produção anterior preservada ao ativar o controle por lotes')
+        resumo.planejada = pedido.quantidade_produzida
+      }
+      const restante = pedido.quantidade - resumo.planejada
+      if (restante <= 0.001) throw new Error('NO_REMAINING')
+      if (!Number.isSafeInteger(restante)) throw new Error('NON_INTEGER')
+      const placas = dividirQuantidadeEmPlacas(restante, capacidade)
+      let sequencia = (db.prepare('SELECT COUNT(*) AS total FROM lotes_producao WHERE pedido_id = ?')
+        .get(pedidoId) as { total: number }).total + 1
+      let impressoraId = pedido.impressora_preferida_id
+      if (impressoraId && !db.prepare('SELECT 1 FROM impressoras WHERE id = ? AND tenant_id = ? AND ativo = 1').get(impressoraId, TENANT_ID)) {
+        impressoraId = null
+      }
+      const inserir = db.prepare(`INSERT INTO lotes_producao (
+        tenant_id, usuario_id, pedido_id, impressora_id, codigo,
+        quantidade_planejada, placa_referencia, observacoes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      placas.forEach((quantidade, indice) => {
+        const codigo = `LOTE-${String(pedidoId).padStart(6, '0')}-${String(sequencia++).padStart(2, '0')}`
+        const referencia = pedido.placa_referencia
+          ? `${pedido.placa_referencia} · ${indice + 1}/${placas.length}`
+          : `Placa ${indice + 1}/${placas.length}`
+        inserir.run(TENANT_ID, USUARIO_ID, pedidoId, impressoraId, codigo, quantidade,
+          referencia, `Gerado automaticamente com capacidade de ${capacidade} unidade(s) por placa`)
+      })
+      criados = placas.length
+      registrarAuditoria(db, { entidade: 'Pedido', entidadeId: pedidoId, acao: 'GERAR_PLACAS',
+        descricao: `${criados} placa(s) · capacidade ${capacidade}` })
+    })
+    try { criar.immediate() } catch (error) {
+      const code = error instanceof Error ? error.message : ''
+      if (code === 'NOT_FOUND') return { success: false, message: 'Pedido não encontrado.' }
+      if (code === 'INVALID_STATUS') return { success: false, message: 'O pedido precisa estar aprovado e em produção.' }
+      if (code === 'NO_PROFILE') return { success: false, message: 'Defina as unidades por placa na ficha técnica do produto.' }
+      if (code === 'NON_INTEGER') return { success: false, message: 'A geração automática exige uma quantidade inteira de peças.' }
+      if (code === 'NO_REMAINING') return { success: false, message: 'Toda a quantidade do pedido já está distribuída em lotes.' }
+      throw error
+    }
+    revalidatePath('/producao')
+    revalidatePath(`/pedidos/${pedidoId}`)
+    return { success: true, message: `${criados} placa(s) criada(s) automaticamente, com até ${capacidade} unidade(s) cada.` }
+  } catch (error) {
+    console.error('[criarLotesAutomaticos]', error)
+    return { success: false, message: 'Não foi possível gerar as placas automaticamente.' }
+  }
 }
 
 export async function criarLoteProducao(data: {

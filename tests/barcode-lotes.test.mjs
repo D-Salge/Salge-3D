@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { barrasCode39, codigoEstoque } from '../lib/barcode.mjs'
-import { progressoPorLotes, validarQuantidadeLote } from '../lib/lotes-producao.mjs'
+import { dividirQuantidadeEmPlacas, progressoPorLotes, validarQuantidadeLote } from '../lib/lotes-producao.mjs'
 
 test('gera códigos permanentes e barras Code 39', () => {
   assert.equal(codigoEstoque('Filamento', 12), 'FIL-000012')
@@ -22,4 +22,10 @@ test('resume produção ignorando lotes cancelados', () => {
     { status: 'Imprimindo', quantidade_planejada: 60, quantidade_produzida: 20 },
     { status: 'Cancelado', quantidade_planejada: 10, quantidade_produzida: 0 },
   ]), { planejado: 100, produzido: 60, emAndamento: 1 })
+})
+
+test('divide a produção pela capacidade real da placa', () => {
+  assert.deepEqual(dividirQuantidadeEmPlacas(100, 24), [24, 24, 24, 24, 4])
+  assert.deepEqual(dividirQuantidadeEmPlacas(48, 24), [24, 24])
+  assert.throws(() => dividirQuantidadeEmPlacas(100, 0), /QUANTIDADE_INVALIDA/)
 })

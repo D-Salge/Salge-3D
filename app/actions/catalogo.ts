@@ -29,15 +29,26 @@ export interface ProdutoCatalogo {
   preco_base_unitario: number
   tempo_impressao_horas_unidade: number
   observacoes_versao: string | null
+  impressora_preferida_id: number | null
+  impressora_preferida_nome: string | null
+  diametro_bico_mm: number | null
+  altura_camada_mm: number | null
+  unidades_por_placa: number | null
+  perfil_fatiamento: string | null
+  placa_referencia: string | null
   total_versoes: number
   total_pedidos: number
   unidades_vendidas: number
+  preco_medio_vendido: number
+  tempo_real_medio_unidade: number
+  pedidos_com_falha: number
   itens: ItemFichaTecnica[]
   checklist: Array<{ id: number; etapa: 'Produção' | 'Qualidade'; texto: string; ordem: number }>
 }
 
 export interface CatalogoDados {
   produtos: ProdutoCatalogo[]
+  impressoras: Array<{ id: number; nome: string; modelo: string | null; bico_atual: string | null }>
   materiais: Array<{
     tipo_item: 'Filamento' | 'Insumo'
     item_id: number
@@ -54,6 +65,12 @@ export interface ProdutoCatalogoInput {
   precoBaseUnitario: number
   tempoImpressaoHorasUnidade: number
   observacoesVersao: string
+  impressoraPreferidaId: number | null
+  diametroBicoMm: number | null
+  alturaCamadaMm: number | null
+  unidadesPorPlaca: number | null
+  perfilFatiamento: string
+  placaReferencia: string
   itens: Array<{ tipoItem: 'Filamento' | 'Insumo'; itemId: number; quantidadePorUnidade: number }>
 }
 
@@ -66,11 +83,22 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
       COALESCE(pv.preco_base_unitario, 0) AS preco_base_unitario,
       COALESCE(pv.tempo_impressao_horas_unidade, 0) AS tempo_impressao_horas_unidade,
       pv.observacoes AS observacoes_versao,
+      pv.impressora_preferida_id, imp.nome AS impressora_preferida_nome,
+      pv.diametro_bico_mm, pv.altura_camada_mm, pv.unidades_por_placa,
+      pv.perfil_fatiamento, pv.placa_referencia,
       (SELECT COUNT(*) FROM produto_versoes todas WHERE todas.produto_id = pc.id) AS total_versoes,
       COUNT(DISTINCT p.id) AS total_pedidos,
-      COALESCE(SUM(CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' THEN p.quantidade ELSE 0 END), 0) AS unidades_vendidas
+      COALESCE(SUM(CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' THEN p.quantidade ELSE 0 END), 0) AS unidades_vendidas,
+      COALESCE(ROUND(AVG(CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado'
+        THEN COALESCE(p.preco_unitario, p.valor_total_cobrado / MAX(p.quantidade, 1)) END), 2), 0) AS preco_medio_vendido,
+      COALESCE(ROUND(
+        SUM(CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' AND p.tempo_real_horas IS NOT NULL THEN p.tempo_real_horas ELSE 0 END) /
+        NULLIF(SUM(CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' AND p.tempo_real_horas IS NOT NULL THEN p.quantidade ELSE 0 END), 0)
+      , 2), 0) AS tempo_real_medio_unidade,
+      COUNT(DISTINCT CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' AND p.falhas_impressao > 0 THEN p.id END) AS pedidos_com_falha
     FROM produtos_catalogo pc
     LEFT JOIN produto_versoes pv ON pv.produto_id = pc.id AND pv.ativa = 1
+    LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id AND imp.tenant_id = pc.tenant_id
     LEFT JOIN pedidos p ON p.produto_id = pc.id AND p.tenant_id = pc.tenant_id
     WHERE pc.tenant_id = ? AND pc.ativo = 1
     GROUP BY pc.id, pv.id
@@ -103,6 +131,9 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
     ORDER BY tipo_item, nome
   `).all(TENANT_ID, TENANT_ID) as CatalogoDados['materiais']
 
+  const impressoras = db.prepare(`SELECT id, nome, modelo, bico_atual FROM impressoras
+    WHERE tenant_id = ? AND ativo = 1 ORDER BY nome`).all(TENANT_ID) as CatalogoDados['impressoras']
+
   return {
     produtos: produtos.map(produto => ({
       ...produto,
@@ -110,6 +141,7 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
       checklist: buscarChecklist.all(TENANT_ID, produto.id) as ProdutoCatalogo['checklist'],
     })),
     materiais,
+    impressoras,
   }
 }
 
@@ -119,12 +151,19 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
     const nomeChave = normalizarNomeProduto(nome)
     if (!nome || nome.length > 160) return { success: false, message: 'Informe um nome de produto válido.' }
     if (!nomeChave) return { success: false, message: 'Nome de produto inválido.' }
-    if (data.categoria.length > 80 || data.descricao.length > 1000 || data.observacoesVersao.length > 1000) {
+    if (data.categoria.length > 80 || data.descricao.length > 1000 || data.observacoesVersao.length > 1000 ||
+        data.perfilFatiamento.length > 160 || data.placaReferencia.length > 120) {
       return { success: false, message: 'Categoria, descrição ou observações muito longas.' }
     }
     if (!Number.isFinite(data.precoBaseUnitario) || data.precoBaseUnitario < 0 || data.precoBaseUnitario > 1_000_000 ||
         !Number.isFinite(data.tempoImpressaoHorasUnidade) || data.tempoImpressaoHorasUnidade < 0 || data.tempoImpressaoHorasUnidade > 10_000) {
       return { success: false, message: 'Preço ou tempo de impressão inválido.' }
+    }
+    if ((data.impressoraPreferidaId !== null && (!Number.isSafeInteger(data.impressoraPreferidaId) || data.impressoraPreferidaId <= 0)) ||
+        (data.diametroBicoMm !== null && (!Number.isFinite(data.diametroBicoMm) || data.diametroBicoMm <= 0 || data.diametroBicoMm > 2)) ||
+        (data.alturaCamadaMm !== null && (!Number.isFinite(data.alturaCamadaMm) || data.alturaCamadaMm <= 0 || data.alturaCamadaMm > 1)) ||
+        (data.unidadesPorPlaca !== null && (!Number.isSafeInteger(data.unidadesPorPlaca) || data.unidadesPorPlaca <= 0 || data.unidadesPorPlaca > 100_000))) {
+      return { success: false, message: 'Revise a impressora, o bico, a camada e a capacidade por placa.' }
     }
     if (!Array.isArray(data.itens) || data.itens.length > 30) return { success: false, message: 'Ficha técnica inválida.' }
     const unicos = new Set<string>()
@@ -140,6 +179,10 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
     let produtoId = id
     let versao = 1
     const salvar = db.transaction(() => {
+      if (data.impressoraPreferidaId !== null && !db.prepare(`SELECT 1 FROM impressoras
+        WHERE id = ? AND tenant_id = ? AND ativo = 1`).get(data.impressoraPreferidaId, TENANT_ID)) {
+        throw new Error('IMPRESSORA_INVALIDA')
+      }
       for (const item of data.itens) {
         const tabela = item.tipoItem === 'Filamento' ? 'filamentos' : 'insumos'
         if (!db.prepare(`SELECT 1 FROM ${tabela} WHERE id = ? AND tenant_id = ? AND ativo = 1`).get(item.itemId, TENANT_ID)) {
@@ -167,10 +210,14 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
         db.prepare('UPDATE produto_versoes SET ativa = 0 WHERE produto_id = ? AND ativa = 1').run(id)
       }
       const versaoResult = db.prepare(`INSERT INTO produto_versoes
-        (produto_id, versao, preco_base_unitario, tempo_impressao_horas_unidade, observacoes)
-        VALUES (?, ?, ?, ?, ?)`)
+        (produto_id, versao, preco_base_unitario, tempo_impressao_horas_unidade, observacoes,
+          impressora_preferida_id, diametro_bico_mm, altura_camada_mm, unidades_por_placa,
+          perfil_fatiamento, placa_referencia)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(produtoId, versao, data.precoBaseUnitario, data.tempoImpressaoHorasUnidade,
-          data.observacoesVersao.trim() || null)
+          data.observacoesVersao.trim() || null, data.impressoraPreferidaId,
+          data.diametroBicoMm, data.alturaCamadaMm, data.unidadesPorPlaca,
+          data.perfilFatiamento.trim() || null, data.placaReferencia.trim() || null)
       const versaoId = Number(versaoResult.lastInsertRowid)
       const inserirItem = db.prepare(`INSERT INTO produto_versao_itens
         (versao_id, tipo_item, item_id, quantidade_por_unidade) VALUES (?, ?, ?, ?)`)
@@ -185,6 +232,7 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
   } catch (error) {
     if (error instanceof Error && error.message === 'NOT_FOUND') return { success: false, message: 'Produto não encontrado.' }
     if (error instanceof Error && error.message === 'ITEM_INVALIDO') return { success: false, message: 'Um material da ficha não está mais disponível.' }
+    if (error instanceof Error && error.message === 'IMPRESSORA_INVALIDA') return { success: false, message: 'A impressora preferida não está disponível.' }
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return { success: false, message: 'Já existe um produto com esse nome.' }
     }
