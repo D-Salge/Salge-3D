@@ -28,6 +28,9 @@ try {
     db.prepare('DELETE FROM recebimentos').run()
     db.prepare('DELETE FROM parcelas_receber').run()
     db.prepare('DELETE FROM anexos_pedido').run()
+    db.prepare('DELETE FROM pedido_checklist_respostas').run()
+    db.prepare('DELETE FROM produto_checklist_itens').run()
+    db.prepare('DELETE FROM arquivos_producao').run()
     db.prepare('DELETE FROM historico_pedidos').run()
     db.prepare('DELETE FROM expedicoes').run()
     db.prepare('DELETE FROM ocorrencias_qualidade').run()
@@ -70,6 +73,9 @@ try {
         'recebimentos',
         'parcelas_receber',
         'anexos_pedido',
+        'pedido_checklist_respostas',
+        'produto_checklist_itens',
+        'arquivos_producao',
         'historico_pedidos',
         'expedicoes',
         'ocorrencias_qualidade',
