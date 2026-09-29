@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
-import { Boxes, Check, Play, Plus } from 'lucide-react'
-import { atualizarLoteProducao, criarLoteProducao, type LoteProducao, type PedidoParaLote } from '@/app/actions/lotes-producao'
+import { Boxes, Check, Play, Plus, WandSparkles } from 'lucide-react'
+import { atualizarLoteProducao, criarLoteProducao, criarLotesAutomaticos, type LoteProducao, type PedidoParaLote } from '@/app/actions/lotes-producao'
 
 type ImpressoraOpcao = { id: number; nome: string }
 
@@ -17,7 +17,11 @@ export function LotesProducao({ lotes, pedidos, impressoras }: {
   const [mensagem, setMensagem] = useState('')
   const [aberto, setAberto] = useState(false)
   const [progresso, setProgresso] = useState<Record<number, string>>(() => Object.fromEntries(lotes.map((item) => [item.id, String(item.quantidade_produzida)])))
-  const [form, setForm] = useState({ pedidoId: pedidos[0]?.id ?? 0, quantidade: 1, impressoraId: '', placaReferencia: '', observacoes: '' })
+  const [form, setForm] = useState({
+    pedidoId: pedidos[0]?.id ?? 0, quantidade: 1,
+    impressoraId: pedidos[0]?.impressora_preferida_id ? String(pedidos[0].impressora_preferida_id) : '',
+    placaReferencia: pedidos[0]?.placa_referencia_padrao || '', observacoes: '',
+  })
   const pedido = useMemo(() => pedidos.find((item) => item.id === form.pedidoId), [pedidos, form.pedidoId])
   const disponivel = pedido ? Math.max(0, pedido.quantidade - pedido.quantidade_planejada) : 0
 
@@ -40,6 +44,15 @@ export function LotesProducao({ lotes, pedidos, impressoras }: {
     })
   }
 
+  function gerarAutomaticamente() {
+    if (!pedido) return
+    startTransition(async () => {
+      const result = await criarLotesAutomaticos(pedido.id)
+      setMensagem(result.message)
+      if (result.success) { setAberto(false); router.refresh() }
+    })
+  }
+
   return <section className="mb-7 rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="flex items-center gap-2 font-semibold"><Boxes size={17} className="text-blue-400" /> Lotes e placas</h2><p className="mt-1 text-xs text-white/35">Divida pedidos grandes por placa, impressora ou remessa e acompanhe o realizado.</p></div>
@@ -47,10 +60,11 @@ export function LotesProducao({ lotes, pedidos, impressoras }: {
     </div>
     {mensagem && <p className="mt-4 rounded-lg bg-white/[0.04] p-3 text-xs text-white/60">{mensagem}</p>}
     {aberto && <form onSubmit={criar} className="mt-5 grid gap-3 rounded-xl border border-blue-400/15 bg-blue-400/[0.03] p-4 sm:grid-cols-2 lg:grid-cols-5">
-      <label className="text-xs text-white/45 lg:col-span-2">Pedido<select required value={form.pedidoId} onChange={(e) => setForm({ ...form, pedidoId: Number(e.target.value), quantidade: 1 })} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3"><option value={0}>Selecione</option>{pedidos.map((item) => <option key={item.id} value={item.id}>{item.numero_orcamento} · {item.nome_da_peca} · livre {Math.max(0, item.quantidade - item.quantidade_planejada)}</option>)}</select></label>
+      <label className="text-xs text-white/45 lg:col-span-2">Pedido<select required value={form.pedidoId} onChange={(e) => { const selecionado = pedidos.find(item => item.id === Number(e.target.value)); setForm({ ...form, pedidoId: Number(e.target.value), quantidade: 1, impressoraId: selecionado?.impressora_preferida_id ? String(selecionado.impressora_preferida_id) : '', placaReferencia: selecionado?.placa_referencia_padrao || '' }) }} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3"><option value={0}>Selecione</option>{pedidos.map((item) => <option key={item.id} value={item.id}>{item.numero_orcamento} · {item.nome_da_peca} · livre {Math.max(0, item.quantidade - item.quantidade_planejada)}</option>)}</select></label>
       <label className="text-xs text-white/45">Quantidade<input required type="number" min="0.001" max={disponivel} step="0.001" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: Number(e.target.value) })} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
       <label className="text-xs text-white/45">Impressora<select value={form.impressoraId} onChange={(e) => setForm({ ...form, impressoraId: e.target.value })} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3"><option value="">Definir depois</option>{impressoras.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
       <label className="text-xs text-white/45">Placa/arquivo<input maxLength={100} value={form.placaReferencia} onChange={(e) => setForm({ ...form, placaReferencia: e.target.value })} placeholder="Placa 01 / 3MF" className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
+      {pedido?.unidades_por_placa && disponivel > 0 && <div className="flex flex-col gap-3 rounded-lg border border-[#d8f45a]/15 bg-[#d8f45a]/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between lg:col-span-5"><div><p className="text-xs font-medium text-[#d8f45a]">Sugestão da ficha: {Math.ceil(disponivel / pedido.unidades_por_placa)} placa(s) de até {pedido.unidades_por_placa} peça(s)</p><p className="mt-1 text-[10px] text-white/35">{pedido.impressora_preferida_nome ? `Impressora ${pedido.impressora_preferida_nome}` : 'Impressora não definida'}{pedido.placa_referencia_padrao ? ` · ${pedido.placa_referencia_padrao}` : ''}</p></div><button type="button" disabled={isPending || !Number.isInteger(disponivel)} onClick={gerarAutomaticamente} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-40"><WandSparkles size={13} /> Gerar todas as placas</button></div>}
       <label className="text-xs text-white/45 sm:col-span-2 lg:col-span-4">Observações<input maxLength={500} value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
       <button disabled={isPending || disponivel <= 0} className="mt-auto h-10 rounded-lg bg-blue-400 px-3 text-xs font-semibold text-[#0d1117] disabled:opacity-40">Criar lote</button>
     </form>}
