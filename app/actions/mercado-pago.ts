@@ -7,6 +7,7 @@ import { registrarAuditoria } from '@/lib/auditoria'
 import { exigirPerfil } from '@/lib/session'
 import {
   buscarPagamentosMercadoPago,
+  normalizarValorCobranca,
   configuracaoMercadoPago,
   criarPreferenciaMercadoPago,
   montarPreferenciaMercadoPago,
@@ -25,9 +26,11 @@ export interface CobrancaMercadoPago {
   forma_pagamento: string | null
   pago_em: string | null
   criado_em: string
+  valor_liquido: number | null
+  taxa_valor: number | null
 }
 
-export async function gerarCobrancaMercadoPago(pedidoId: number): Promise<{
+export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado: number): Promise<{
   success: boolean
   message: string
   url?: string
@@ -58,12 +61,23 @@ export async function gerarCobrancaMercadoPago(pedidoId: number): Promise<{
       return { success: false, message: 'A cobrança só pode ser criada para um pedido aprovado e ativo.' }
     }
     if (pedido.saldo_pendente < 0.01) return { success: false, message: 'Este pedido não possui saldo pendente.' }
+    let valorCobranca: number
+    try {
+      valorCobranca = normalizarValorCobranca(valorSolicitado, pedido.saldo_pendente)
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error && error.message === 'PAYMENT_AMOUNT_EXCEEDS_BALANCE'
+          ? 'O valor da cobrança não pode ultrapassar o saldo pendente.'
+          : 'Informe um valor de cobrança maior que zero.',
+      }
+    }
 
     const externalReference = `salge-${sessao.tenantId}-${pedido.id}-${randomUUID()}`
     const idempotencyKey = randomUUID()
     const preferencia = await criarPreferenciaMercadoPago(
       montarPreferenciaMercadoPago({
-        pedido,
+        pedido: { ...pedido, saldo_pendente: valorCobranca },
         externalReference,
         appUrl: config.appUrl,
         // O Mercado Pago não envia webhooks automáticos para pagamentos criados
@@ -84,11 +98,11 @@ export async function gerarCobrancaMercadoPago(pedidoId: number): Promise<{
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       sessao.tenantId, sessao.usuarioId, pedido.id, preferencia.id, externalReference,
-      url, preferencia.sandbox_init_point || null, pedido.saldo_pendente,
+      url, preferencia.sandbox_init_point || null, valorCobranca,
     )
     registrarAuditoria(db, {
       entidade: 'CobrancaMercadoPago', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
-      descricao: `Cobrança de R$ ${pedido.saldo_pendente.toFixed(2)} para ${pedido.numero_orcamento || `#${pedido.id}`}`,
+      descricao: `Cobrança de R$ ${valorCobranca.toFixed(2)} para ${pedido.numero_orcamento || `#${pedido.id}`}`,
     })
     revalidatePath(`/pedidos/${pedido.id}`)
     return { success: true, message: 'Link de pagamento criado.', url }
@@ -147,6 +161,8 @@ export async function sincronizarCobrancaMercadoPago(pedidoId: number): Promise<
       'manual.sync',
     )
     revalidatePath(`/pedidos/${pedidoId}`)
+    revalidatePath('/financeiro')
+    revalidatePath('/relatorios')
     if (resultado.status === 'Aprovado') {
       return { success: true, message: resultado.duplicado
         ? 'O pagamento já havia sido sincronizado.'

@@ -210,6 +210,8 @@ export interface PedidoDetalhes {
     forma_pagamento: string | null
     pago_em: string | null
     criado_em: string
+    valor_liquido: number | null
+    taxa_valor: number | null
   } | null
   link_pagamento: string | null
 }
@@ -596,7 +598,14 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
         COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) *
           CASE WHEN imp.custo_hora > 0 THEN imp.custo_hora ELSE t.custo_hora_maquina END +
         p.taxa_operacional + p.custo_embalagem + p.frete_pago +
-        p.taxas_comissoes + p.custo_extra_real
+        CASE WHEN EXISTS (
+          SELECT 1 FROM mercado_pago_cobrancas mc
+          WHERE mc.pedido_id = p.id AND mc.taxa_valor IS NOT NULL
+            AND mc.status IN ('Aprovado', 'Reembolsado')
+        ) THEN COALESCE((
+          SELECT SUM(mc.taxa_valor) FROM mercado_pago_cobrancas mc
+          WHERE mc.pedido_id = p.id AND mc.status IN ('Aprovado', 'Reembolsado')
+        ), 0) ELSE p.taxas_comissoes END + p.custo_extra_real
       ) AS custo_real
     FROM pedidos p
     JOIN clientes c ON c.id = p.cliente_id
@@ -700,7 +709,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     ORDER BY date(e.entregue_em) DESC, e.id DESC
   `).all(pedidoId) as EntregaPedido[]
   const cobrancaMercadoPago = db.prepare(`
-    SELECT id, valor, status, init_point, pagamento_id, forma_pagamento, pago_em, criado_em
+    SELECT id, valor, status, init_point, pagamento_id, forma_pagamento, pago_em, criado_em,
+      valor_liquido, taxa_valor
     FROM mercado_pago_cobrancas
     WHERE tenant_id = ? AND pedido_id = ?
     ORDER BY id DESC LIMIT 1
