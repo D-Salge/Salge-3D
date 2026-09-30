@@ -1,6 +1,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { distribuirRecebimento } from '@/lib/financeiro.mjs'
+import { calcularLiquidacaoMercadoPago } from '@/lib/mercado-pago.mjs'
 
 export type PagamentoMercadoPago = {
   id: number
@@ -11,6 +12,8 @@ export type PagamentoMercadoPago = {
   payment_method_id?: string
   payment_type_id?: string
   date_approved?: string
+  transaction_details?: { net_received_amount?: number }
+  fee_details?: Array<{ type?: string; amount?: number }>
 }
 
 export type ResultadoProcessamentoMercadoPago = {
@@ -62,19 +65,21 @@ export function processarPagamentoMercadoPago(
     `).get(pagamento.external_reference || '') as {
       id: number; tenant_id: number; pedido_id: number; usuario_id: number; valor: number
       valor_total_cobrado: number; recebido: number; numero_orcamento: string | null
-      nome_da_peca: string; mei_natureza_padrao: 'Venda' | 'Serviço'
+      nome_da_peca: string; mei_natureza_padrao: 'Venda' | 'Serviço'; despesa_taxa_id: number | null
     } | undefined
     if (!cobranca) throw new Error('COBRANCA_NOT_FOUND')
     const status = statusInterno(pagamento.status)
+    const liquidacao = status === 'Aprovado' ? calcularLiquidacaoMercadoPago(pagamento) : null
     db.prepare(`UPDATE mercado_pago_cobrancas SET status = ?, pagamento_id = ?,
       status_detalhe = ?, forma_pagamento = ?, pago_em = ?,
+      valor_liquido = COALESCE(?, valor_liquido), taxa_valor = COALESCE(?, taxa_valor),
       atualizado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?`
     ).run(status, pagamentoId, pagamento.status_detail || null,
       pagamento.payment_method_id || pagamento.payment_type_id || null,
-      pagamento.date_approved || null, cobranca.id)
+      pagamento.date_approved || null, liquidacao?.liquido ?? null, liquidacao?.taxa ?? null, cobranca.id)
 
     if (status === 'Aprovado') {
-      const valor = Math.round(Number(pagamento.transaction_amount) * 100) / 100
+      const valor = liquidacao!.bruto
       const saldo = Math.round((cobranca.valor_total_cobrado - cobranca.recebido) * 100) / 100
       if (!Number.isFinite(valor) || valor <= 0 || valor > saldo + 0.001 || Math.abs(valor - cobranca.valor) > 0.01) {
         throw new Error(`VALUE_MISMATCH:${valor}:${saldo}`)
@@ -117,6 +122,31 @@ export function processarPagamentoMercadoPago(
           entidadeId: recebimentoId,
           acao: 'CRIAR_AUTOMATICO',
           descricao: `Mercado Pago ${pagamentoId}`,
+        })
+      }
+      if (liquidacao!.taxa > 0 && cobranca.despesa_taxa_id === null) {
+        const dataTaxa = (pagamento.date_approved || new Date().toISOString()).slice(0, 10)
+        const despesa = db.prepare(`INSERT INTO despesas (
+          tenant_id, usuario_id, categoria, descricao, valor, data_despesa,
+          competencia_em, vencimento_em, pago_em, forma_pagamento, codigo_externo,
+          fornecedor, tipo_origem, status_origem, pedido_id, observacoes_origem
+        ) VALUES (?, ?, 'Outros', ?, ?, ?, ?, ?, ?, 'Débito automático', ?,
+          'Mercado Pago', 'Taxa de pagamento', 'Pago', ?, ?)`
+        ).run(
+          cobranca.tenant_id, cobranca.usuario_id, `Taxa Mercado Pago · pagamento ${pagamentoId}`,
+          liquidacao!.taxa, dataTaxa, dataTaxa, dataTaxa, dataTaxa, `MP-TAXA-${pagamentoId}`,
+          cobranca.pedido_id, `Bruto R$ ${valor.toFixed(2)} · líquido R$ ${liquidacao!.liquido.toFixed(2)}`,
+        )
+        const despesaId = Number(despesa.lastInsertRowid)
+        db.prepare('UPDATE mercado_pago_cobrancas SET despesa_taxa_id = ? WHERE id = ?')
+          .run(despesaId, cobranca.id)
+        registrarAuditoria(db, {
+          tenantId: cobranca.tenant_id,
+          usuarioId: cobranca.usuario_id,
+          entidade: 'Despesa',
+          entidadeId: despesaId,
+          acao: 'CRIAR_AUTOMATICO',
+          descricao: `Taxa Mercado Pago ${pagamentoId} · R$ ${liquidacao!.taxa.toFixed(2)}`,
         })
       }
       resultado = { duplicado: false, status, valor }

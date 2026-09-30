@@ -3,7 +3,9 @@ import { createHmac } from 'node:crypto'
 import test from 'node:test'
 import {
   configuracaoMercadoPago,
+  calcularLiquidacaoMercadoPago,
   montarPreferenciaMercadoPago,
+  normalizarValorCobranca,
   validarAssinaturaMercadoPago,
 } from '../lib/mercado-pago.mjs'
 
@@ -45,4 +47,23 @@ test('valida assinatura HMAC do webhook e rejeita conteúdo alterado', () => {
   const assinatura = `ts=${ts},v1=${v1}`
   assert.equal(validarAssinaturaMercadoPago({ assinatura, requestId, dataId, secret }), true)
   assert.equal(validarAssinaturaMercadoPago({ assinatura, requestId: 'outro', dataId, secret }), false)
+})
+
+test('aceita cobrança parcial e impede valor acima do saldo', () => {
+  assert.equal(normalizarValorCobranca(140, 350), 140)
+  assert.equal(normalizarValorCobranca(57.126, 100), 57.13)
+  assert.throws(() => normalizarValorCobranca(350.01, 350), /PAYMENT_AMOUNT_EXCEEDS_BALANCE/)
+  assert.throws(() => normalizarValorCobranca(0, 350), /PAYMENT_AMOUNT_INVALID/)
+})
+
+test('calcula taxa e líquido informados pelo Mercado Pago', () => {
+  assert.deepEqual(calcularLiquidacaoMercadoPago({
+    transaction_amount: 140,
+    transaction_details: { net_received_amount: 135.31 },
+    fee_details: [{ amount: 4.69 }],
+  }), { bruto: 140, liquido: 135.31, taxa: 4.69 })
+  assert.deepEqual(calcularLiquidacaoMercadoPago({
+    transaction_amount: 100,
+    fee_details: [{ amount: 3.2 }, { amount: 0.5 }],
+  }), { bruto: 100, liquido: 96.3, taxa: 3.7 })
 })
