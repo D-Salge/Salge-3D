@@ -1,6 +1,6 @@
 'use server'
 
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
@@ -46,7 +46,7 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
     }
     const pedido = db.prepare(`
       SELECT p.id, p.numero_orcamento, p.nome_da_peca, p.valor_total_cobrado,
-        p.orcamento_status, p.status, c.email AS cliente_email,
+        p.orcamento_status, p.status, p.validade_orcamento, c.email AS cliente_email,
         MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor)
           FROM recebimentos r WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente
       FROM pedidos p JOIN clientes c ON c.id = p.cliente_id
@@ -54,7 +54,8 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
     `).get(pedidoId, sessao.tenantId) as {
       id: number; numero_orcamento: string | null; nome_da_peca: string
       valor_total_cobrado: number; saldo_pendente: number
-      orcamento_status: string; status: string; cliente_email: string | null
+      orcamento_status: string; status: string; validade_orcamento: string | null
+      cliente_email: string | null
     } | undefined
     if (!pedido) return { success: false, message: 'Pedido não encontrado.' }
     if (pedido.orcamento_status !== 'Aprovado' || pedido.status === 'Cancelado') {
@@ -73,6 +74,34 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
       }
     }
 
+    const validadeMinimaPortal = new Date(Date.now() + 30 * 86_400_000).toISOString()
+    const portalExistente = db.prepare(`
+      SELECT id, token, expira_em FROM portal_links
+      WHERE tenant_id = ? AND pedido_id = ? AND revogado_em IS NULL
+        AND datetime(expira_em) > datetime('now')
+      ORDER BY id DESC LIMIT 1
+    `).get(sessao.tenantId, pedido.id) as { id: number; token: string; expira_em: string } | undefined
+    let portalToken = portalExistente?.token
+    if (portalExistente) {
+      db.prepare(`UPDATE portal_links SET expira_em = ?
+        WHERE id = ? AND datetime(expira_em) < datetime(?)`
+      ).run(validadeMinimaPortal, portalExistente.id, validadeMinimaPortal)
+    } else {
+      portalToken = randomBytes(24).toString('hex')
+      const portal = db.prepare(`INSERT INTO portal_links (
+        tenant_id, usuario_id, pedido_id, token, expira_em
+      ) VALUES (?, ?, ?, ?, ?)`
+      ).run(sessao.tenantId, sessao.usuarioId, pedido.id, portalToken, validadeMinimaPortal)
+      registrarAuditoria(db, {
+        tenantId: sessao.tenantId,
+        usuarioId: sessao.usuarioId,
+        entidade: 'PortalCliente',
+        entidadeId: Number(portal.lastInsertRowid),
+        acao: 'CRIAR_LINK',
+        descricao: `Link seguro criado para o retorno do pagamento do pedido #${pedido.id}`,
+      })
+    }
+
     const externalReference = `salge-${sessao.tenantId}-${pedido.id}-${randomUUID()}`
     const idempotencyKey = randomUUID()
     const preferencia = await criarPreferenciaMercadoPago(
@@ -80,6 +109,7 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
         pedido: { ...pedido, saldo_pendente: valorCobranca },
         externalReference,
         appUrl: config.appUrl,
+        portalToken,
         // O Mercado Pago não envia webhooks automáticos para pagamentos criados
         // com credenciais de teste. No sandbox a consulta manual usa a referência.
         incluirWebhook: !config.testMode,
