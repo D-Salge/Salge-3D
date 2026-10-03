@@ -163,6 +163,45 @@ export async function registrarContatoWhatsApp(dados: {
   }
 }
 
+export async function dispensarPendenciaWhatsApp(dados: {
+  pedidoId: number
+  tipo: TipoMensagemWhatsApp
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const sessao = await exigirSessao()
+    if (!Number.isSafeInteger(dados.pedidoId) || dados.pedidoId <= 0 ||
+        !TIPOS_MENSAGEM_WHATSAPP.includes(dados.tipo)) {
+      return { success: false, message: 'Acompanhamento inválido.' }
+    }
+    const pedido = db.prepare(`SELECT id, numero_orcamento FROM pedidos
+      WHERE id = ? AND tenant_id = ?`).get(dados.pedidoId, sessao.tenantId) as {
+        id: number; numero_orcamento: string | null
+      } | undefined
+    if (!pedido) return { success: false, message: 'Pedido não encontrado.' }
+    const rotulo = ROTULOS_MENSAGEM_WHATSAPP[dados.tipo]
+    db.transaction(() => {
+      db.prepare(`INSERT INTO historico_pedidos (
+        tenant_id, pedido_id, usuario_id, evento, descricao
+      ) VALUES (?, ?, ?, ?, ?)`
+      ).run(sessao.tenantId, pedido.id, sessao.usuarioId,
+        `WhatsApp: ${rotulo}`, 'Acompanhamento dispensado sem envio de mensagem.')
+      registrarAuditoria(db, {
+        tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
+        entidade: 'Pedido', entidadeId: pedido.id, acao: 'WHATSAPP_DISPENSAR',
+        descricao: `${rotulo} — ${pedido.numero_orcamento || `#${pedido.id}`}`,
+      })
+    })()
+    revalidatePath('/')
+    revalidatePath('/orcamentos')
+    revalidatePath(`/pedidos/${pedido.id}`)
+    revalidatePath('/agenda')
+    return { success: true, message: 'Aviso dispensado para esta etapa do pedido.' }
+  } catch (error) {
+    console.error('[dispensarPendenciaWhatsApp]', error)
+    return { success: false, message: 'Não foi possível dispensar o aviso.' }
+  }
+}
+
 export interface EnvioWhatsAppOficial {
   id: number
   pedido_id: number
@@ -263,6 +302,7 @@ export async function enviarWhatsAppOficial(dados: {
       registrarAuditoria(db, { entidade: 'WhatsAppEnvio', entidadeId: envioId!, acao: 'ENVIAR', descricao: `${pedido.numero_orcamento || `#${pedido.id}`} para ${pedido.cliente_nome}` })
     })()
     revalidatePath('/')
+    revalidatePath('/orcamentos')
     revalidatePath('/configuracoes/integracoes')
     revalidatePath(`/pedidos/${pedido.id}`)
     return {

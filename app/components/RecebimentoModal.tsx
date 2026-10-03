@@ -2,10 +2,19 @@
 import { useState, useEffect, useTransition } from 'react'
 import { X } from 'lucide-react'
 import { getRecebimentosPorPedido, registrarRecebimento, deletarRecebimento, type Recebimento } from '@/app/actions/recebimentos'
+import { getContasFinanceiras, type ContaFinanceira } from '@/app/actions/contas-financeiras'
 
-export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onClose: () => void }) {
+export function RecebimentoModal({ pedidoId, onClose, contas = [] }: {
+  pedidoId: number
+  onClose: () => void
+  contas?: ContaFinanceira[]
+}) {
   const [isPending, startTransition] = useTransition()
   const [historico, setHistorico] = useState<Recebimento[]>([])
+  const [contasDisponiveis, setContasDisponiveis] = useState(contas)
+  const [contaId, setContaId] = useState<number | null>(
+    contas.find((conta) => conta.padrao_recebimento)?.id ?? contas[0]?.id ?? null,
+  )
   
   const [valor, setValor] = useState('')
   const [forma, setForma] = useState('Pix')
@@ -16,6 +25,14 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
     getRecebimentosPorPedido(pedidoId).then(setHistorico)
   }, [pedidoId])
 
+  useEffect(() => {
+    if (contasDisponiveis.length > 0) return
+    getContasFinanceiras().then((itens) => {
+      setContasDisponiveis(itens)
+      setContaId((atual) => atual ?? itens.find((conta) => conta.padrao_recebimento)?.id ?? itens[0]?.id ?? null)
+    })
+  }, [contasDisponiveis.length])
+
   function handleSave(e: React.FormEvent) {
     e.preventDefault()
     startTransition(async () => {
@@ -25,6 +42,7 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
         forma_pagamento: forma,
         observacao: obs,
         data_recebimento: dataRecebimento,
+        conta_financeira_id: contaId,
       })
       if(res.success) {
         onClose()
@@ -56,7 +74,7 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
             <div className="space-y-2">
               {historico.map(h => (
                 <div key={h.id} className="flex justify-between items-center text-sm">
-                  <span className="text-white/70">{h.forma_pagamento}</span>
+                  <span className="text-white/70">{h.forma_pagamento}{h.conta_financeira_nome ? ` · ${h.conta_financeira_nome}` : ''}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[#d8f45a] font-mono">R$ {h.valor.toFixed(2)}</span>
                     <button onClick={() => handleDel(h.id)} className="text-red-400 hover:text-red-300 text-xs">Estornar</button>
@@ -72,6 +90,14 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
             <span className="text-xs font-medium text-white/55">Valor (R$)</span>
             <input required type="number" step="0.01" min="0.01" value={valor} onChange={e=>setValor(e.target.value)}
               className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" />
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-white/55">Conta de entrada</span>
+            <select required value={contaId ?? ''} onChange={e => setContaId(Number(e.target.value))}
+              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60">
+              <option value="" disabled>Selecione a conta</option>
+              {contasDisponiveis.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}
+            </select>
           </label>
           <label className="flex flex-col gap-2">
             <span className="text-xs font-medium text-white/55">Observação</span>
@@ -95,7 +121,7 @@ export function RecebimentoModal({ pedidoId, onClose }: { pedidoId: number, onCl
           </label>
           <div className="mt-4 flex justify-end gap-3">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs text-white/50">Cancelar</button>
-            <button type="submit" disabled={isPending} className="rounded-lg bg-[#d8f45a] px-5 py-2 text-xs font-semibold text-[#15180d]">
+            <button type="submit" disabled={isPending || contaId === null} className="rounded-lg bg-[#d8f45a] px-5 py-2 text-xs font-semibold text-[#15180d] disabled:opacity-50">
               Salvar
             </button>
           </div>

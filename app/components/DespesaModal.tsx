@@ -1,18 +1,24 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { X } from 'lucide-react'
 import { salvarDespesa, deletarDespesa, type Despesa, type DespesaInput } from '@/app/actions/despesas'
 import { gerarParcelas } from '@/lib/financeiro.mjs'
+import { getContasFinanceiras, type ContaFinanceira } from '@/app/actions/contas-financeiras'
 
 const FORMAS_PAGAMENTO = [
   'Cartão de Crédito', 'Pix', 'Dinheiro', 'Cartão de Débito', 'Transferência', 'Boleto', 'Outro',
 ]
 
-export function DespesaModal({ despesa, onClose }: { despesa: Despesa | null, onClose: () => void }) {
+export function DespesaModal({ despesa, onClose, contas = [] }: {
+  despesa: Despesa | null
+  onClose: () => void
+  contas?: ContaFinanceira[]
+}) {
   const [isPending, startTransition] = useTransition()
   const hoje = new Date().toISOString().substring(0, 10)
   const [mensagem, setMensagem] = useState('')
+  const [contasDisponiveis, setContasDisponiveis] = useState(contas)
   const [form, setForm] = useState<DespesaInput>(despesa ? {
     categoria: despesa.categoria,
     descricao: despesa.descricao,
@@ -23,11 +29,24 @@ export function DespesaModal({ despesa, onClose }: { despesa: Despesa | null, on
     pago_em: despesa.pago_em?.substring(0, 10) ?? null,
     forma_pagamento: despesa.forma_pagamento ?? 'Cartão de Crédito',
     parcelas: despesa.total_parcelas,
+    conta_financeira_id: despesa.conta_financeira_id,
   } : {
     categoria: 'Outros', descricao: '', valor: 0, data_despesa: hoje,
     competencia_em: hoje, vencimento_em: hoje, pago_em: null,
     forma_pagamento: 'Cartão de Crédito', parcelas: 1,
+    conta_financeira_id: contas.find((conta) => conta.padrao_pagamento)?.id ?? contas[0]?.id ?? null,
   })
+
+  useEffect(() => {
+    if (contasDisponiveis.length > 0) return
+    getContasFinanceiras().then((itens) => {
+      setContasDisponiveis(itens)
+      setForm((atual) => ({
+        ...atual,
+        conta_financeira_id: atual.conta_financeira_id ?? itens.find((conta) => conta.padrao_pagamento)?.id ?? itens[0]?.id ?? null,
+      }))
+    })
+  }, [contasDisponiveis.length])
 
   const previa = useMemo(() => {
     if (despesa || form.valor <= 0 || !form.vencimento_em || form.parcelas < 1) return []
@@ -84,6 +103,13 @@ export function DespesaModal({ despesa, onClose }: { despesa: Despesa | null, on
               </select>
             </label>
           </div>
+          <label className="flex flex-col gap-2 text-xs text-white/55">Conta de pagamento
+            <select required value={form.conta_financeira_id ?? ''} onChange={e => setForm({...form, conta_financeira_id: Number(e.target.value)})}
+              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white">
+              <option value="" disabled>Selecione a conta</option>
+              {contasDisponiveis.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}
+            </select>
+          </label>
           <div className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-2 text-xs text-white/55">Forma de pagamento
               <select value={form.forma_pagamento} onChange={e=>setForm({...form, forma_pagamento: e.target.value})}
@@ -138,7 +164,7 @@ export function DespesaModal({ despesa, onClose }: { despesa: Despesa | null, on
             {despesa ? <button type="button" onClick={handleDel} className="text-xs text-red-400">Estornar parcela</button> : <div/>}
             <div className="flex gap-3">
               <button type="button" onClick={onClose} className="px-4 py-2 text-xs text-white/50">Cancelar</button>
-              <button type="submit" disabled={isPending} className="rounded-lg bg-[#d8f45a] px-5 py-2 text-xs font-semibold text-[#15180d] disabled:opacity-50">
+              <button type="submit" disabled={isPending || form.conta_financeira_id === null} className="rounded-lg bg-[#d8f45a] px-5 py-2 text-xs font-semibold text-[#15180d] disabled:opacity-50">
                 {isPending ? 'Salvando...' : despesa ? 'Salvar parcela' : form.parcelas > 1 ? `Criar ${form.parcelas} parcelas` : 'Salvar'}
               </button>
             </div>

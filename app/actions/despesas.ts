@@ -30,6 +30,8 @@ export interface Despesa {
   grupo_parcelamento: string | null
   numero_parcela: number
   total_parcelas: number
+  conta_financeira_id: number | null
+  conta_financeira_nome: string | null
 }
 
 export interface DespesaInput {
@@ -42,6 +44,7 @@ export interface DespesaInput {
   pago_em: string | null
   forma_pagamento: string
   parcelas: number
+  conta_financeira_id: number | null
 }
 
 export interface DespesaRecorrente {
@@ -74,6 +77,8 @@ export interface FluxoCapital {
   valor: number
   descricao: string | null
   data_movimentacao: string
+  conta_financeira_id: number | null
+  conta_financeira_nome: string | null
 }
 
 export interface ActionResult {
@@ -128,28 +133,30 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
   if (mes) {
     return db
       .prepare(
-        `SELECT id, categoria, descricao, valor, data_despesa,
-           COALESCE(competencia_em, data_despesa) AS competencia_em,
-           COALESCE(vencimento_em, data_despesa) AS vencimento_em, pago_em,
-           forma_pagamento, grupo_parcelamento, numero_parcela, total_parcelas
-         FROM despesas
-         WHERE tenant_id = ?
-           AND estornada_em IS NULL
-           AND strftime('%Y-%m', data_despesa) = ?
-         ORDER BY date(COALESCE(vencimento_em, data_despesa)), numero_parcela`
+        `SELECT d.id, d.categoria, d.descricao, d.valor, d.data_despesa,
+           COALESCE(d.competencia_em, d.data_despesa) AS competencia_em,
+           COALESCE(d.vencimento_em, d.data_despesa) AS vencimento_em, d.pago_em,
+           d.forma_pagamento, d.grupo_parcelamento, d.numero_parcela, d.total_parcelas,
+           d.conta_financeira_id, cf.nome AS conta_financeira_nome
+         FROM despesas d LEFT JOIN contas_financeiras cf ON cf.id = d.conta_financeira_id
+         WHERE d.tenant_id = ?
+           AND d.estornada_em IS NULL
+           AND strftime('%Y-%m', d.data_despesa) = ?
+         ORDER BY date(COALESCE(d.vencimento_em, d.data_despesa)), d.numero_parcela`
       )
       .all(TENANT_ID, mes) as Despesa[]
   }
 
   return db
     .prepare(
-      `SELECT id, categoria, descricao, valor, data_despesa,
-         COALESCE(competencia_em, data_despesa) AS competencia_em,
-         COALESCE(vencimento_em, data_despesa) AS vencimento_em, pago_em,
-         forma_pagamento, grupo_parcelamento, numero_parcela, total_parcelas
-       FROM despesas
-       WHERE tenant_id = ? AND estornada_em IS NULL
-       ORDER BY pago_em IS NOT NULL, date(COALESCE(vencimento_em, data_despesa)), numero_parcela`
+      `SELECT d.id, d.categoria, d.descricao, d.valor, d.data_despesa,
+         COALESCE(d.competencia_em, d.data_despesa) AS competencia_em,
+         COALESCE(d.vencimento_em, d.data_despesa) AS vencimento_em, d.pago_em,
+         d.forma_pagamento, d.grupo_parcelamento, d.numero_parcela, d.total_parcelas,
+         d.conta_financeira_id, cf.nome AS conta_financeira_nome
+       FROM despesas d LEFT JOIN contas_financeiras cf ON cf.id = d.conta_financeira_id
+       WHERE d.tenant_id = ? AND d.estornada_em IS NULL
+       ORDER BY d.pago_em IS NOT NULL, date(COALESCE(d.vencimento_em, d.data_despesa)), d.numero_parcela`
     )
     .all(TENANT_ID) as Despesa[]
 }
@@ -168,10 +175,11 @@ export async function getDespesasRecorrentes(): Promise<DespesaRecorrente[]> {
 export async function getFluxoCapital(): Promise<FluxoCapital[]> {
   return db
     .prepare(
-      `SELECT id, tipo, valor, descricao, data_movimentacao
-       FROM fluxo_capital
-       WHERE tenant_id = ?
-       ORDER BY data_movimentacao DESC`
+      `SELECT f.id, f.tipo, f.valor, f.descricao, f.data_movimentacao,
+         f.conta_financeira_id, cf.nome AS conta_financeira_nome
+       FROM fluxo_capital f LEFT JOIN contas_financeiras cf ON cf.id = f.conta_financeira_id
+       WHERE f.tenant_id = ?
+       ORDER BY f.data_movimentacao DESC`
     )
     .all(TENANT_ID) as FluxoCapital[]
 }
@@ -264,6 +272,12 @@ export async function salvarDespesa(
     if (!data.forma_pagamento?.trim() || data.forma_pagamento.length > 80) {
       return { success: false, message: 'Informe uma forma de pagamento válida.' }
     }
+    if (data.conta_financeira_id !== null &&
+        (!Number.isSafeInteger(data.conta_financeira_id) || data.conta_financeira_id <= 0 ||
+          !db.prepare(`SELECT 1 FROM contas_financeiras WHERE id = ? AND tenant_id = ? AND ativa = 1`)
+            .get(data.conta_financeira_id, TENANT_ID))) {
+      return { success: false, message: 'Conta financeira inválida.' }
+    }
 
     if (id === null) {
       const criarParcelas = db.transaction(() => {
@@ -272,8 +286,8 @@ export async function salvarDespesa(
           `INSERT INTO despesas (
             tenant_id, usuario_id, categoria, descricao, valor, data_despesa,
             competencia_em, vencimento_em, pago_em, forma_pagamento,
-            grupo_parcelamento, numero_parcela, total_parcelas
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            grupo_parcelamento, numero_parcela, total_parcelas, conta_financeira_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         const ids: number[] = []
         for (const parcela of gerarParcelas(data.valor, data.parcelas, data.vencimento_em)) {
@@ -291,6 +305,7 @@ export async function salvarDespesa(
             grupo,
             parcela.numero,
             data.parcelas,
+            data.conta_financeira_id,
           )
           ids.push(Number(res.lastInsertRowid))
         }
@@ -305,7 +320,8 @@ export async function salvarDespesa(
       const res = db.prepare(
         `UPDATE despesas
          SET categoria = ?, descricao = ?, valor = ?, data_despesa = ?,
-           competencia_em = ?, vencimento_em = ?, pago_em = ?, forma_pagamento = ?
+           competencia_em = ?, vencimento_em = ?, pago_em = ?, forma_pagamento = ?,
+           conta_financeira_id = ?
          WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`
       ).run(
         data.categoria,
@@ -316,6 +332,7 @@ export async function salvarDespesa(
         data.vencimento_em,
         data.pago_em,
         data.forma_pagamento.trim(),
+        data.conta_financeira_id,
         id,
         TENANT_ID,
       )
@@ -483,7 +500,7 @@ export async function deletarDespesa(id: number): Promise<ActionResult> {
 // --- Mutations: fluxo de capital ---
 
 export async function salvarFluxoCapital(
-  data: Omit<FluxoCapital, 'id'>,
+  data: Omit<FluxoCapital, 'id' | 'conta_financeira_nome'>,
 ): Promise<ActionResult> {
   try {
     if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
@@ -495,10 +512,16 @@ export async function salvarFluxoCapital(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.data_movimentacao)) {
       return { success: false, message: 'Data invalida.' }
     }
+    if (data.conta_financeira_id !== null &&
+        (!Number.isSafeInteger(data.conta_financeira_id) || data.conta_financeira_id <= 0 ||
+          !db.prepare(`SELECT 1 FROM contas_financeiras WHERE id = ? AND tenant_id = ? AND ativa = 1`)
+            .get(data.conta_financeira_id, TENANT_ID))) {
+      return { success: false, message: 'Conta financeira inválida.' }
+    }
 
     const result = db.prepare(
-      `INSERT INTO fluxo_capital (tenant_id, usuario_id, tipo, valor, descricao, data_movimentacao)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO fluxo_capital (tenant_id, usuario_id, tipo, valor, descricao, data_movimentacao, conta_financeira_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(
       TENANT_ID,
       USUARIO_ID,
@@ -506,6 +529,7 @@ export async function salvarFluxoCapital(
       data.valor,
       data.descricao?.trim() || null,
       data.data_movimentacao,
+      data.conta_financeira_id,
     )
     registrarAuditoria(db, {
       entidade: 'FluxoCapital', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',

@@ -52,6 +52,8 @@ test('não repete uma pendência do WhatsApp que já foi contatada', () => {
   const eventos = 'WhatsApp: Enviar orçamento||Status do orçamento'
   assert.equal(contatoWhatsAppJaRegistrado('orcamento', eventos), true)
   assert.equal(contatoWhatsAppJaRegistrado('pronto', eventos), false)
+  assert.equal(contatoWhatsAppJaRegistrado('cobranca', 'WhatsApp: Cobrar pagamento'), true)
+  assert.equal(contatoWhatsAppJaRegistrado('orcamento', 'WhatsApp: Retomar orçamento'), true)
 })
 
 test('gera mensagens específicas de follow-up e pós-venda', () => {
