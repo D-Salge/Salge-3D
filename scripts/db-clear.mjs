@@ -26,6 +26,7 @@ try {
     db.prepare('DELETE FROM inventario_itens').run()
     db.prepare('DELETE FROM inventarios').run()
     db.prepare('DELETE FROM recebimentos').run()
+    db.prepare('DELETE FROM transferencias_financeiras').run()
     db.prepare('DELETE FROM parcelas_receber').run()
     db.prepare('DELETE FROM anexos_pedido').run()
     db.prepare('DELETE FROM pedido_checklist_respostas').run()
@@ -71,6 +72,7 @@ try {
         'inventario_itens',
         'inventarios',
         'recebimentos',
+        'transferencias_financeiras',
         'parcelas_receber',
         'anexos_pedido',
         'pedido_checklist_respostas',

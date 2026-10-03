@@ -36,10 +36,12 @@ export function WhatsAppModal({
   pedido,
   tipoInicial,
   onClose,
+  onConcluido,
 }: {
   pedido: PedidoWhatsApp
   tipoInicial?: TipoMensagemWhatsApp
   onClose: () => void
+  onConcluido?: () => void
 }) {
   const sugerido = tipoInicial ?? sugerirTipoMensagemWhatsApp({
     orcamentoStatus: pedido.orcamento_status,
@@ -84,7 +86,11 @@ export function WhatsAppModal({
     startTransition(async () => {
       const resultado = await registrarContatoWhatsApp({ pedidoId: pedido.id, tipo, mensagem })
       setRetorno(resultado.message)
-      if (resultado.success) router.refresh()
+      if (resultado.success) {
+        onConcluido?.()
+        router.refresh()
+        onClose()
+      }
     })
   }
 
@@ -92,7 +98,11 @@ export function WhatsAppModal({
     startTransition(async () => {
       const resultado = await enviarWhatsAppOficial({ pedidoId: pedido.id, tipo, mensagem })
       setRetorno(resultado.message)
-      if (resultado.success) router.refresh()
+      if (resultado.success) {
+        onConcluido?.()
+        router.refresh()
+        onClose()
+      }
     })
   }
 

@@ -21,6 +21,8 @@ export interface Recebimento {
   forma_pagamento: string
   data_recebimento: string
   observacao: string | null
+  conta_financeira_id: number | null
+  conta_financeira_nome: string | null
 }
 
 export interface RecebimentoResumo {
@@ -48,9 +50,11 @@ export interface ActionResult {
 export async function getRecebimentosPorPedido(pedidoId: number): Promise<Recebimento[]> {
   return db
     .prepare(
-      `SELECT id, pedido_id, valor, forma_pagamento, data_recebimento, observacao
-       FROM recebimentos
-       WHERE pedido_id = ? AND tenant_id = ? AND estornado_em IS NULL
+      `SELECT r.id, r.pedido_id, r.valor, r.forma_pagamento, r.data_recebimento, r.observacao,
+         r.conta_financeira_id, cf.nome AS conta_financeira_nome
+       FROM recebimentos r
+       LEFT JOIN contas_financeiras cf ON cf.id = r.conta_financeira_id
+       WHERE r.pedido_id = ? AND r.tenant_id = ? AND r.estornado_em IS NULL
        ORDER BY data_recebimento DESC`
     )
     .all(pedidoId, TENANT_ID) as Recebimento[]
@@ -190,6 +194,7 @@ export async function registrarRecebimento(data: {
   forma_pagamento: string
   observacao?: string
   data_recebimento?: string
+  conta_financeira_id?: number | null
 }): Promise<ActionResult> {
   try {
     if (!Number.isSafeInteger(data.pedido_id) || data.pedido_id <= 0) {
@@ -211,6 +216,10 @@ export async function registrarRecebimento(data: {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataRecebimento)) {
       return { success: false, message: 'Data de recebimento inválida.' }
     }
+    if (data.conta_financeira_id !== undefined && data.conta_financeira_id !== null &&
+        (!Number.isSafeInteger(data.conta_financeira_id) || data.conta_financeira_id <= 0)) {
+      return { success: false, message: 'Conta financeira inválida.' }
+    }
 
     const registrar = db.transaction(() => {
       const pedido = db.prepare(`
@@ -227,6 +236,10 @@ export async function registrarRecebimento(data: {
         mei_natureza_padrao: 'Venda' | 'Serviço'
       } | undefined
       if (!pedido) throw new Error('NOT_FOUND')
+      if (data.conta_financeira_id && !db.prepare(`SELECT 1 FROM contas_financeiras
+        WHERE id = ? AND tenant_id = ? AND ativa = 1`).get(data.conta_financeira_id, TENANT_ID)) {
+        throw new Error('ACCOUNT')
+      }
       const saldo = Math.round((pedido.valor_total_cobrado - pedido.recebido) * 100) / 100
       if (data.valor > saldo + 0.001) throw new Error(`OVERPAYMENT:${saldo}`)
 
@@ -243,11 +256,12 @@ export async function registrarRecebimento(data: {
 
       const result = db.prepare(
         `INSERT INTO recebimentos (
-          tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao
-        ) VALUES (?, ?, ?, ?, ?, ?)`
+          tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao,
+          conta_financeira_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`
       ).run(
         TENANT_ID, data.pedido_id, data.valor, forma, dataRecebimento,
-        data.observacao?.trim() || null,
+        data.observacao?.trim() || null, data.conta_financeira_id || null,
       )
       const recebimentoId = Number(result.lastInsertRowid)
       db.prepare(`
@@ -282,6 +296,7 @@ export async function registrarRecebimento(data: {
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
       if (message === 'NOT_FOUND') return { success: false, message: 'Pedido nao encontrado.' }
+      if (message === 'ACCOUNT') return { success: false, message: 'Conta financeira não encontrada.' }
       if (message.startsWith('OVERPAYMENT:')) {
         const saldo = Number(message.split(':')[1])
         return { success: false, message: `O valor excede o saldo pendente de R$ ${saldo.toFixed(2).replace('.', ',')}.` }

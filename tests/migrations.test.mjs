@@ -138,6 +138,22 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(chargeColumns.includes('despesa_taxa_id'))
     const receiptColumns = db.prepare(`PRAGMA table_info(recebimentos)`).all().map((column) => column.name)
     assert.ok(receiptColumns.includes('mercado_pago_pagamento_id'))
+    assert.ok(receiptColumns.includes('conta_financeira_id'))
+    assert.ok(expenseColumns.includes('conta_financeira_id'))
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'contas_financeiras'`).get())
+    assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transferencias_financeiras'`).get())
+    const contas = db.prepare(`SELECT nome, padrao_recebimento, padrao_pagamento FROM contas_financeiras ORDER BY nome`).all()
+    assert.deepEqual(contas.map((conta) => conta.nome), ['Mercado Pago', 'Nubank PJ'])
+    assert.equal(contas.find((conta) => conta.nome === 'Mercado Pago').padrao_recebimento, 1)
+    assert.equal(contas.find((conta) => conta.nome === 'Mercado Pago').padrao_pagamento, 1)
+    const fluxoId = Number(db.prepare(`INSERT INTO fluxo_capital
+      (tenant_id, usuario_id, tipo, valor, descricao, data_movimentacao)
+      VALUES (1, 1, 'Aporte', 50, 'Teste', '2020-01-01')`).run().lastInsertRowid)
+    assert.equal(
+      db.prepare(`SELECT cf.nome FROM fluxo_capital f JOIN contas_financeiras cf
+        ON cf.id = f.conta_financeira_id WHERE f.id = ?`).get(fluxoId).nome,
+      'Mercado Pago',
+    )
     const backupColumns = db.prepare(`PRAGMA table_info(backups_registro)`).all().map((column) => column.name)
     assert.ok(backupColumns.includes('externo_status'))
     const produtoMigrado = db.prepare(`SELECT id FROM produtos_catalogo WHERE nome = 'Ímã Bem-Estar'`).get()

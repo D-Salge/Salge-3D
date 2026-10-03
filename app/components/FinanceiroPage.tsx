@@ -12,6 +12,8 @@ import type { ProjecaoFluxoCaixa as Projecao } from '@/app/actions/financeiro'
 import { DespesasRecorrentes } from './DespesasRecorrentes'
 import Link from 'next/link'
 import { Landmark } from 'lucide-react'
+import { ContasFinanceiras } from './ContasFinanceiras'
+import type { ContaFinanceira, TransferenciaFinanceira } from '@/app/actions/contas-financeiras'
 
 export function FinanceiroPage({ 
   pendentes, 
@@ -21,6 +23,8 @@ export function FinanceiroPage({
   resumoDespesas, 
   fluxo,
   projecao,
+  contas,
+  transferencias,
 }: { 
   pendentes: RecebimentoResumo[],
   resumoRecebimentos: {
@@ -42,6 +46,8 @@ export function FinanceiroPage({
   },
   fluxo: FluxoCapital[],
   projecao: Projecao,
+  contas: ContaFinanceira[],
+  transferencias: TransferenciaFinanceira[],
 }) {
   const [isPending, startTransition] = useTransition()
   const [recModal, setRecModal] = useState<number | null>(null)
@@ -73,6 +79,8 @@ export function FinanceiroPage({
         </div>
         <Link href="/financeiro/conciliacao" className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-500/10 px-4 text-xs font-medium text-blue-300"><Landmark size={15} /> Conciliar banco</Link>
       </div>
+
+      <ContasFinanceiras contas={contas} transferencias={transferencias} />
 
       <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-6">
         {/* Recebido */}
@@ -190,6 +198,7 @@ export function FinanceiroPage({
                         {d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}
                         vence {d.vencimento_em.split('-').reverse().join('/')}
                         {d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}
+                        {d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}
                       </p>
                       <span className="inline-block mt-1 rounded bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase text-white/50">{d.categoria}</span>
                       <span className={`ml-2 inline-block rounded px-2 py-0.5 text-[10px] ${d.pago_em ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{d.pago_em ? 'Paga' : 'Pendente'}</span>
@@ -229,6 +238,7 @@ export function FinanceiroPage({
                     <td className="p-4">
                       <span className={`inline-block mb-1 rounded px-2 py-0.5 text-[10px] uppercase ${f.tipo==='Aporte' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{f.tipo}</span>
                       <p className="font-medium text-white">{f.descricao || f.tipo}</p>
+                      {f.conta_financeira_nome && <p className="mt-1 text-xs text-white/35">{f.conta_financeira_nome}</p>}
                     </td>
                     <td className="p-4 font-mono text-white/80">{f.data_movimentacao.substring(0,10)}</td>
                     <td className="p-4 text-right font-mono text-white">{fmtBRL(f.valor)}</td>
@@ -239,9 +249,9 @@ export function FinanceiroPage({
           </div>
       </div>
 
-      {recModal && <RecebimentoModal pedidoId={recModal} onClose={() => setRecModal(null)} />}
-      {despesaModal && <DespesaModal despesa={despesaModal === 'new' ? null : despesaModal} onClose={() => setDespesaModal(null)} />}
-      {fluxoModal && <FluxoCapitalModal fluxo={fluxoModal === 'new' ? null : fluxoModal} onClose={() => setFluxoModal(null)} />}
+      {recModal && <RecebimentoModal pedidoId={recModal} contas={contas} onClose={() => setRecModal(null)} />}
+      {despesaModal && <DespesaModal despesa={despesaModal === 'new' ? null : despesaModal} contas={contas} onClose={() => setDespesaModal(null)} />}
+      {fluxoModal && <FluxoCapitalModal fluxo={fluxoModal === 'new' ? null : fluxoModal} contas={contas} onClose={() => setFluxoModal(null)} />}
     </>
   )
 }
