@@ -57,6 +57,10 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
   }
 
   const fmtBRL = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
+  const fmtGramas = (v: number) => v.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
 
   return (
     <>
@@ -133,7 +137,7 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
                         <div className="flex items-center justify-between text-xs">
                           <span className={estoqueBaixo ? 'text-red-400 font-medium flex items-center gap-1' : 'text-white/70'}>
                             {estoqueBaixo && <AlertTriangle size={12} />}
-                            {estoqueAtual}g
+                            {fmtGramas(estoqueAtual)} g
                           </span>
                           <span className="text-white/30 text-[10px]">{Math.round(percent)}%</span>
                         </div>
@@ -214,6 +218,27 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
                     value={form.preco_rolo}
                     onChange={e => setForm(f => ({ ...f, preco_rolo: Number(e.target.value) }))}
                     className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-white/55">Marca / fabricante</span>
+                  <input
+                    value={form.marca ?? ''}
+                    onChange={e => setForm(f => ({ ...f, marca: e.target.value || null }))}
+                    className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                    placeholder="Ex: Voolt3D"
+                  />
+                </label>
+                <label className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-white/55">Fornecedor</span>
+                  <input
+                    value={form.fornecedor ?? ''}
+                    onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value || null }))}
+                    className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-[#d8f45a]/60"
+                    placeholder="Ex: TikTok Shop"
                   />
                 </label>
               </div>
