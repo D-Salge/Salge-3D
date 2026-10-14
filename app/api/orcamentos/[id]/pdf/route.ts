@@ -46,6 +46,11 @@ export async function GET(_request: Request, context: RouteContext<'/api/orcamen
   linha('Validade', dataBr(pedido.validade_orcamento))
   linha('Previsão de entrega', dataBr(pedido.data_entrega))
   linha('Pagamento', `${pedido.condicao_pagamento || 'A combinar'} · ${pedido.parcelas}x`)
+  if (pedido.sinal_percentual > 0) {
+    const sinal = Math.round(pedido.valor_total_cobrado * pedido.sinal_percentual) / 100
+    linha('Sinal para iniciar', `${pedido.sinal_percentual.toLocaleString('pt-BR')}% · ${moeda(sinal)}`)
+    linha('Restante', moeda(pedido.valor_total_cobrado - sinal))
+  }
   y -= 14
 
   page.drawText('Resumo comercial', { x: 46, y, size: 13, font: bold, color: dark })

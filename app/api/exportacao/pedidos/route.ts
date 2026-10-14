@@ -12,7 +12,10 @@ export async function GET() {
   const rows = db.prepare(`
     SELECT p.numero_orcamento, p.nome_da_peca, c.nome AS cliente,
       p.orcamento_status, p.status, p.data_pedido, p.data_entrega,
-      p.valor_total_cobrado,
+      p.valor_total_cobrado, p.sinal_percentual,
+      ROUND(p.valor_total_cobrado * p.sinal_percentual / 100.0, 2) AS valor_sinal,
+      COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido,
       COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
       p.valor_total_cobrado - (
@@ -25,7 +28,8 @@ export async function GET() {
   `).all() as Record<string, unknown>[]
   const headers = [
     'numero_orcamento', 'nome_da_peca', 'cliente', 'orcamento_status', 'status',
-    'data_pedido', 'data_entrega', 'valor_total_cobrado', 'total_recebido', 'lucro_estimado',
+    'data_pedido', 'data_entrega', 'valor_total_cobrado', 'sinal_percentual',
+    'valor_sinal', 'sinal_recebido', 'total_recebido', 'lucro_estimado',
   ]
   const content = '\ufeff' + [
     headers.map(csv).join(';'),

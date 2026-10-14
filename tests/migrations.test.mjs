@@ -139,6 +139,8 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     const receiptColumns = db.prepare(`PRAGMA table_info(recebimentos)`).all().map((column) => column.name)
     assert.ok(receiptColumns.includes('mercado_pago_pagamento_id'))
     assert.ok(receiptColumns.includes('conta_financeira_id'))
+    assert.ok(receiptColumns.includes('tipo_recebimento'))
+    assert.ok(columns.includes('sinal_percentual'))
     assert.ok(expenseColumns.includes('conta_financeira_id'))
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'contas_financeiras'`).get())
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transferencias_financeiras'`).get())

@@ -130,6 +130,7 @@ export interface PedidoParaDuplicar {
   frete_cobrado: number
   frete_pago: number
   parcelas: number
+  sinal_percentual: number
   condicao_pagamento: string | null
   valor_total_original: number
   preco_unitario_original: number
@@ -403,6 +404,7 @@ export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoPar
       orcamento_status, nome_da_peca,
       quantidade, tempo_impressao_horas, custo_embalagem, desconto,
       frete_cobrado, frete_pago, parcelas, condicao_pagamento,
+      sinal_percentual,
       tipo_venda, impressora_id, data_entrega, validade_orcamento, vencimento_em,
       materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
       valor_total_cobrado AS valor_total_original,
@@ -498,6 +500,7 @@ export interface CriarPedidoInput {
   validade_orcamento?: string
   vencimento_em?: string
   parcelas?: number
+  sinal_percentual?: number
   condicao_pagamento?: string
   pedido_origem_id?: number
   preco_unitario?: number
@@ -528,6 +531,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       validade_orcamento,
       vencimento_em,
       parcelas = 1,
+      sinal_percentual = 0,
       condicao_pagamento,
       pedido_origem_id,
       preco_unitario,
@@ -580,6 +584,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
     }
     if (!Number.isSafeInteger(parcelas) || parcelas < 1 || parcelas > 120) {
       return { success: false, message: 'Quantidade de parcelas inválida.' }
+    }
+    if (!Number.isFinite(sinal_percentual) || sinal_percentual < 0 || sinal_percentual > 100) {
+      return { success: false, message: 'O sinal deve ficar entre 0% e 100%.' }
     }
     let origemNumero: string | null = null
     if (pedido_origem_id !== undefined) {
@@ -761,10 +768,10 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             valor_reserva_maquina, taxa_operacional, custo_embalagem,
             desconto, frete_cobrado, frete_pago,
             valor_total_cobrado, data_entrega, validade_orcamento, vencimento_em,
-            parcelas, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
+            parcelas, sinal_percentual, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
             materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
             orcamento_status, status
-          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
+          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           TENANT_ID,
@@ -787,6 +794,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           validade_orcamento ?? null,
           vencimento_em ?? null,
           parcelas,
+          sinal_percentual,
           condicao_pagamento?.trim() || null,
           quantidade,
           precoUnitarioAplicado,
@@ -873,7 +881,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
     const {
       nome_da_peca, cliente_id, tempo_impressao_horas, quantidade = 1, tipo_pedido,
       materials, insumos, custo_embalagem, desconto, frete_cobrado, frete_pago,
-      data_entrega, validade_orcamento, vencimento_em, parcelas = 1, condicao_pagamento,
+      data_entrega, validade_orcamento, vencimento_em, parcelas = 1, sinal_percentual = 0, condicao_pagamento,
       preco_unitario, materiais_avulsos_por_unidade, horas_trabalho_ativo,
       setup_projeto, margem_perdas, impressora_id = null,
     } = data
@@ -911,6 +919,8 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
     }
     if (!Number.isSafeInteger(parcelas) || parcelas < 1 || parcelas > 120)
       return { success: false, message: 'Quantidade de parcelas inválida.' }
+    if (!Number.isFinite(sinal_percentual) || sinal_percentual < 0 || sinal_percentual > 100)
+      return { success: false, message: 'O sinal deve ficar entre 0% e 100%.' }
 
     const pesosPorFilamento = new Map<number, number>()
     for (const material of materials) {
@@ -1011,7 +1021,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
         cliente_id = ?, produto_id = ?, produto_versao_id = ?, nome_da_peca = ?, tempo_impressao_horas = ?, custo_filamento = ?,
         custo_insumos = ?, custo_energia = ?, valor_reserva_maquina = ?, taxa_operacional = ?,
         custo_embalagem = ?, desconto = ?, frete_cobrado = ?, frete_pago = ?, valor_total_cobrado = ?,
-        data_entrega = ?, validade_orcamento = ?, vencimento_em = ?, parcelas = ?, condicao_pagamento = ?,
+        data_entrega = ?, validade_orcamento = ?, vencimento_em = ?, parcelas = ?, sinal_percentual = ?, condicao_pagamento = ?,
         quantidade = ?, preco_unitario = ?, tipo_venda = ?, taxas_comissoes = ?, impressora_id = ?,
         materiais_avulsos_por_unidade = ?, horas_trabalho_ativo = ?, setup_projeto = ?, margem_perdas = ?
         WHERE id = ? AND tenant_id = ?`).run(
@@ -1020,7 +1030,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
           arredondarMoeda(custoInsumosBruto), calculo.energia, calculo.reservaMaquina, custosAdicionais,
           arredondarMoeda(custo_embalagem), arredondarMoeda(desconto), arredondarMoeda(frete_cobrado),
           arredondarMoeda(frete_pago), valorTotal, data_entrega ?? null, validade_orcamento ?? null,
-          vencimento_em ?? null, parcelas, condicao_pagamento?.trim() || null, quantidade,
+          vencimento_em ?? null, parcelas, sinal_percentual, condicao_pagamento?.trim() || null, quantidade,
           precoUnitarioAplicado, tipo_pedido, taxasComissoes, impressora_id,
           materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas,
           pedidoId, TENANT_ID,
@@ -1163,14 +1173,26 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
 
     const atualizar = db.transaction(() => {
       const pedido = db
-        .prepare('SELECT status, orcamento_status, quantidade, quantidade_produzida FROM pedidos WHERE id = ? AND tenant_id = ?')
-        .get(pedidoId, TENANT_ID) as { status: string; orcamento_status: string; quantidade: number; quantidade_produzida: number } | undefined
+        .prepare(`SELECT status, orcamento_status, quantidade, quantidade_produzida,
+          valor_total_cobrado, sinal_percentual,
+          COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+            WHERE r.pedido_id = pedidos.id AND r.estornado_em IS NULL), 0) AS total_recebido
+          FROM pedidos WHERE id = ? AND tenant_id = ?`)
+        .get(pedidoId, TENANT_ID) as {
+          status: string; orcamento_status: string; quantidade: number; quantidade_produzida: number
+          valor_total_cobrado: number; sinal_percentual: number; total_recebido: number
+        } | undefined
 
       if (!pedido) throw new Error('NOT_FOUND')
       if (pedido.orcamento_status !== 'Aprovado') throw new Error('NOT_APPROVED')
       if (pedido.status === novoStatus) return 'UNCHANGED'
       if (!transicoesPermitidas[pedido.status]?.includes(novoStatus)) {
         throw new Error('INVALID_TRANSITION')
+      }
+      if (novoStatus === 'Imprimindo' && pedido.sinal_percentual > 0) {
+        const sinalNecessario = arredondarMoeda(pedido.valor_total_cobrado * pedido.sinal_percentual / 100)
+        const sinalPendente = arredondarMoeda(Math.max(0, sinalNecessario - pedido.total_recebido))
+        if (sinalPendente > 0.009) throw new Error(`SIGNAL_PENDING:${sinalPendente}`)
       }
 
       if (novoStatus === 'Finalizado') {
@@ -1394,6 +1416,10 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       }
       if (message === 'NOT_APPROVED') {
         return { success: false, message: 'Aprove o orçamento antes de iniciar a produção.' }
+      }
+      if (message.startsWith('SIGNAL_PENDING:')) {
+        const pendente = Number(message.split(':')[1])
+        return { success: false, message: `Ainda faltam R$ ${pendente.toFixed(2).replace('.', ',')} do sinal para iniciar a produção.` }
       }
       if (message.startsWith('INCOMPLETE_PRODUCTION:')) {
         const [, produzida, total] = message.split(':')

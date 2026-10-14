@@ -23,6 +23,9 @@ export interface OrcamentoPortal {
   validade_orcamento: string | null
   orcamento_status: string
   saldo_pendente: number
+  total_recebido: number
+  sinal_percentual: number
+  sinal_recebido: number
   link_pagamento: string | null
   expira_em: string
   resposta: string | null
@@ -76,6 +79,11 @@ export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal
       p.id, p.numero_orcamento, p.nome_da_peca, p.descricao, c.nome AS cliente_nome,
       p.quantidade, COALESCE(p.preco_unitario, p.valor_total_cobrado / MAX(p.quantidade, 1)) AS preco_unitario,
       p.valor_total_cobrado, p.frete_cobrado, p.data_entrega, p.validade_orcamento, p.orcamento_status,
+      p.sinal_percentual,
+      COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
+      COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido,
       MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
       (SELECT mc.init_point FROM mercado_pago_cobrancas mc
@@ -110,6 +118,9 @@ export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal
     validade_orcamento: pedido.validade_orcamento,
     orcamento_status: pedido.orcamento_status,
     saldo_pendente: pedido.saldo_pendente,
+    total_recebido: pedido.total_recebido,
+    sinal_percentual: pedido.sinal_percentual,
+    sinal_recebido: pedido.sinal_recebido,
     link_pagamento: pedido.link_pagamento,
     expira_em: pedido.expira_em,
     resposta: pedido.resposta,

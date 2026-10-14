@@ -8,6 +8,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { distribuirRecebimento } from '@/lib/financeiro.mjs'
+import { percentualDoPedido } from '@/lib/sinal.mjs'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -23,6 +24,18 @@ export interface Recebimento {
   observacao: string | null
   conta_financeira_id: number | null
   conta_financeira_nome: string | null
+  tipo_recebimento: 'Sinal' | 'Parcial' | 'Quitacao'
+  percentual_pedido: number
+}
+
+export interface ContextoRecebimentoPedido {
+  valor_total: number
+  total_recebido: number
+  saldo_pendente: number
+  sinal_percentual: number
+  valor_sinal: number
+  sinal_recebido: number
+  sinal_pendente: number
 }
 
 export interface RecebimentoResumo {
@@ -51,13 +64,33 @@ export async function getRecebimentosPorPedido(pedidoId: number): Promise<Recebi
   return db
     .prepare(
       `SELECT r.id, r.pedido_id, r.valor, r.forma_pagamento, r.data_recebimento, r.observacao,
-         r.conta_financeira_id, cf.nome AS conta_financeira_nome
+         r.conta_financeira_id, cf.nome AS conta_financeira_nome, r.tipo_recebimento,
+         ROUND(r.valor * 100.0 / NULLIF(p.valor_total_cobrado, 0), 2) AS percentual_pedido
        FROM recebimentos r
+       JOIN pedidos p ON p.id = r.pedido_id AND p.tenant_id = r.tenant_id
        LEFT JOIN contas_financeiras cf ON cf.id = r.conta_financeira_id
        WHERE r.pedido_id = ? AND r.tenant_id = ? AND r.estornado_em IS NULL
        ORDER BY data_recebimento DESC`
     )
     .all(pedidoId, TENANT_ID) as Recebimento[]
+}
+
+export async function getContextoRecebimentoPedido(pedidoId: number): Promise<ContextoRecebimentoPedido | null> {
+  if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return null
+  const contexto = db.prepare(`
+    SELECT p.valor_total_cobrado AS valor_total,
+      COALESCE(SUM(CASE WHEN r.estornado_em IS NULL THEN r.valor ELSE 0 END), 0) AS total_recebido,
+      MAX(0, p.valor_total_cobrado - COALESCE(SUM(CASE WHEN r.estornado_em IS NULL THEN r.valor ELSE 0 END), 0)) AS saldo_pendente,
+      p.sinal_percentual,
+      ROUND(p.valor_total_cobrado * p.sinal_percentual / 100.0, 2) AS valor_sinal,
+      COALESCE(SUM(CASE WHEN r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal' THEN r.valor ELSE 0 END), 0) AS sinal_recebido,
+      MAX(0, ROUND(p.valor_total_cobrado * p.sinal_percentual / 100.0, 2) -
+        COALESCE(SUM(CASE WHEN r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal' THEN r.valor ELSE 0 END), 0)) AS sinal_pendente
+    FROM pedidos p LEFT JOIN recebimentos r ON r.pedido_id = p.id AND r.tenant_id = p.tenant_id
+    WHERE p.id = ? AND p.tenant_id = ?
+    GROUP BY p.id
+  `).get(pedidoId, TENANT_ID) as ContextoRecebimentoPedido | undefined
+  return contexto ?? null
 }
 
 export async function getPedidosComSaldoPendente(): Promise<RecebimentoResumo[]> {
@@ -195,6 +228,7 @@ export async function registrarRecebimento(data: {
   observacao?: string
   data_recebimento?: string
   conta_financeira_id?: number | null
+  tipo_recebimento?: 'Sinal' | 'Parcial' | 'Quitacao'
 }): Promise<ActionResult> {
   try {
     if (!Number.isSafeInteger(data.pedido_id) || data.pedido_id <= 0) {
@@ -212,6 +246,10 @@ export async function registrarRecebimento(data: {
     }
     const forma = formas[data.forma_pagamento]
     if (!forma) return { success: false, message: 'Forma de pagamento invalida.' }
+    const tipoRecebimento = data.tipo_recebimento ?? 'Parcial'
+    if (!['Sinal', 'Parcial', 'Quitacao'].includes(tipoRecebimento)) {
+      return { success: false, message: 'Tipo de recebimento inválido.' }
+    }
     const dataRecebimento = data.data_recebimento || new Date().toISOString().slice(0, 10)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataRecebimento)) {
       return { success: false, message: 'Data de recebimento inválida.' }
@@ -223,15 +261,17 @@ export async function registrarRecebimento(data: {
 
     const registrar = db.transaction(() => {
       const pedido = db.prepare(`
-        SELECT p.valor_total_cobrado, p.usuario_id, p.numero_orcamento, p.nome_da_peca,
+        SELECT p.valor_total_cobrado, p.sinal_percentual, p.usuario_id, p.numero_orcamento, p.nome_da_peca,
           t.mei_natureza_padrao,
           COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-            WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido
+            WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido,
+          COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+            WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido
         FROM pedidos p JOIN tenants t ON t.id = p.tenant_id
         WHERE p.id = ? AND p.tenant_id = ? AND p.status != 'Cancelado'
           AND p.orcamento_status = 'Aprovado'
       `).get(data.pedido_id, TENANT_ID) as {
-        valor_total_cobrado: number; recebido: number; usuario_id: number
+        valor_total_cobrado: number; sinal_percentual: number; recebido: number; sinal_recebido: number; usuario_id: number
         numero_orcamento: string | null; nome_da_peca: string
         mei_natureza_padrao: 'Venda' | 'Serviço'
       } | undefined
@@ -242,6 +282,15 @@ export async function registrarRecebimento(data: {
       }
       const saldo = Math.round((pedido.valor_total_cobrado - pedido.recebido) * 100) / 100
       if (data.valor > saldo + 0.001) throw new Error(`OVERPAYMENT:${saldo}`)
+      if (tipoRecebimento === 'Sinal' && pedido.sinal_percentual > 0) {
+        const sinalAlvo = Math.round(pedido.valor_total_cobrado * pedido.sinal_percentual) / 100
+        const sinalPendente = Math.max(0, Math.round((sinalAlvo - pedido.sinal_recebido) * 100) / 100)
+        if (sinalPendente < 0.01) throw new Error('SIGNAL_PAID')
+        if (data.valor > sinalPendente + 0.001) throw new Error(`SIGNAL_EXCESS:${sinalPendente}`)
+      }
+      if (tipoRecebimento === 'Quitacao' && Math.abs(data.valor - saldo) > 0.01) {
+        throw new Error(`INVALID_SETTLEMENT:${saldo}`)
+      }
 
       const parcelas = db.prepare(`
         SELECT pr.id, pr.valor,
@@ -257,11 +306,14 @@ export async function registrarRecebimento(data: {
       const result = db.prepare(
         `INSERT INTO recebimentos (
           tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao,
-          conta_financeira_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+          conta_financeira_id, tipo_recebimento
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         TENANT_ID, data.pedido_id, data.valor, forma, dataRecebimento,
-        data.observacao?.trim() || null, data.conta_financeira_id || null,
+        data.observacao?.trim() || (tipoRecebimento === 'Sinal'
+          ? `Sinal de ${percentualDoPedido(data.valor, pedido.valor_total_cobrado).toFixed(2).replace('.', ',')}% do pedido`
+          : null),
+        data.conta_financeira_id || null, tipoRecebimento,
       )
       const recebimentoId = Number(result.lastInsertRowid)
       db.prepare(`
@@ -288,7 +340,7 @@ export async function registrarRecebimento(data: {
         entidade: 'Recebimento',
         entidadeId: recebimentoId,
         acao: 'CRIAR',
-        descricao: `Recebimento de R$ ${data.valor.toFixed(2)} no pedido #${data.pedido_id}`,
+        descricao: `${tipoRecebimento} de R$ ${data.valor.toFixed(2)} no pedido #${data.pedido_id}`,
       })
     })
     try {
@@ -301,6 +353,17 @@ export async function registrarRecebimento(data: {
         const saldo = Number(message.split(':')[1])
         return { success: false, message: `O valor excede o saldo pendente de R$ ${saldo.toFixed(2).replace('.', ',')}.` }
       }
+      if (message.startsWith('INVALID_SETTLEMENT:')) {
+        const saldo = Number(message.split(':')[1])
+        return { success: false, message: `Para quitar, informe exatamente o saldo de R$ ${saldo.toFixed(2).replace('.', ',')}.` }
+      }
+      if (message === 'SIGNAL_PAID') {
+        return { success: false, message: 'O sinal deste pedido já foi recebido. Use pagamento parcial ou quitação.' }
+      }
+      if (message.startsWith('SIGNAL_EXCESS:')) {
+        const pendente = Number(message.split(':')[1])
+        return { success: false, message: `O sinal restante é de R$ ${pendente.toFixed(2).replace('.', ',')}. Para receber mais, use pagamento parcial ou quitação.` }
+      }
       if (message === 'INSTALLMENTS_MISMATCH') {
         return { success: false, message: 'As parcelas do pedido estão inconsistentes. Reabra o pedido e tente novamente.' }
       }
@@ -310,6 +373,7 @@ export async function registrarRecebimento(data: {
     revalidatePath('/')
     revalidatePath('/financeiro')
     revalidatePath('/recebimentos')
+    revalidatePath(`/pedidos/${data.pedido_id}`)
 
     return { success: true, message: 'Recebimento registrado com sucesso!' }
   } catch (error) {
