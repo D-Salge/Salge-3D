@@ -2,6 +2,7 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { distribuirRecebimento } from '@/lib/financeiro.mjs'
 import { calcularLiquidacaoMercadoPago } from '@/lib/mercado-pago.mjs'
+import { classificarRecebimentoAutomatico, percentualDoPedido } from '@/lib/sinal.mjs'
 
 export type PagamentoMercadoPago = {
   id: number
@@ -54,17 +55,19 @@ export function processarPagamentoMercadoPago(
       VALUES (?, ?, 'payment', ?, ?)`
     ).run(chaveEvento, pagamentoId, acao, JSON.stringify(payload).slice(0, 100_000))
     const cobranca = db.prepare(`
-      SELECT mc.*, p.usuario_id, p.valor_total_cobrado, p.numero_orcamento, p.nome_da_peca,
+      SELECT mc.*, p.usuario_id, p.valor_total_cobrado, p.sinal_percentual, p.numero_orcamento, p.nome_da_peca,
         t.mei_natureza_padrao,
         COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-          WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido
+          WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido,
+        COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+          WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido
       FROM mercado_pago_cobrancas mc
       JOIN pedidos p ON p.id = mc.pedido_id AND p.tenant_id = mc.tenant_id
       JOIN tenants t ON t.id = mc.tenant_id
       WHERE mc.external_reference = ?
     `).get(pagamento.external_reference || '') as {
       id: number; tenant_id: number; pedido_id: number; usuario_id: number; valor: number
-      valor_total_cobrado: number; recebido: number; numero_orcamento: string | null
+      valor_total_cobrado: number; sinal_percentual: number; recebido: number; sinal_recebido: number; numero_orcamento: string | null
       nome_da_peca: string; mei_natureza_padrao: 'Venda' | 'Serviço'; despesa_taxa_id: number | null
     } | undefined
     if (!cobranca) throw new Error('COBRANCA_NOT_FOUND')
@@ -87,12 +90,17 @@ export function processarPagamentoMercadoPago(
       const jaRecebido = db.prepare('SELECT id FROM recebimentos WHERE mercado_pago_pagamento_id = ?').get(pagamentoId)
       if (!jaRecebido) {
         const dataRecebimento = (pagamento.date_approved || new Date().toISOString()).slice(0, 10)
+        const tipoRecebimento = classificarRecebimentoAutomatico({
+          valor, saldo, valorTotal: cobranca.valor_total_cobrado,
+          sinalPercentual: cobranca.sinal_percentual, sinalRecebido: cobranca.sinal_recebido,
+        })
         const result = db.prepare(`INSERT INTO recebimentos (
-          tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao, mercado_pago_pagamento_id
-        ) VALUES (?, ?, ?, 'Outro', ?, ?, ?)`
+          tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao,
+          mercado_pago_pagamento_id, tipo_recebimento
+        ) VALUES (?, ?, ?, 'Outro', ?, ?, ?, ?)`
         ).run(cobranca.tenant_id, cobranca.pedido_id, valor, dataRecebimento,
-          `Baixa automática Mercado Pago · ${pagamento.payment_method_id || pagamento.payment_type_id || 'pagamento online'}`,
-          pagamentoId)
+          `${tipoRecebimento === 'Sinal' ? `Sinal de ${percentualDoPedido(valor, cobranca.valor_total_cobrado).toFixed(2).replace('.', ',')}% · ` : ''}Baixa automática Mercado Pago · ${pagamento.payment_method_id || pagamento.payment_type_id || 'pagamento online'}`,
+          pagamentoId, tipoRecebimento)
         const recebimentoId = Number(result.lastInsertRowid)
         const parcelas = db.prepare(`SELECT pr.id, pr.valor,
           COALESCE((SELECT SUM(ra.valor) FROM recebimento_alocacoes ra
