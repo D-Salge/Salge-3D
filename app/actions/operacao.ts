@@ -154,6 +154,7 @@ export interface PedidoDetalhes {
   validade_orcamento: string | null
   vencimento_em: string | null
   parcelas: number
+  sinal_percentual: number
   quantidade: number
   quantidade_produzida: number
   quantidade_entregue: number
@@ -172,6 +173,7 @@ export interface PedidoDetalhes {
   custo_extra_real: number
   valor_total_cobrado: number
   total_recebido: number
+  sinal_recebido: number
   saldo_pendente: number
   custo_real: number
   custo_estimado: number
@@ -573,6 +575,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
       c.email AS cliente_email, imp.nome AS impressora_nome,
       COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
+      COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido,
       MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
         WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
       (SELECT a.nota FROM avaliacoes_pedido a
