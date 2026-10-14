@@ -32,17 +32,21 @@ export function MercadoPagoCobranca({
   parcelas,
   cobranca,
   modoTeste,
+  sinalPercentual = 0,
+  sinalPendente = 0,
 }: {
   pedidoId: number
   saldo: number
   parcelas: Parcela[]
   cobranca: Cobranca
   modoTeste: boolean
+  sinalPercentual?: number
+  sinalPendente?: number
 }) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const [mensagem, setMensagem] = useState('')
-  const [valor, setValor] = useState(valorInput(saldo))
+  const [valor, setValor] = useState(valorInput(sinalPendente > 0.009 ? sinalPendente : saldo))
   const [url, setUrl] = useState(cobranca?.status === 'Pendente' ? cobranca.init_point : '')
   const [copiado, setCopiado] = useState(false)
   const [operacao, setOperacao] = useState<'gerar' | 'sincronizar' | null>(null)
@@ -114,6 +118,7 @@ export function MercadoPagoCobranca({
         </div>
       </label>
       <div className="flex flex-wrap gap-1.5">
+        {sinalPendente > 0.009 && <button type="button" onClick={() => setValor(valorInput(sinalPendente))} className="rounded-md bg-[#d8f45a]/10 px-2 py-1 text-[10px] text-[#d8f45a]">Sinal de {sinalPercentual.toLocaleString('pt-BR')}% · {moeda(sinalPendente)}</button>}
         <button type="button" onClick={() => setValor(valorInput(saldo))} className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-white/55">Saldo total · {moeda(saldo)}</button>
         {parcelasAbertas.length > 1 && parcelasAbertas.map((parcela) => <button key={parcela.id} type="button" onClick={() => setValor(valorInput(parcela.saldo))} className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-white/55">Parcela {parcela.numero} · {moeda(parcela.saldo)}</button>)}
       </div>
