@@ -16,6 +16,7 @@ import {
   normalizarChaveTexto,
   TIPOS_PEDIDO,
 } from '@/lib/orcamento.mjs'
+import { calcularValorSinal } from '@/lib/sinal.mjs'
 
 function formaPagamentoInicial(valor?: string | null) {
   const mapa: Record<string, string> = {
@@ -108,6 +109,7 @@ export function OrcamentoPage({
   const [validadeOrcamento, setValidadeOrcamento] = useState(pedidoEdicaoId ? pedidoInicial?.validade_orcamento?.slice(0, 10) ?? '' : '')
   const [vencimentoEm, setVencimentoEm] = useState(pedidoEdicaoId ? pedidoInicial?.vencimento_em?.slice(0, 10) ?? '' : '')
   const [parcelas, setParcelas] = useState(pedidoInicial?.parcelas ?? 1)
+  const [sinalPercentual, setSinalPercentual] = useState(pedidoInicial?.sinal_percentual ?? 0)
   const [condicaoPagamento, setCondicaoPagamento] = useState(formaPagamentoInicial(pedidoInicial?.condicao_pagamento))
 
   // UI state
@@ -219,6 +221,8 @@ export function OrcamentoPage({
   })
   const taxasEstimadas = arredondarMoeda(valorFinal * taxaVenda)
   const lucroEstimado = arredondarMoeda(valorFinal - taxasEstimadas - calculo.custoCompleto)
+  const valorSinal = calcularValorSinal(valorFinal, sinalPercentual)
+  const saldoAposSinal = arredondarMoeda(valorFinal - valorSinal)
 
   // ─── SUBMIT ──────────────────────────────────────────────────────
   function handleSubmit(e?: React.SyntheticEvent) {
@@ -239,6 +243,10 @@ export function OrcamentoPage({
     }
     if (desc > baseComercial + freteC) {
       setErrorMsg('O desconto não pode ser maior que o valor do orçamento.')
+      return
+    }
+    if (!Number.isFinite(sinalPercentual) || sinalPercentual < 0 || sinalPercentual > 100) {
+      setErrorMsg('O sinal deve ficar entre 0% e 100%.')
       return
     }
 
@@ -272,6 +280,7 @@ export function OrcamentoPage({
         validade_orcamento: validadeOrcamento || undefined,
         vencimento_em: vencimentoEm || undefined,
         parcelas,
+        sinal_percentual: sinalPercentual,
         condicao_pagamento: condicaoPagamento,
         pedido_origem_id: pedidoEdicaoId ? undefined : pedidoInicial?.origem_id,
         preco_unitario: precoUnitario ?? undefined,
@@ -460,6 +469,16 @@ export function OrcamentoPage({
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-[#d8f45a]">Sinal para iniciar a produção (%)</span>
+              <div className="relative">
+                <input type="number" min="0" max="100" step="1" value={sinalPercentual}
+                  onChange={e => setSinalPercentual(Number(e.target.value))}
+                  className="h-11 w-full rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 pr-8 text-sm text-white focus:border-[#d8f45a] outline-none" />
+                <span className="absolute right-3 top-3 text-sm text-white/35">%</span>
+              </div>
+              <span className="text-[10px] text-white/30">Use 0% quando o pedido não exigir sinal.</span>
+            </label>
+            <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-[#d8f45a]">Preço de venda por unidade (R$)</span>
               <input type="number" min="0.01" step="0.01" placeholder={`Automático: ${fmt(precoAutomatico)}`} value={precoUnitarioVenda}
                 onChange={e => setPrecoUnitarioVenda(e.target.value === '' ? '' : Number(e.target.value))}
@@ -608,6 +627,10 @@ export function OrcamentoPage({
             </div>
             <p className={`mt-2 text-xs ${lucroEstimado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>Lucro estimado: {fmt(lucroEstimado)}</p>
           </div>
+          {sinalPercentual > 0 && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.05] p-4 text-sm">
+            <div className="flex justify-between text-white/60"><span>Sinal de {sinalPercentual.toLocaleString('pt-BR')}%</span><b className="font-mono text-[#d8f45a]">{fmt(valorSinal)}</b></div>
+            <div className="mt-2 flex justify-between text-white/45"><span>Restante na entrega</span><span className="font-mono">{fmt(saldoAposSinal)}</span></div>
+          </div>}
         </div>
 
         {errorMsg && <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-red-400">{errorMsg}</div>}
