@@ -170,7 +170,7 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-lg font-semibold">{form.id ? 'Editar Filamento' : 'Novo Filamento'}</h3>
               <button type="button" onClick={() => setModalOpen(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
