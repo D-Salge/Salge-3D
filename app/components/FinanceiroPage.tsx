@@ -157,31 +157,31 @@ export function FinanceiroPage({
 
       <ProjecaoFluxoCaixa projecao={projecao} />
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         {/* Pagamentos Pendentes */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
           <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
             <div><h2 className="text-sm font-semibold text-white">Pagamentos pendentes</h2><p className="mt-1 text-xs text-white/35">Valores que ainda precisam ser recebidos.</p></div>
             <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-300">{pendentes.length}</span>
           </div>
-          <div className="erp-table-scroll">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/30"><th className="px-4 py-3">Pedido</th><th className="px-4 py-3">Saldo</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
+          <div className="erp-table-scroll erp-table-fit">
+            <table className="w-full table-fixed text-sm">
+              <thead><tr className="border-b border-white/[0.06] text-left text-[9px] uppercase tracking-wider text-white/30"><th className="px-3 py-3">Pedido</th><th className="w-[94px] px-2 py-3">Saldo</th><th className="w-[82px] px-3 py-3 text-right">Ação</th></tr></thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {pendentes.length === 0 && (
                   <tr><td colSpan={3} className="py-8 text-center text-xs text-white/40">Nenhum pagamento pendente!</td></tr>
                 )}
                 {pendentes.map(p => (
                   <tr key={p.parcela_id} className="group hover:bg-white/[0.02]">
-                    <td className="p-4">
-                      <p className="font-medium text-white">{p.nome_da_peca}</p>
-                      <p className="text-xs text-white/50">{p.cliente_nome} · parcela {p.numero_parcela}/{p.total_parcelas} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
+                    <td className="px-3 py-3">
+                      <p className="line-clamp-2 text-xs font-medium leading-4 text-white" title={p.nome_da_peca}>{p.nome_da_peca}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-white/45" title={`${p.cliente_nome} · parcela ${p.numero_parcela}/${p.total_parcelas} · ${p.situacao}${p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}`}>{p.cliente_nome} · parcela {p.numero_parcela}/{p.total_parcelas} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
                     </td>
-                    <td className="p-4 font-mono text-[#d8f45a]">{fmtBRL(p.saldo_pendente)}</td>
-                    <td className="p-4 text-right">
+                    <td className="px-2 py-3 font-mono text-[11px] text-[#d8f45a] whitespace-nowrap">{fmtBRL(p.saldo_pendente)}</td>
+                    <td className="px-3 py-3 text-right">
                       <button 
                         onClick={() => setRecModal(p.pedido_id)}
-                        className="rounded bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20"
+                        className="w-full rounded bg-emerald-500/10 px-2 py-1.5 text-[11px] font-medium text-emerald-400 hover:bg-emerald-500/20"
                       >
                         Receber
                       </button>
@@ -206,31 +206,30 @@ export function FinanceiroPage({
             <select aria-label="Filtrar despesas por status" value={statusDespesa} onChange={(event) => setStatusDespesa(event.target.value as typeof statusDespesa)} className="h-9 rounded-lg border border-white/[0.08] bg-[#101114] px-2 text-xs text-white/65"><option>Todas</option><option>Pendentes</option><option>Pagas</option></select>
             <select aria-label="Ordenar despesas" value={ordemDespesa} onChange={(event) => setOrdemDespesa(event.target.value as typeof ordemDespesa)} className="h-9 rounded-lg border border-white/[0.08] bg-[#101114] px-2 text-xs text-white/65"><option>Recentes</option><option>Vencimento</option></select>
           </div>
-          <div className="erp-table-scroll">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/30"><th className="px-4 py-3">Despesa</th><th className="px-4 py-3">Vencimento</th><th className="px-4 py-3 text-right">Valor</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
+          <div className="erp-table-scroll erp-table-fit">
+            <table className="w-full table-fixed text-sm">
+              <thead><tr className="border-b border-white/[0.06] text-left text-[9px] uppercase tracking-wider text-white/30"><th className="px-3 py-3">Despesa</th><th className="w-[92px] px-2 py-3">Vencimento</th><th className="w-[96px] px-2 py-3 text-right">Valor</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {despesasVisiveis.length === 0 && (
                   <tr><td colSpan={4} className="py-8 text-center text-xs text-white/40">Nenhuma despesa corresponde aos filtros.</td></tr>
                 )}
                 {despesasVisiveis.map(d => (
                   <tr key={d.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setDespesaModal(d)}>
-                    <td className="p-4">
-                      <p className="font-medium text-white">{d.descricao}</p>
-                      <p className="mt-1 text-xs text-white/40">
+                    <td className="px-3 py-3">
+                      <p className="line-clamp-2 text-xs font-medium leading-4 text-white" title={d.descricao}>{d.descricao}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-white/40">
                         {d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}
                         vence {d.vencimento_em.split('-').reverse().join('/')}
                         {d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}
                         {d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}
                       </p>
-                      <span className="inline-block mt-1 rounded bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase text-white/50">{d.categoria}</span>
-                      <span className={`ml-2 inline-block rounded px-2 py-0.5 text-[10px] ${d.pago_em ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{d.pago_em ? 'Paga' : 'Pendente'}</span>
+                      <div className="mt-1 flex min-w-0 gap-1"><span className="truncate rounded bg-white/[0.05] px-1.5 py-0.5 text-[9px] uppercase text-white/50">{d.categoria}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] ${d.pago_em ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{d.pago_em ? 'Paga' : 'Pendente'}</span></div>
                     </td>
-                    <td className="p-4 font-mono text-white/80">{d.vencimento_em.split('-').reverse().join('/')}</td>
-                    <td className="p-4 text-right font-mono text-red-400">{fmtBRL(d.valor)}</td>
-                    <td className="p-4 text-right">
+                    <td className="px-2 py-3 font-mono text-[10px] text-white/70 whitespace-nowrap">{d.vencimento_em.split('-').reverse().join('/')}</td>
+                    <td className="px-2 py-3 text-right font-mono text-[11px] text-red-400 whitespace-nowrap">{fmtBRL(d.valor)}</td>
+                    <td className="px-3 py-3 text-right">
                       <button type="button" disabled={isPending} onClick={(event) => alternarPagamento(event, d)}
-                        className={`rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${d.pago_em ? 'bg-white/[0.05] text-white/50 hover:bg-white/[0.1]' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                        className={`w-full rounded px-2 py-1.5 text-[10px] font-medium disabled:opacity-50 ${d.pago_em ? 'bg-white/[0.05] text-white/50 hover:bg-white/[0.1]' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
                         {d.pago_em ? 'Reabrir' : 'Dar baixa'}
                       </button>
                     </td>
