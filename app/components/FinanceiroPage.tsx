@@ -56,7 +56,9 @@ export function FinanceiroPage({
   const [mensagem, setMensagem] = useState('')
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
-  const saldoCaixa = resumoRecebimentos.totalRecebido - resumoDespesas.totalDespesasPagas + resumoDespesas.totalAportes - resumoDespesas.totalRetiradas
+  // O caixa real é a soma das contas. A fórmula antiga ignorava saldos iniciais
+  // e ajustes de conciliação, fazendo o painel divergir dos bancos.
+  const saldoCaixa = contas.reduce((total, conta) => total + conta.saldo_atual, 0)
   const saldoProjetado = saldoCaixa + resumoRecebimentos.totalPendente - resumoDespesas.totalDespesasPendentes
 
   function alternarPagamento(event: React.MouseEvent, despesa: Despesa) {

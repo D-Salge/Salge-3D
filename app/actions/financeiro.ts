@@ -25,14 +25,29 @@ export async function getProjecaoFluxoCaixa(): Promise<ProjecaoFluxoCaixa> {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
   const caixa = db.prepare(`
-    SELECT
-      COALESCE((SELECT SUM(valor) FROM recebimentos
-        WHERE tenant_id = ? AND estornado_em IS NULL AND date(data_recebimento) <= date(?)), 0) -
-      COALESCE((SELECT SUM(valor) FROM despesas
-        WHERE tenant_id = ? AND estornada_em IS NULL AND pago_em IS NOT NULL AND date(pago_em) <= date(?)), 0) +
-      COALESCE((SELECT SUM(CASE WHEN tipo = 'Aporte' THEN valor ELSE -valor END) FROM fluxo_capital
-        WHERE tenant_id = ? AND date(data_movimentacao) <= date(?)), 0) AS saldo
-  `).get(TENANT_ID, hoje, TENANT_ID, hoje, TENANT_ID, hoje) as { saldo: number }
+    SELECT COALESCE(SUM(
+      cf.saldo_inicial
+      + COALESCE((SELECT SUM(r.valor) FROM recebimentos r
+          WHERE r.tenant_id = cf.tenant_id AND r.conta_financeira_id = cf.id
+            AND r.estornado_em IS NULL AND date(r.data_recebimento) <= date(?)), 0)
+      - COALESCE((SELECT SUM(d.valor) FROM despesas d
+          WHERE d.tenant_id = cf.tenant_id AND d.conta_financeira_id = cf.id
+            AND d.estornada_em IS NULL AND d.pago_em IS NOT NULL
+            AND date(d.pago_em) <= date(?)), 0)
+      + COALESCE((SELECT SUM(CASE WHEN f.tipo = 'Aporte' THEN f.valor ELSE -f.valor END)
+          FROM fluxo_capital f
+          WHERE f.tenant_id = cf.tenant_id AND f.conta_financeira_id = cf.id
+            AND date(f.data_movimentacao) <= date(?)), 0)
+      + COALESCE((SELECT SUM(t.valor) FROM transferencias_financeiras t
+          WHERE t.tenant_id = cf.tenant_id AND t.conta_destino_id = cf.id
+            AND t.estornada_em IS NULL AND date(t.data_transferencia) <= date(?)), 0)
+      - COALESCE((SELECT SUM(t.valor) FROM transferencias_financeiras t
+          WHERE t.tenant_id = cf.tenant_id AND t.conta_origem_id = cf.id
+            AND t.estornada_em IS NULL AND date(t.data_transferencia) <= date(?)), 0)
+    ), 0) AS saldo
+    FROM contas_financeiras cf
+    WHERE cf.tenant_id = ? AND cf.ativa = 1
+  `).get(hoje, hoje, hoje, hoje, hoje, TENANT_ID) as { saldo: number }
 
   const contasReceber = db.prepare(`
     SELECT pr.vencimento_em AS data, 'Entrada' AS tipo,
