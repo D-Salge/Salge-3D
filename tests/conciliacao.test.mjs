@@ -6,6 +6,7 @@ import {
   parseExtrato,
   parseExtratoMercadoPago,
   sugerirConciliacao,
+  valoresFechamConciliacao,
 } from '../lib/conciliacao.mjs'
 
 test('lê valores bancários brasileiros', () => {
@@ -49,6 +50,13 @@ test('reconhece somente as duas direções válidas do cofrinho', () => {
   assert.equal(detectarTransferenciaMercadoPago('Dinheiro retirado Salge 3D', 25), 'DaReserva')
   assert.equal(detectarTransferenciaMercadoPago('Pix recebido Cliente', 25), null)
   assert.equal(detectarTransferenciaMercadoPago('Dinheiro reservado Salge 3D', 50), null)
+})
+
+test('concilia um Pix com vários pedidos somente quando os centavos fecham', () => {
+  assert.equal(valoresFechamConciliacao(60, [30, 30]), true)
+  assert.equal(valoresFechamConciliacao(58.50, [20, 38.50]), true)
+  assert.equal(valoresFechamConciliacao(58.50, [20, 38.49]), false)
+  assert.equal(valoresFechamConciliacao(60, []), false)
 })
 
 test('sugere apenas mesmo valor, tipo e data próxima', () => {

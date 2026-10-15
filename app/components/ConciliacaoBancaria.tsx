@@ -28,9 +28,9 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [mensagem, setMensagem] = useState('')
-  const [selecoes, setSelecoes] = useState<Record<number, string>>(() => Object.fromEntries(
+  const [selecoes, setSelecoes] = useState<Record<number, number[]>>(() => Object.fromEntries(
     lancamentos.filter((item) => item.sugestao)
-      .map((item) => [item.id, `${item.sugestao!.tipo}:${item.sugestao!.id}`]),
+      .map((item) => [item.id, [item.sugestao!.id]]),
   ))
   const [categorias, setCategorias] = useState<Record<number, CategoriaDespesa>>({})
 
@@ -45,12 +45,25 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
   }
 
   function conciliar(item: LancamentoExtrato) {
-    const [tipo, id] = (selecoes[item.id] ?? '').split(':')
-    if (!tipo || !id) { setMensagem('Selecione o registro financeiro correspondente.'); return }
+    const ids = selecoes[item.id] ?? []
+    if (!ids.length) { setMensagem('Selecione ao menos um registro financeiro.'); return }
+    const tipo = item.valor > 0 ? 'Recebimento' : 'Despesa'
     startTransition(async () => {
-      const result = await conciliarLancamento(item.id, tipo as 'Recebimento' | 'Despesa', Number(id))
+      const result = await conciliarLancamento(item.id, tipo, ids)
       setMensagem(result.message)
       if (result.success) router.refresh()
+    })
+  }
+
+  function alternarSelecao(lancamentoId: number, entidadeId: number) {
+    setSelecoes((atuais) => {
+      const selecionados = atuais[lancamentoId] ?? []
+      return {
+        ...atuais,
+        [lancamentoId]: selecionados.includes(entidadeId)
+          ? selecionados.filter((id) => id !== entidadeId)
+          : [...selecionados, entidadeId],
+      }
     })
   }
 
@@ -105,8 +118,13 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
         {pendentes.map((item) => {
           const tipo = item.valor > 0 ? 'Recebimento' : 'Despesa'
           const opcoes = candidatos.filter((candidato) => candidato.tipo === tipo &&
-            candidato.conta_financeira_id === item.conta_financeira_id &&
-            Math.abs(candidato.valor - Math.abs(item.valor)) < 0.01)
+            candidato.conta_financeira_id === item.conta_financeira_id)
+            .sort((a, b) => Math.abs(new Date(`${a.data}T12:00:00`).getTime() - new Date(`${item.data_lancamento}T12:00:00`).getTime()) -
+              Math.abs(new Date(`${b.data}T12:00:00`).getTime() - new Date(`${item.data_lancamento}T12:00:00`).getTime()))
+          const idsSelecionados = selecoes[item.id] ?? []
+          const selecionados = opcoes.filter((opcao) => idsSelecionados.includes(opcao.id))
+          const totalSelecionado = selecionados.reduce((total, opcao) => total + opcao.valor, 0)
+          const valorFecha = Math.round(totalSelecionado * 100) === Math.round(Math.abs(item.valor) * 100)
           return <div key={item.id} className="space-y-4 p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
@@ -118,13 +136,18 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
             </div>
 
             <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_auto] lg:items-end">
-              <label className="text-[10px] uppercase text-white/30">{item.valor > 0 ? 'Venda já registrada' : 'Despesa já registrada'}
-                <select value={selecoes[item.id] ?? ''} onChange={(event) => setSelecoes({ ...selecoes, [item.id]: event.target.value })} className="mt-1 h-10 w-full min-w-0 rounded-lg border border-white/10 bg-[#101114] px-3 text-xs">
-                  <option value="">{opcoes.length ? `Selecione ${item.valor > 0 ? 'um recebimento' : 'uma despesa'}` : 'Nenhum registro com mesmo valor nesta conta'}</option>
-                  {opcoes.map((opcao) => <option key={`${opcao.tipo}-${opcao.id}`} value={`${opcao.tipo}:${opcao.id}`}>{opcao.data.split('-').reverse().join('/')} · {opcao.descricao} · {moeda(opcao.valor)}</option>)}
-                </select>
-              </label>
-              <button disabled={isPending || !selecoes[item.id]} onClick={() => conciliar(item)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500/10 px-3 text-xs text-emerald-300 disabled:opacity-40"><Link2 size={12} /> Conciliar {item.valor > 0 ? 'venda' : 'despesa'}</button>
+              <div>
+                <p className="text-[10px] uppercase text-white/30">{item.valor > 0 ? 'Recebimentos dos pedidos' : 'Despesas já registradas'}</p>
+                <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-[#101114] p-2">
+                  {!opcoes.length && <p className="px-2 py-3 text-xs text-white/30">Nenhum registro disponível nesta conta.</p>}
+                  {opcoes.map((opcao) => <label key={`${opcao.tipo}-${opcao.id}`} className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-xs hover:bg-white/[0.04]">
+                    <input type="checkbox" checked={idsSelecionados.includes(opcao.id)} onChange={() => alternarSelecao(item.id, opcao.id)} className="mt-0.5 accent-[#d8f45a]" />
+                    <span className="min-w-0 flex-1"><span className="block truncate text-white/65">{opcao.descricao}</span><span className="mt-0.5 block text-[10px] text-white/30">{opcao.data.split('-').reverse().join('/')} · {moeda(opcao.valor)}</span></span>
+                  </label>)}
+                </div>
+                <p className={`mt-2 text-[10px] ${valorFecha ? 'text-emerald-300' : 'text-white/35'}`}>Selecionado: {moeda(totalSelecionado)} de {moeda(item.valor)}{idsSelecionados.length > 1 ? ` · ${idsSelecionados.length} registros` : ''}</p>
+              </div>
+              <button disabled={isPending || !valorFecha} onClick={() => conciliar(item)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500/10 px-3 text-xs text-emerald-300 disabled:opacity-40"><Link2 size={12} /> Conciliar {idsSelecionados.length > 1 ? `${idsSelecionados.length} registros` : item.valor > 0 ? 'venda' : 'despesa'}</button>
             </div>
 
             {item.valor > 0 ? <div className="flex flex-wrap gap-2">
