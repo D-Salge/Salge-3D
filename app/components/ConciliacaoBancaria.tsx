@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { Check, CircleDollarSign, FileUp, Link2, ReceiptText, UserRound, X } from 'lucide-react'
+import { Check, CircleDollarSign, FileUp, Link2, ReceiptText, RotateCcw, UserRound, X } from 'lucide-react'
 import {
   classificarLancamento,
   conciliarLancamento,
+  desfazerTratamentoLancamento,
   ignorarLancamento,
   importarExtrato,
   type CandidatoConciliacao,
@@ -81,6 +82,22 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
     if (!confirm('Ignorar este lançamento? Ele não será contabilizado no saldo do ERP.')) return
     startTransition(async () => {
       const result = await ignorarLancamento(id)
+      setMensagem(result.message)
+      if (result.success) router.refresh()
+    })
+  }
+
+  function desfazer(item: LancamentoExtrato) {
+    const efeito = item.classificacao === 'Pessoal' || item.classificacao === 'Aporte'
+      ? 'A movimentação de capital criada será removida.'
+      : item.classificacao === 'Transferencia'
+        ? 'A transferência vinculada será estornada.'
+        : item.classificacao === 'Despesa'
+          ? 'Se a despesa foi criada pelo extrato, ela será estornada. Despesas que já existiam serão preservadas.'
+          : 'Os registros financeiros existentes serão preservados.'
+    if (!confirm(`Desfazer este tratamento? ${efeito} O lançamento voltará para pendente.`)) return
+    startTransition(async () => {
+      const result = await desfazerTratamentoLancamento(item.id)
       setMensagem(result.message)
       if (result.success) router.refresh()
     })
@@ -169,7 +186,11 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
 
     {lancamentos.some((item) => item.status !== 'Pendente') && <section className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
       <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Check size={15} className="text-emerald-400" /> Histórico recente</h2>
-      <div className="space-y-2">{lancamentos.filter((item) => item.status !== 'Pendente').slice(0, 30).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/[0.025] p-3 text-xs"><span className="min-w-0 truncate text-white/55">{item.data_lancamento.split('-').reverse().join('/')} · {item.descricao}</span><span className={item.status === 'Conciliado' ? 'text-emerald-300' : 'text-white/30'}>{item.classificacao ?? item.status} · {moeda(item.valor)}</span></div>)}</div>
+      <div className="space-y-2">{lancamentos.filter((item) => item.status !== 'Pendente').slice(0, 30).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.025] p-3 text-xs">
+        <span className="min-w-0 flex-1 truncate text-white/55">{item.data_lancamento.split('-').reverse().join('/')} · {item.descricao}</span>
+        <span className={item.status === 'Conciliado' ? 'text-emerald-300' : 'text-white/30'}>{item.classificacao ?? item.status} · {moeda(item.valor)}</span>
+        <button type="button" disabled={isPending} onClick={() => desfazer(item)} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-[10px] text-white/45 hover:bg-white/[0.09] hover:text-white disabled:opacity-40"><RotateCcw size={11} /> Desfazer</button>
+      </div>)}</div>
     </section>}
   </>
 }
