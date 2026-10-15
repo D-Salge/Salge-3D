@@ -9,6 +9,7 @@ import {
   parseExtrato,
   parseExtratoMercadoPago,
   sugerirConciliacao,
+  valoresFechamConciliacao,
 } from '@/lib/conciliacao.mjs'
 import { exigirSessao } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
@@ -55,6 +56,8 @@ function candidatos(tenantId: number): CandidatoConciliacao[] {
     JOIN pedidos p ON p.id = r.pedido_id
     JOIN clientes c ON c.id = p.cliente_id
     WHERE r.tenant_id = ? AND r.estornado_em IS NULL
+      AND NOT EXISTS (SELECT 1 FROM extrato_conciliacoes ec WHERE ec.tenant_id = r.tenant_id
+        AND ec.entidade_tipo = 'Recebimento' AND ec.entidade_id = r.id)
       AND NOT EXISTS (SELECT 1 FROM extrato_lancamentos el WHERE el.tenant_id = r.tenant_id
         AND el.entidade_tipo = 'Recebimento' AND el.entidade_id = r.id AND el.status = 'Conciliado')
     UNION ALL
@@ -62,6 +65,8 @@ function candidatos(tenantId: number): CandidatoConciliacao[] {
       d.valor, d.descricao, d.conta_financeira_id
     FROM despesas d
     WHERE d.tenant_id = ? AND d.estornada_em IS NULL
+      AND NOT EXISTS (SELECT 1 FROM extrato_conciliacoes ec WHERE ec.tenant_id = d.tenant_id
+        AND ec.entidade_tipo = 'Despesa' AND ec.entidade_id = d.id)
       AND NOT EXISTS (SELECT 1 FROM extrato_lancamentos el WHERE el.tenant_id = d.tenant_id
         AND el.entidade_tipo = 'Despesa' AND el.entidade_id = d.id AND el.status = 'Conciliado')
   `).all(tenantId, tenantId) as CandidatoConciliacao[]
@@ -253,11 +258,19 @@ export async function importarExtrato(formData: FormData): Promise<{ success: bo
   }
 }
 
-export async function conciliarLancamento(lancamentoId: number, tipo: 'Recebimento' | 'Despesa', entidadeId: number): Promise<{ success: boolean; message: string }> {
+export async function conciliarLancamento(
+  lancamentoId: number,
+  tipo: 'Recebimento' | 'Despesa',
+  entidadeIds: number[],
+): Promise<{ success: boolean; message: string }> {
   try {
     const sessao = await exigirSessao()
-    if (!Number.isSafeInteger(lancamentoId) || lancamentoId <= 0 || !['Recebimento', 'Despesa'].includes(tipo) ||
-        !Number.isSafeInteger(entidadeId) || entidadeId <= 0) return { success: false, message: 'Conciliação inválida.' }
+    const ids = [...new Set(Array.isArray(entidadeIds) ? entidadeIds : [])]
+    if (!Number.isSafeInteger(lancamentoId) || lancamentoId <= 0 ||
+        !['Recebimento', 'Despesa'].includes(tipo) || ids.length === 0 || ids.length > 50 ||
+        !ids.every((id) => Number.isSafeInteger(id) && id > 0)) {
+      return { success: false, message: 'Conciliação inválida.' }
+    }
     const conciliar = db.transaction(() => {
       const linha = db.prepare(`
         SELECT el.id, el.data_lancamento, el.valor, ei.conta_financeira_id
@@ -270,28 +283,44 @@ export async function conciliarLancamento(lancamentoId: number, tipo: 'Recebimen
       if ((linha.valor > 0 ? 'Recebimento' : 'Despesa') !== tipo) throw new Error('TYPE')
       const tabela = tipo === 'Recebimento' ? 'recebimentos' : 'despesas'
       const estorno = tipo === 'Recebimento' ? 'estornado_em' : 'estornada_em'
-      const entidade = db.prepare(`SELECT id, valor, conta_financeira_id FROM ${tabela}
-        WHERE id = ? AND tenant_id = ? AND ${estorno} IS NULL`)
-        .get(entidadeId, sessao.tenantId) as { id: number; valor: number; conta_financeira_id: number | null } | undefined
-      if (!entidade) throw new Error('ENTITY_NOT_FOUND')
-      if (entidade.conta_financeira_id !== linha.conta_financeira_id) throw new Error('ACCOUNT')
-      if (Math.abs(entidade.valor - Math.abs(linha.valor)) > 0.01) throw new Error('AMOUNT')
-      const usada = db.prepare(`
-        SELECT 1 FROM extrato_lancamentos WHERE tenant_id = ? AND status = 'Conciliado'
-          AND entidade_tipo = ? AND entidade_id = ?
-      `).get(sessao.tenantId, tipo, entidadeId)
+      const placeholders = ids.map(() => '?').join(', ')
+      const entidades = db.prepare(`SELECT id, valor, conta_financeira_id FROM ${tabela}
+        WHERE tenant_id = ? AND ${estorno} IS NULL AND id IN (${placeholders})`)
+        .all(sessao.tenantId, ...ids) as { id: number; valor: number; conta_financeira_id: number | null }[]
+      if (entidades.length !== ids.length) throw new Error('ENTITY_NOT_FOUND')
+      if (entidades.some((entidade) => entidade.conta_financeira_id !== linha.conta_financeira_id)) {
+        throw new Error('ACCOUNT')
+      }
+      if (!valoresFechamConciliacao(linha.valor, entidades.map((entidade) => entidade.valor))) {
+        throw new Error('AMOUNT')
+      }
+      const usada = db.prepare(`SELECT 1 FROM extrato_conciliacoes
+        WHERE tenant_id = ? AND entidade_tipo = ? AND entidade_id IN (${placeholders}) LIMIT 1`)
+        .get(sessao.tenantId, tipo, ...ids)
       if (usada) throw new Error('USED')
+      const inserirVinculo = db.prepare(`INSERT INTO extrato_conciliacoes (
+        tenant_id, extrato_lancamento_id, entidade_tipo, entidade_id, valor_vinculado
+      ) VALUES (?, ?, ?, ?, ?)`)
+      for (const entidade of entidades) {
+        inserirVinculo.run(sessao.tenantId, lancamentoId, tipo, entidade.id, entidade.valor)
+      }
+      const entidadeUnica = entidades.length === 1 ? entidades[0] : null
       db.prepare(`
         UPDATE extrato_lancamentos SET status = 'Conciliado', classificacao = ?,
           entidade_tipo = ?, entidade_id = ?, conciliado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         WHERE id = ?
-      `).run(tipo === 'Recebimento' ? 'Venda' : 'Despesa', tipo, entidadeId, lancamentoId)
-      if (tipo === 'Despesa') db.prepare('UPDATE despesas SET pago_em = COALESCE(pago_em, ?) WHERE id = ?')
-        .run(linha.data_lancamento, entidadeId)
+      `).run(tipo === 'Recebimento' ? 'Venda' : 'Despesa', entidadeUnica ? tipo : null,
+        entidadeUnica?.id ?? null, lancamentoId)
+      if (tipo === 'Despesa') {
+        db.prepare(`UPDATE despesas SET pago_em = COALESCE(pago_em, ?)
+          WHERE tenant_id = ? AND id IN (${placeholders})`)
+          .run(linha.data_lancamento, sessao.tenantId, ...ids)
+      }
       registrarAuditoria(db, {
         tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'ExtratoBancario', entidadeId: lancamentoId, acao: 'CONCILIAR',
-        descricao: `${tipo} #${entidadeId} · R$ ${Math.abs(linha.valor).toFixed(2)}`,
+        descricao: `${entidades.length} ${tipo.toLowerCase()}(s) · R$ ${Math.abs(linha.valor).toFixed(2)}`,
+        detalhes: { tipo, entidadeIds: ids },
       })
     })
     try { conciliar.immediate() } catch (error) {
@@ -299,14 +328,16 @@ export async function conciliarLancamento(lancamentoId: number, tipo: 'Recebimen
       if (code === 'NOT_FOUND') return { success: false, message: 'Lançamento pendente não encontrado.' }
       if (code === 'ENTITY_NOT_FOUND') return { success: false, message: 'Registro financeiro não encontrado.' }
       if (code === 'TYPE') return { success: false, message: 'Créditos conciliam recebimentos e débitos conciliam despesas.' }
-      if (code === 'AMOUNT') return { success: false, message: 'Os valores precisam ser exatamente iguais.' }
+      if (code === 'AMOUNT') return { success: false, message: 'A soma dos registros selecionados precisa ser exatamente igual ao lançamento.' }
       if (code === 'ACCOUNT') return { success: false, message: 'O lançamento e o registro financeiro pertencem a contas diferentes.' }
       if (code === 'USED') return { success: false, message: 'Esse registro financeiro já foi conciliado.' }
       throw error
     }
     revalidatePath('/financeiro/conciliacao')
     revalidatePath('/financeiro')
-    return { success: true, message: 'Lançamento conciliado.' }
+    return { success: true, message: ids.length === 1
+      ? 'Lançamento conciliado.'
+      : `Lançamento conciliado com ${ids.length} registros.` }
   } catch (error) {
     console.error('[conciliarLancamento]', error)
     return { success: false, message: 'Não foi possível conciliar.' }
