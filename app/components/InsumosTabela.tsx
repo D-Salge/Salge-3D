@@ -78,7 +78,7 @@ export function InsumosTabela({ insumos }: { insumos: Insumo[] }) {
             <p className="mt-0.5 text-xs text-white/35">{insumos.length} cadastrados</p>
           </div>
         </div>
-        <div className="overflow-x-auto p-6 sm:p-8">
+        <div className="erp-table-scroll p-6 sm:p-8">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
@@ -114,7 +114,7 @@ export function InsumosTabela({ insumos }: { insumos: Insumo[] }) {
                     </td>
                     <td className="py-4 px-3 text-white/40 text-xs">{ins.estoque_minimo}</td>
                     <td className="py-4 pl-3 pr-0 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <button onClick={() => openEdit(ins)} className="rounded-md p-1.5 text-white/30 hover:bg-white/[0.06] hover:text-white transition"><Pencil size={14} /></button>
                         <button onClick={() => handleDelete(ins.id)} className="rounded-md p-1.5 text-red-400/50 hover:bg-red-500/10 hover:text-red-400 transition"><Trash2 size={14} /></button>
                       </div>

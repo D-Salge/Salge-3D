@@ -9,5 +9,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
   const solicitado = Number(params.ano)
   const ano = Number.isSafeInteger(solicitado) && solicitado >= 2020 && solicitado <= 2100
     ? solicitado : new Date().getFullYear()
-  return <div className="mx-auto max-w-[1320px] px-6 py-9 lg:px-10"><FiscalMeiPage painel={await getPainelFiscal(ano)} /></div>
+  return <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10"><FiscalMeiPage painel={await getPainelFiscal(ano)} /></div>
 }

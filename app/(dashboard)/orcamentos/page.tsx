@@ -30,7 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   ])
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10 shrink-0">
+    <div className="mx-auto max-w-[1200px] shrink-0 px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8">
         <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
           <span>Workspace</span><span>/</span><span className="text-white/65">Orçamentos</span>

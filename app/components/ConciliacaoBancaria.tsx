@@ -133,7 +133,7 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
         <h2 className="text-sm font-semibold">Lançamentos a conferir</h2>
         <p className="mt-1 text-xs text-white/35">{pendentes.length} pendente(s){reconhecidos ? ` · ${reconhecidos} transferência(s) do cofrinho reconhecida(s)` : ''}. Concilie vendas e despesas já registradas ou classifique o lançamento abaixo.</p>
       </div>
-      <div className="divide-y divide-white/[0.05]">
+      <div className="erp-list-scroll divide-y divide-white/[0.05]">
         {pendentes.length === 0 && <p className="p-10 text-center text-xs text-white/35">Nenhum lançamento pendente.</p>}
         {pendentes.map((item) => {
           const tipo = item.valor > 0 ? 'Recebimento' : 'Despesa'
@@ -194,7 +194,7 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
           {mostrarHistoricoCompleto ? 'Mostrar somente os 30 mais recentes' : `Mostrar todos (${historico.length})`}
         </button>}
       </div>
-      <div className="space-y-2">{historicoVisivel.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.025] p-3 text-xs">
+      <div className="erp-list-scroll space-y-2 pr-1">{historicoVisivel.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.025] p-3 text-xs">
         <span className="min-w-0 flex-1 truncate text-white/55">{item.data_lancamento.split('-').reverse().join('/')} · {item.descricao}</span>
         <span className={item.status === 'Conciliado' ? 'text-emerald-300' : 'text-white/30'}>{item.classificacao ?? item.status} · {moeda(item.valor)}</span>
         <button type="button" disabled={isPending} onClick={() => desfazer(item)} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-[10px] text-white/45 hover:bg-white/[0.09] hover:text-white disabled:opacity-40"><RotateCcw size={11} /> Desfazer</button>

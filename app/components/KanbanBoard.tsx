@@ -82,7 +82,7 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
           </div>
 
           {/* Cards */}
-          <div className="flex flex-col gap-3 min-h-[150px] rounded-xl bg-white/[0.02] p-3 border border-white/[0.05]">
+          <div className="erp-list-scroll flex min-h-[150px] flex-col gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
             {col.items.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center text-center text-white/20">
                 <span className="text-xs">Nenhum pedido</span>

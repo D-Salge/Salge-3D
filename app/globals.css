@@ -18,6 +18,10 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+  background: #101114;
+}
+
 /* ── Scrollbar custom (dark theme) ──────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -61,4 +65,52 @@ tbody tr {
   outline: 2px solid rgb(139 92 246);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* Regiões extensas mantêm a página curta e o cabeçalho da tabela visível. */
+.erp-table-scroll,
+.overflow-x-auto:has(> table) {
+  max-height: min(68vh, 44rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.erp-table-scroll thead,
+.overflow-x-auto:has(> table) thead {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: #15171b;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.07);
+}
+
+.erp-list-scroll {
+  max-height: min(62vh, 38rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+[id] {
+  scroll-margin-top: 6rem;
+}
+
+@media (max-width: 1023px) {
+  .erp-table-scroll,
+  .overflow-x-auto:has(> table),
+  .erp-list-scroll {
+    max-height: min(64vh, 34rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

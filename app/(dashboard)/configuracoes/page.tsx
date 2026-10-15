@@ -13,7 +13,7 @@ export default async function ConfiguracoesPage() {
   const config = await getConfiguracoes()
 
   return (
-    <div className="mx-auto max-w-[1000px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <ConfiguracoesForm initialData={config} />
     </div>
   )

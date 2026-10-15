@@ -42,9 +42,9 @@ export default async function DashboardLayout({
         metaMensal={config.meta_mensal}
         perfil={sessao.perfil}
       />
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader usuario={sessao} />
-        <main className="flex-1">
+        <main className="flex-1 overflow-x-hidden pb-20 lg:pb-0">
           {children}
         </main>
       </div>

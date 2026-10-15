@@ -77,7 +77,7 @@ export function AgendaPage({ agenda }: { agenda: AgendaDados }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] px-5 py-8 lg:px-10">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div><p className="mb-3 text-xs text-white/35">Operação / Agenda</p><h1 className="text-3xl font-semibold">Agenda da Salge 3D</h1><p className="mt-2 text-sm text-white/40">Entregas, contas, orçamentos e pós-venda em uma única fila.</p></div>
         <button onClick={() => setNovo(true)} className="inline-flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]"><Plus size={14} /> Novo lembrete</button>
@@ -99,7 +99,7 @@ export function AgendaPage({ agenda }: { agenda: AgendaDados }) {
           if (itens.length === 0) return null
           return <section key={grupo} className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#15171b]">
             <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4"><div className="flex items-center gap-2"><Clock3 size={15} className={grupo === 'Atrasado' ? 'text-red-300' : 'text-[#d8f45a]'} /><h2 className="text-sm font-semibold">{titulo}</h2></div><span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] text-white/45">{itens.length}</span></div>
-            <div className="divide-y divide-white/[0.05]">{itens.map((item) => <div key={item.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center">
+            <div className="erp-list-scroll divide-y divide-white/[0.05]">{itens.map((item) => <div key={item.id} className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center">
               <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`rounded px-2 py-1 text-[10px] ${CORES[item.tipo]}`}>{item.tipo}</span>{item.origem === 'Automatica' && <span className="text-[9px] uppercase tracking-wider text-white/20">automático</span>}<span className={grupo === 'Atrasado' ? 'text-xs text-red-300' : 'text-xs text-white/35'}>{dataBr(item.vencimento_em)}</span></div><p className="mt-2 text-sm font-medium text-white/80">{item.titulo}</p>{item.descricao && <p className="mt-1 truncate text-xs text-white/35">{item.descricao}</p>}</div>
               {item.valor !== null && <div className="flex items-center gap-2 font-mono text-sm text-amber-200"><WalletCards size={14} /> {moeda(item.valor)}</div>}
               <div className="flex flex-wrap items-center gap-2">

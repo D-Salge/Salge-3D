@@ -7,6 +7,6 @@ export const metadata: Metadata = { title: 'Integrações e hospedagem · Salge 
 
 export default async function Page() {
   const [diagnostico, envios] = await Promise.all([getDiagnosticoSistema(), getEnviosWhatsAppOficial()])
-  return <div className="mx-auto max-w-[1100px] px-6 py-9 lg:px-10"><IntegracoesPage diagnostico={diagnostico} envios={envios} /></div>
+  return <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10"><IntegracoesPage diagnostico={diagnostico} envios={envios} /></div>
 }
 

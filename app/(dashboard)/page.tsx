@@ -179,7 +179,7 @@ export default async function VisaoGeralPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-[1320px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
 
       {/* ── Cabeçalho da página ─────────────────────────────────────────────── */}
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">

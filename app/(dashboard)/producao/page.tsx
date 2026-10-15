@@ -24,7 +24,7 @@ export default async function ProducaoPage() {
   ])
 
   return (
-    <div className="mx-auto max-w-[1440px] px-6 py-9 lg:px-10 h-full flex flex-col">
+    <div className="mx-auto flex h-full max-w-[1440px] flex-col px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       {/* Header da Página */}
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end shrink-0">
         <div>

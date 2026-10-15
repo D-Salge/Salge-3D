@@ -15,7 +15,7 @@ export default async function Page() {
     getManutencoesImpressoras(),
   ])
   return (
-    <div className="mx-auto max-w-[1100px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <ImpressorasPage
         impressoras={impressoras}
         indicadores={indicadores}

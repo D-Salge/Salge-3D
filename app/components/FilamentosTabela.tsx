@@ -99,7 +99,7 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
           </div>
         </div>
 
-        <div className="overflow-x-auto p-6 sm:p-8">
+        <div className="erp-table-scroll p-6 sm:p-8">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
@@ -150,7 +150,7 @@ export function FilamentosTabela({ filamentos }: { filamentos: FilamentoCompleto
                       </div>
                     </td>
                     <td className="py-4 pl-3 pr-0 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <button onClick={() => openEdit(f)} className="rounded-md p-1.5 text-white/30 hover:bg-white/[0.06] hover:text-white transition">
                           <Pencil size={15} />
                         </button>

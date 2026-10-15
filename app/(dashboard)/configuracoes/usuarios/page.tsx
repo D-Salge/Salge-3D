@@ -8,5 +8,5 @@ export const metadata: Metadata = { title: 'Usuários · Salge 3D' }
 
 export default async function Page() {
   const usuarios = await getUsuarios()
-  return <div className="mx-auto max-w-[1000px] px-6 py-9 lg:px-10"><Link href="/configuracoes" className="mb-5 inline-flex items-center gap-2 text-xs text-white/40"><ArrowLeft size={13} /> Configurações</Link><UsuariosSistema usuarios={usuarios} /></div>
+  return <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10"><Link href="/configuracoes" className="mb-5 inline-flex items-center gap-2 text-xs text-white/40"><ArrowLeft size={13} /> Configurações</Link><UsuariosSistema usuarios={usuarios} /></div>
 }
