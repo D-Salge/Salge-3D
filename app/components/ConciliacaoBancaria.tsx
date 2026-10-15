@@ -34,6 +34,7 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
       .map((item) => [item.id, [item.sugestao!.id]]),
   ))
   const [categorias, setCategorias] = useState<Record<number, CategoriaDespesa>>({})
+  const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false)
 
   function importar(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -105,6 +106,8 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
 
   const pendentes = lancamentos.filter((item) => item.status === 'Pendente')
   const reconhecidos = lancamentos.filter((item) => item.classificacao === 'Transferencia').length
+  const historico = lancamentos.filter((item) => item.status !== 'Pendente')
+  const historicoVisivel = mostrarHistoricoCompleto ? historico : historico.slice(0, 30)
 
   return <>
     <form onSubmit={importar} className="mb-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
@@ -184,9 +187,14 @@ export function ConciliacaoBancaria({ lancamentos, candidatos, contas }: {
       </div>
     </section>
 
-    {lancamentos.some((item) => item.status !== 'Pendente') && <section className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Check size={15} className="text-emerald-400" /> Histórico recente</h2>
-      <div className="space-y-2">{lancamentos.filter((item) => item.status !== 'Pendente').slice(0, 30).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.025] p-3 text-xs">
+    {historico.length > 0 && <section className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold"><Check size={15} className="text-emerald-400" /> Histórico da conciliação</h2>
+        {historico.length > 30 && <button type="button" onClick={() => setMostrarHistoricoCompleto((valor) => !valor)} className="rounded-lg bg-white/[0.05] px-3 py-2 text-[10px] text-white/50 hover:bg-white/[0.09] hover:text-white">
+          {mostrarHistoricoCompleto ? 'Mostrar somente os 30 mais recentes' : `Mostrar todos (${historico.length})`}
+        </button>}
+      </div>
+      <div className="space-y-2">{historicoVisivel.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.025] p-3 text-xs">
         <span className="min-w-0 flex-1 truncate text-white/55">{item.data_lancamento.split('-').reverse().join('/')} · {item.descricao}</span>
         <span className={item.status === 'Conciliado' ? 'text-emerald-300' : 'text-white/30'}>{item.classificacao ?? item.status} · {moeda(item.valor)}</span>
         <button type="button" disabled={isPending} onClick={() => desfazer(item)} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-[10px] text-white/45 hover:bg-white/[0.09] hover:text-white disabled:opacity-40"><RotateCcw size={11} /> Desfazer</button>
