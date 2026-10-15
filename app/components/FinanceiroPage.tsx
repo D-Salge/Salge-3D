@@ -93,7 +93,7 @@ export function FinanceiroPage({
             </div>
             <span className="text-xs font-medium text-white/55">Recebido (mês)</span>
           </div>
-          <p className="text-2xl font-bold tracking-tight text-white">{fmtBRL(resumoRecebimentos.totalRecebidoMes)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(resumoRecebimentos.totalRecebidoMes)}</p>
         </div>
 
         {/* Despesas */}
@@ -104,7 +104,7 @@ export function FinanceiroPage({
             </div>
             <span className="text-xs font-medium text-white/55">Despesas (mês)</span>
           </div>
-          <p className="text-2xl font-bold tracking-tight text-white">{fmtBRL(resumoDespesas.totalDespesasMes)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(resumoDespesas.totalDespesasMes)}</p>
         </div>
 
         {/* Saldo Operacional */}
@@ -115,7 +115,7 @@ export function FinanceiroPage({
             </div>
             <span className="text-xs font-medium text-white/55">Saldo em caixa</span>
           </div>
-          <p className="text-2xl font-bold tracking-tight text-white">{fmtBRL(saldoCaixa)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(saldoCaixa)}</p>
         </div>
 
         {/* Inadimplência */}
@@ -126,15 +126,15 @@ export function FinanceiroPage({
             </div>
             <span className="text-xs font-medium text-white/55">Em atraso</span>
           </div>
-          <p className="text-2xl font-bold tracking-tight text-amber-400">{fmtBRL(resumoRecebimentos.totalVencido)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-amber-400 2xl:text-2xl">{fmtBRL(resumoRecebimentos.totalVencido)}</p>
         </div>
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-[#d8f45a]/10 text-[#d8f45a]"><TrendingUp size={18} /></div><span className="text-xs font-medium text-white/55">Saldo projetado</span></div>
-          <p className="text-2xl font-bold tracking-tight text-[#d8f45a]">{fmtBRL(saldoProjetado)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-[#d8f45a] 2xl:text-2xl">{fmtBRL(saldoProjetado)}</p>
         </div>
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400"><DollarSign size={18} /></div><span className="text-xs font-medium text-white/55">Receita por competência</span></div>
-          <p className="text-2xl font-bold tracking-tight text-white">{fmtBRL(resumoRecebimentos.receitaCompetenciaMes)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(resumoRecebimentos.receitaCompetenciaMes)}</p>
         </div>
       </div>
 
