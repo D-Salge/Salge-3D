@@ -159,17 +159,39 @@ export async function registrarTransferencia(data: {
 export async function estornarTransferencia(id: number) {
   try {
     const sessao = await exigirSessao()
-    const result = db.prepare(`UPDATE transferencias_financeiras
-      SET estornada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-      WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`).run(id, sessao.tenantId)
-    if (result.changes !== 1) return { success: false, message: 'Transferência não encontrada.' }
-    registrarAuditoria(db, {
-      tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
-      entidade: 'TransferenciaFinanceira', entidadeId: id, acao: 'ESTORNAR',
-      descricao: 'Transferência estornada',
+    const estornar = db.transaction(() => {
+      const result = db.prepare(`UPDATE transferencias_financeiras
+        SET estornada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`).run(id, sessao.tenantId)
+      if (result.changes !== 1) throw new Error('NOT_FOUND')
+      const extratos = db.prepare(`SELECT id FROM extrato_lancamentos
+        WHERE tenant_id = ? AND transferencia_financeira_id = ?`).all(sessao.tenantId, id) as { id: number }[]
+      db.prepare(`UPDATE extrato_lancamentos
+        SET status = 'Pendente', classificacao = NULL, transferencia_financeira_id = NULL,
+          entidade_tipo = NULL, entidade_id = NULL, fluxo_capital_id = NULL, conciliado_em = NULL
+        WHERE tenant_id = ? AND transferencia_financeira_id = ?`).run(sessao.tenantId, id)
+      registrarAuditoria(db, {
+        tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
+        entidade: 'TransferenciaFinanceira', entidadeId: id, acao: 'ESTORNAR',
+        descricao: extratos.length
+          ? `Transferência estornada · ${extratos.length} lançamento(s) do extrato reaberto(s)`
+          : 'Transferência estornada',
+        detalhes: { extratoLancamentoIds: extratos.map((item) => item.id) },
+      })
+      return extratos.length
     })
+    let extratosReabertos = 0
+    try { extratosReabertos = estornar.immediate() } catch (error) {
+      if (error instanceof Error && error.message === 'NOT_FOUND') {
+        return { success: false, message: 'Transferência não encontrada.' }
+      }
+      throw error
+    }
     revalidatePath('/financeiro')
-    return { success: true, message: 'Transferência estornada.' }
+    revalidatePath('/financeiro/conciliacao')
+    return { success: true, message: extratosReabertos
+      ? 'Transferência estornada e lançamento do extrato reaberto.'
+      : 'Transferência estornada.' }
   } catch (error) {
     console.error('[estornarTransferencia]', error)
     return { success: false, message: 'Não foi possível estornar a transferência.' }
