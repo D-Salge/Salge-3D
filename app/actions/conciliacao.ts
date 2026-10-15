@@ -6,6 +6,7 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import {
   detectarTransferenciaMercadoPago,
+  desfazerConciliacaoExtrato,
   parseExtrato,
   parseExtratoMercadoPago,
   sugerirConciliacao,
@@ -442,5 +443,41 @@ export async function ignorarLancamento(lancamentoId: number): Promise<{ success
   } catch (error) {
     console.error('[ignorarLancamento]', error)
     return { success: false, message: 'Não foi possível ignorar o lançamento.' }
+  }
+}
+
+export async function desfazerTratamentoLancamento(
+  lancamentoId: number,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const sessao = await exigirSessao()
+    if (!Number.isSafeInteger(lancamentoId) || lancamentoId <= 0) {
+      return { success: false, message: 'Lançamento inválido.' }
+    }
+    const desfazer = db.transaction(() => {
+      const resultado = desfazerConciliacaoExtrato(db, sessao.tenantId, lancamentoId)
+      registrarAuditoria(db, {
+        tenantId: sessao.tenantId,
+        usuarioId: sessao.usuarioId,
+        entidade: 'ExtratoBancario',
+        entidadeId: lancamentoId,
+        acao: 'DESFAZER_CONCILIACAO',
+        descricao: `Tratamento desfeito · ${resultado.classificacaoAnterior ?? 'Ignorado'}`,
+        detalhes: resultado,
+      })
+      return resultado
+    })
+    try { desfazer.immediate() } catch (error) {
+      if (error instanceof Error && error.message === 'NOT_FOUND') {
+        return { success: false, message: 'Lançamento tratado não encontrado.' }
+      }
+      throw error
+    }
+    revalidatePath('/financeiro/conciliacao')
+    revalidatePath('/financeiro')
+    return { success: true, message: 'Tratamento desfeito. O lançamento voltou para pendente.' }
+  } catch (error) {
+    console.error('[desfazerTratamentoLancamento]', error)
+    return { success: false, message: 'Não foi possível desfazer o tratamento.' }
   }
 }
