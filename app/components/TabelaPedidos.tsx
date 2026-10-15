@@ -115,7 +115,7 @@ export function TabelaPedidos({ pedidos }: { pedidos: PedidoResumo[] }) {
         </button>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="erp-table-scroll">
       <table className="w-full min-w-[820px] text-sm">
         <thead>
           <tr className="border-b border-white/[0.06]">

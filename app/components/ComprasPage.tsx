@@ -112,7 +112,7 @@ export function ComprasPage({ dados, sugestoes }: { dados: ComprasDados; sugesto
   }
 
   return (
-    <div className="mx-auto max-w-[1280px] px-5 py-8 lg:px-10">
+    <div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div><p className="mb-3 text-xs text-white/35">Estoque / Compras</p><h1 className="text-3xl font-semibold">Compras e fornecedores</h1><p className="mt-2 text-sm text-white/40">Do pedido ao recebimento, com estoque e financeiro integrados.</p></div>
         <div className="flex gap-2"><button onClick={() => editarFornecedor()} className="inline-flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70"><Building2 size={14} /> Fornecedor</button><button onClick={() => setModalCompra(true)} disabled={!dados.fornecedores.length || !dados.catalogo.length} className="inline-flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-40"><Plus size={14} /> Nova compra</button></div>

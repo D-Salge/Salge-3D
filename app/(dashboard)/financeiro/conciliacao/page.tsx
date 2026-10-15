@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Conciliação bancária · Salge 3D'
 
 export default async function Page() {
   const [dados, contas] = await Promise.all([getConciliacaoBancaria(), getContasFinanceiras()])
-  return <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
+  return <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
     <Link href="/financeiro" className="mb-5 inline-flex items-center gap-2 text-xs text-white/40 hover:text-white"><ArrowLeft size={13} /> Financeiro</Link>
     <div className="mb-8"><p className="mb-3 text-xs text-white/35">Financeiro / Conferência</p><h1 className="text-3xl font-semibold tracking-tight">Conciliação bancária</h1><p className="mt-2 text-sm text-white/40">Cruze vendas, despesas, aportes e transferências com o extrato da conta.</p></div>
     <ConciliacaoBancaria {...dados} contas={contas} />

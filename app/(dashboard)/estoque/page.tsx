@@ -14,7 +14,7 @@ function fmtBRL(valor: number) {
 export default async function EstoquePage() {
   const resumo = await getResumoEstoque()
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="mb-3 text-xs text-white/35">Estoque / Movimentações</p>
@@ -58,7 +58,7 @@ export default async function EstoquePage() {
             <p className="text-xs text-white/35">Últimos 100 lançamentos</p>
           </div>
         </div>
-        <div className="overflow-x-auto p-6">
+        <div className="erp-table-scroll p-6">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase text-white/25">
               <th className="pb-3">Data</th><th className="pb-3">Item</th><th className="pb-3">Movimento</th>

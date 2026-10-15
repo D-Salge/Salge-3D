@@ -89,7 +89,7 @@ export function LotesFilamento({
           </button>
         </div>
         {mensagem && <p className="mx-6 mt-4 rounded-lg bg-white/[0.04] p-3 text-xs text-white/65">{mensagem}</p>}
-        <div className="overflow-x-auto p-6">
+        <div className="erp-table-scroll p-6">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase text-white/25">
               <th className="pb-3">Lote</th><th className="pb-3">Filamento</th><th className="pb-3">Saldo</th>

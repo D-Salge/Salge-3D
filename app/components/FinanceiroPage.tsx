@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react'
+import { useMemo, useState, useTransition } from 'react'
+import { Search, TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react'
 import type { RecebimentoResumo } from '@/app/actions/recebimentos'
 import { alterarPagamentoDespesa, type Despesa, type DespesaRecorrente, type FluxoCapital } from '@/app/actions/despesas'
 import { RecebimentoModal } from './RecebimentoModal'
@@ -54,12 +54,25 @@ export function FinanceiroPage({
   const [despesaModal, setDespesaModal] = useState<Despesa | 'new' | null>(null)
   const [fluxoModal, setFluxoModal] = useState<FluxoCapital | 'new' | null>(null)
   const [mensagem, setMensagem] = useState('')
+  const [buscaDespesa, setBuscaDespesa] = useState('')
+  const [statusDespesa, setStatusDespesa] = useState<'Todas' | 'Pendentes' | 'Pagas'>('Todas')
+  const [ordemDespesa, setOrdemDespesa] = useState<'Recentes' | 'Vencimento'>('Recentes')
 
   const fmtBRL = (v: number) => 'R$ ' + v.toFixed(2).replace('.', ',')
   // O caixa real é a soma das contas. A fórmula antiga ignorava saldos iniciais
   // e ajustes de conciliação, fazendo o painel divergir dos bancos.
   const saldoCaixa = contas.reduce((total, conta) => total + conta.saldo_atual, 0)
   const saldoProjetado = saldoCaixa + resumoRecebimentos.totalPendente - resumoDespesas.totalDespesasPendentes
+  const despesasVisiveis = useMemo(() => {
+    const termo = buscaDespesa.trim().toLocaleLowerCase('pt-BR')
+    return despesas
+      .filter((despesa) => statusDespesa === 'Todas' || (statusDespesa === 'Pagas' ? Boolean(despesa.pago_em) : !despesa.pago_em))
+      .filter((despesa) => !termo || [despesa.descricao, despesa.categoria, despesa.conta_financeira_nome, despesa.forma_pagamento]
+        .some((valor) => valor?.toLocaleLowerCase('pt-BR').includes(termo)))
+      .sort((a, b) => ordemDespesa === 'Recentes'
+        ? b.id - a.id
+        : Number(Boolean(a.pago_em)) - Number(Boolean(b.pago_em)) || a.vencimento_em.localeCompare(b.vencimento_em))
+  }, [buscaDespesa, despesas, ordemDespesa, statusDespesa])
 
   function alternarPagamento(event: React.MouseEvent, despesa: Despesa) {
     event.stopPropagation()
@@ -72,19 +85,19 @@ export function FinanceiroPage({
 
   return (
     <>
-      <div className="mb-8 flex items-center justify-between gap-4">
+      <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
             <span>Sistema</span><span>/</span><span className="text-white/65">Financeiro</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">Financeiro</h1>
         </div>
-        <Link href="/financeiro/conciliacao" className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-500/10 px-4 text-xs font-medium text-blue-300"><Landmark size={15} /> Conciliar banco</Link>
+        <Link href="/financeiro/conciliacao" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 text-xs font-medium text-blue-300 transition hover:bg-blue-500/15 sm:w-auto"><Landmark size={15} /> Conciliar banco</Link>
       </div>
 
       <ContasFinanceiras contas={contas} transferencias={transferencias} />
 
-      <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-6">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {/* Recebido */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
@@ -144,17 +157,19 @@ export function FinanceiroPage({
 
       <ProjecaoFluxoCaixa projecao={projecao} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         {/* Pagamentos Pendentes */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
-          <div className="flex items-center gap-3 border-b border-white/[0.07] px-6 py-5">
-            <h2 className="text-sm font-semibold text-white">Pagamentos Pendentes</h2>
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
+            <div><h2 className="text-sm font-semibold text-white">Pagamentos pendentes</h2><p className="mt-1 text-xs text-white/35">Valores que ainda precisam ser recebidos.</p></div>
+            <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-300">{pendentes.length}</span>
           </div>
-          <div className="p-0">
-            <table className="w-full text-sm">
+          <div className="erp-table-scroll">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/30"><th className="px-4 py-3">Pedido</th><th className="px-4 py-3">Saldo</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {pendentes.length === 0 && (
-                  <tr><td className="py-8 text-center text-xs text-white/40">Nenhum pagamento pendente!</td></tr>
+                  <tr><td colSpan={3} className="py-8 text-center text-xs text-white/40">Nenhum pagamento pendente!</td></tr>
                 )}
                 {pendentes.map(p => (
                   <tr key={p.parcela_id} className="group hover:bg-white/[0.02]">
@@ -180,19 +195,25 @@ export function FinanceiroPage({
 
         {/* Despesas */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-6 py-5">
-            <h2 className="text-sm font-semibold text-white">Despesas e contas a pagar</h2>
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
+            <div><h2 className="text-sm font-semibold text-white">Despesas e contas a pagar</h2><p className="mt-1 text-xs text-white/35">{despesasVisiveis.length} de {despesas.length} lançamento(s)</p></div>
             <button onClick={() => setDespesaModal('new')} className="rounded bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.1]">
               Nova Despesa
             </button>
           </div>
-          <div className="p-0">
-            <table className="w-full text-sm">
+          <div className="grid gap-2 border-b border-white/[0.06] p-3 sm:grid-cols-[minmax(0,1fr)_130px_140px]">
+            <label className="relative"><Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/25" /><input aria-label="Buscar despesa" value={buscaDespesa} onChange={(event) => setBuscaDespesa(event.target.value)} placeholder="Buscar despesa" className="h-9 w-full rounded-lg border border-white/[0.08] bg-[#101114] pl-8 pr-3 text-xs outline-none placeholder:text-white/25 focus:border-[#d8f45a]/40" /></label>
+            <select aria-label="Filtrar despesas por status" value={statusDespesa} onChange={(event) => setStatusDespesa(event.target.value as typeof statusDespesa)} className="h-9 rounded-lg border border-white/[0.08] bg-[#101114] px-2 text-xs text-white/65"><option>Todas</option><option>Pendentes</option><option>Pagas</option></select>
+            <select aria-label="Ordenar despesas" value={ordemDespesa} onChange={(event) => setOrdemDespesa(event.target.value as typeof ordemDespesa)} className="h-9 rounded-lg border border-white/[0.08] bg-[#101114] px-2 text-xs text-white/65"><option>Recentes</option><option>Vencimento</option></select>
+          </div>
+          <div className="erp-table-scroll">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/30"><th className="px-4 py-3">Despesa</th><th className="px-4 py-3">Vencimento</th><th className="px-4 py-3 text-right">Valor</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
               <tbody className="divide-y divide-white/[0.04]">
-                {despesas.length === 0 && (
-                  <tr><td className="py-8 text-center text-xs text-white/40">Nenhuma despesa registrada.</td></tr>
+                {despesasVisiveis.length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-xs text-white/40">Nenhuma despesa corresponde aos filtros.</td></tr>
                 )}
-                {despesas.map(d => (
+                {despesasVisiveis.map(d => (
                   <tr key={d.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setDespesaModal(d)}>
                     <td className="p-4">
                       <p className="font-medium text-white">{d.descricao}</p>
@@ -223,17 +244,18 @@ export function FinanceiroPage({
       
       {/* Fluxo Capital */}
       <div className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/[0.07] px-6 py-5">
-          <h2 className="text-sm font-semibold text-white">Aportes & Retiradas</h2>
+        <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+          <div><h2 className="text-sm font-semibold text-white">Aportes & retiradas</h2><p className="mt-1 text-xs text-white/35">{fluxo.length} movimentação(ões) de capital</p></div>
           <button onClick={() => setFluxoModal('new')} className="rounded bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.1]">
             Nova Movimentação
           </button>
         </div>
-        <div className="p-0">
-            <table className="w-full text-sm">
+        <div className="erp-table-scroll">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/30"><th className="px-4 py-3">Movimentação</th><th className="px-4 py-3">Data</th><th className="px-4 py-3 text-right">Valor</th></tr></thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {fluxo.length === 0 && (
-                  <tr><td className="py-8 text-center text-xs text-white/40">Nenhuma movimentação.</td></tr>
+                  <tr><td colSpan={3} className="py-8 text-center text-xs text-white/40">Nenhuma movimentação.</td></tr>
                 )}
                 {fluxo.map(f => (
                   <tr key={f.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setFluxoModal(f)}>

@@ -123,7 +123,7 @@ export function ClientesTabela({ clientes }: { clientes: Cliente[] }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto p-6 sm:p-8">
+        <div className="erp-table-scroll p-6 sm:p-8">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">

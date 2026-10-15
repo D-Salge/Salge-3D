@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default async function ImportarPlanilhaPage() {
   const history = await getHistoricoImportacoes()
   return (
-    <div className="mx-auto max-w-[1000px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <Link href="/configuracoes" className="mb-5 inline-flex items-center gap-2 text-xs text-white/40 hover:text-white/70"><ArrowLeft size={14} /> Configurações</Link>
       <div className="mb-8">
         <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">Importar planilha</h1>

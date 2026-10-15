@@ -38,7 +38,7 @@ export function ProdutosPage({ produtos, catalogo }: { produtos: ResumoProduto[]
   const campeao = [...produtos].sort((a, b) => b.unidades - a.unidades)[0]
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8">
         <div className="mb-3 flex items-center gap-2 text-xs text-white/35"><span>Dashboard</span><span>/</span><span className="text-white/65">Produtos</span></div>
         <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-[34px]">Produtos e vendas</h1>
@@ -69,7 +69,7 @@ export function ProdutosPage({ produtos, catalogo }: { produtos: ResumoProduto[]
           </div>
         </div>
 
-        {filtrados.length === 0 ? <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-xs text-white/35">{produtos.length === 0 ? 'Nenhum pedido aprovado para analisar.' : 'Nenhum produto encontrado.'}</div> : <div className="overflow-x-auto">
+        {filtrados.length === 0 ? <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-xs text-white/35">{produtos.length === 0 ? 'Nenhum pedido aprovado para analisar.' : 'Nenhum produto encontrado.'}</div> : <div className="erp-table-scroll">
           <table className="w-full min-w-[900px] text-sm">
             <thead><tr className="border-b border-white/[0.06]">{['Produto', 'Pedidos', 'Unidades', 'Clientes', 'Média/un.', 'Faturamento', 'Lucro', 'Margem', 'Última venda', 'Ação'].map((item) => <th key={item} className="px-2 pb-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25 first:pl-0 last:pr-0 last:text-right">{item}</th>)}</tr></thead>
             <tbody className="divide-y divide-white/[0.04]">{filtrados.map((produto) => <tr key={produto.chave} className="hover:bg-white/[0.02]">

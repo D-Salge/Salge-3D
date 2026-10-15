@@ -21,7 +21,7 @@ export default async function Page() {
     getTransferenciasFinanceiras(),
   ])
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-9 lg:px-10">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <FinanceiroPage pendentes={pendentes} resumoRecebimentos={resumoRec} despesas={despesas} despesasRecorrentes={recorrentes} resumoDespesas={resumoDespesas} fluxo={fluxo} projecao={projecao} contas={contas} transferencias={transferencias} />
     </div>
   )

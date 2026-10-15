@@ -6,7 +6,7 @@
  * Client Component — gera data dinâmica no cliente para evitar hydration mismatch.
  */
 
-import { Bell, Box, LogOut } from 'lucide-react'
+import { Box, LogOut } from 'lucide-react'
 import type { SessaoAtual } from '@/lib/session'
 
 export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
@@ -19,12 +19,13 @@ export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
   const hojeFormatado = hoje.charAt(0).toUpperCase() + hoje.slice(1)
 
   return (
-    <header className="flex h-[76px] shrink-0 items-center justify-between border-b border-white/[0.07] px-6 lg:px-10">
+    <header className="sticky top-0 z-30 flex h-[68px] shrink-0 items-center justify-between border-b border-white/[0.07] bg-[#101114]/90 px-4 backdrop-blur-xl sm:px-6 lg:h-[76px] lg:px-10">
       {/* Logo mobile */}
-      <div className="lg:hidden">
+      <div className="flex items-center gap-3 lg:hidden">
         <div className="flex size-9 items-center justify-center rounded-xl bg-[#d8f45a] text-[#16180f]">
           <Box size={18} />
         </div>
+        <div><p className="text-sm font-semibold">Salge<span className="text-[#d8f45a]">3D</span></p><p className="text-[9px] uppercase tracking-[0.16em] text-white/30">ERP</p></div>
       </div>
 
       {/* Saudação desktop */}
@@ -35,15 +36,7 @@ export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
 
       {/* Ações */}
       <div className="flex items-center gap-4">
-        <button
-          aria-label="Notificações"
-          className="relative rounded-lg p-2 text-white/45 transition hover:bg-white/[0.06] hover:text-white"
-        >
-          <Bell size={18} />
-          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-[#d8f45a]" />
-        </button>
-
-        <div className="flex items-center gap-3 border-l border-white/[0.08] pl-4">
+        <div className="flex items-center gap-3">
           <div className="flex size-8 items-center justify-center rounded-full bg-[#2e3540] text-xs font-semibold text-[#d8f45a]">
             {usuario.nome.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase()}
           </div>
