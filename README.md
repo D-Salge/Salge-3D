@@ -5,6 +5,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 ## Módulos
 
 - Dashboard com faturamento, lucro, margem, pendências e alertas de estoque.
+- Busca global por pedido, cliente, produto, filamento e insumo com `Ctrl+K`.
 - Orçamentos com validade, PDF, aprovação e conversão para produção.
 - Produção em Kanban, planejamento por impressora e registro de falhas.
 - Prioridade e ordem manual da fila, com distribuição automática dos pedidos sem impressora.
@@ -30,6 +31,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - WhatsApp Cloud API opcional com templates aprovados, webhook assinado e estados de entrega/leitura.
 - Backup externo opcional para pasta sincronizada, com conferência SHA-256.
 - Diagnóstico de segurança e prontidão para uma implantação em rede.
+- Sessão renovada durante o uso e exportações isoladas pela empresa autenticada.
 
 ## Instalação
 
