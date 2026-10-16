@@ -8,6 +8,7 @@
 
 import { Box, LogOut } from 'lucide-react'
 import type { SessaoAtual } from '@/lib/session'
+import { BuscaGlobal } from '@/app/components/BuscaGlobal'
 
 export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
   const hoje = new Date().toLocaleDateString('pt-BR', {
@@ -36,6 +37,7 @@ export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
 
       {/* Ações */}
       <div className="flex items-center gap-4">
+        <BuscaGlobal />
         <div className="flex items-center gap-3">
           <div className="flex size-8 items-center justify-center rounded-full bg-[#2e3540] text-xs font-semibold text-[#d8f45a]">
             {usuario.nome.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase()}

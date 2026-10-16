@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import db from '@/lib/db'
 
 export const COOKIE_SESSAO = 'salge_session'
-const DURACAO_SEGUNDOS = 60 * 60 * 12
+export const DURACAO_SESSAO_SEGUNDOS = 60 * 60 * 12
 
 export type PerfilUsuario = 'admin' | 'operador' | 'visualizador'
 
@@ -23,7 +23,7 @@ export function autenticacaoConfigurada(): boolean {
 
 export async function criarSessao(usuario: { id: number; tenant_id: number }) {
   const token = randomBytes(32).toString('hex')
-  const expiraEm = new Date(Date.now() + DURACAO_SEGUNDOS * 1000).toISOString()
+  const expiraEm = new Date(Date.now() + DURACAO_SESSAO_SEGUNDOS * 1000).toISOString()
   db.prepare(`
     INSERT INTO sessoes (tenant_id, usuario_id, token_hash, expira_em) VALUES (?, ?, ?, ?)
   `).run(usuario.tenant_id, usuario.id, tokenHash(token), expiraEm)
@@ -33,7 +33,7 @@ export async function criarSessao(usuario: { id: number; tenant_id: number }) {
     sameSite: 'lax',
     secure: process.env.AUTH_COOKIE_SECURE === 'true',
     path: '/',
-    maxAge: DURACAO_SEGUNDOS,
+    maxAge: DURACAO_SESSAO_SEGUNDOS,
   })
 }
 
@@ -54,7 +54,6 @@ export async function getSessaoAtual(): Promise<SessaoAtual | null> {
     WHERE s.token_hash = ? AND datetime(s.expira_em) > datetime('now') AND u.ativo = 1
   `).get(tokenHash(token)) as SessaoAtual | undefined
   if (!sessao) return null
-  db.prepare(`UPDATE sessoes SET ultimo_uso_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE token_hash = ?`).run(tokenHash(token))
   return sessao
 }
 

@@ -1,4 +1,5 @@
 import db from '@/lib/db'
+import { getSessaoAtual } from '@/lib/session'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,8 @@ function csv(valor: unknown) {
 }
 
 export async function GET() {
+  const sessao = await getSessaoAtual()
+  if (!sessao) return new Response('Não autorizado', { status: 401 })
   const rows = db.prepare(`
     SELECT p.numero_orcamento, p.nome_da_peca, c.nome AS cliente,
       p.orcamento_status, p.status, p.data_pedido, p.data_entrega,
@@ -23,9 +26,9 @@ export async function GET() {
         p.valor_reserva_maquina + p.custo_embalagem + p.frete_pago + p.custo_extra_real
       ) AS lucro_estimado
     FROM pedidos p JOIN clientes c ON c.id = p.cliente_id
-    WHERE p.tenant_id = 1
+    WHERE p.tenant_id = ?
     ORDER BY p.data_pedido DESC
-  `).all() as Record<string, unknown>[]
+  `).all(sessao.tenantId) as Record<string, unknown>[]
   const headers = [
     'numero_orcamento', 'nome_da_peca', 'cliente', 'orcamento_status', 'status',
     'data_pedido', 'data_entrega', 'valor_total_cobrado', 'sinal_percentual',
@@ -40,6 +43,7 @@ export async function GET() {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="pedidos-salge3d-${new Date().toISOString().slice(0, 10)}.csv"`,
       'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
     },
   })
 }
