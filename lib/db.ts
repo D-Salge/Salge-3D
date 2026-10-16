@@ -12,6 +12,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { applyMigrations } from './migrations.mjs';
+import { normalizarTextoBusca } from './busca-global.mjs';
 
 // Caminho absoluto do arquivo SQLite — fica na pasta /database na raiz do projeto.
 const DB_PATH = path.join(process.cwd(), 'database', 'salge3d.sqlite');
@@ -31,6 +32,7 @@ function createConnection(): Database.Database {
   db.pragma('foreign_keys = ON');
   db.pragma('synchronous = NORMAL');
   db.pragma('busy_timeout = 5000');
+  db.function('normalizar_busca', { deterministic: true }, (valor) => normalizarTextoBusca(valor));
 
   applyMigrations(db);
 
