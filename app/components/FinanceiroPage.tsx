@@ -216,8 +216,8 @@ export function FinanceiroPage({
                 {despesasVisiveis.map(d => (
                   <tr key={d.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setDespesaModal(d)}>
                     <td className="px-3 py-3">
-                      <p className="line-clamp-2 text-xs font-medium leading-4 text-white" title={d.descricao}>{d.descricao}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-white/40">
+                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-white" title={d.descricao}>{d.descricao}</p>
+                      <p className="mt-0.5 truncate text-xs leading-4 text-white/45" title={`${d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}vence ${d.vencimento_em.split('-').reverse().join('/')}${d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}${d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}`}>
                         {d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}
                         vence {d.vencimento_em.split('-').reverse().join('/')}
                         {d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}
