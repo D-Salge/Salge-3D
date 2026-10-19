@@ -21,8 +21,6 @@ jobs:
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
-      SALGE_CI_TEMP_ROOT: ${{ runner.temp }}/salge3d-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      SALGE_DB_PATH: ${{ runner.temp }}/salge3d-ci-${{ github.run_id }}-${{ github.run_attempt }}/build.sqlite
 
     steps:
       - name: Obter código
@@ -35,6 +33,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
+
+      - name: Definir banco temporário
+        shell: bash
+        run: |
+          temp_root="$RUNNER_TEMP/salge3d-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "SALGE_CI_TEMP_ROOT=$temp_root" >> "$GITHUB_ENV"
+          echo "SALGE_DB_PATH=$temp_root/build.sqlite" >> "$GITHUB_ENV"
 
       - name: Instalar dependências pelo lockfile
         run: npm ci
