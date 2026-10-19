@@ -124,8 +124,11 @@ function prepararCenarios(db) {
 }
 
 function idDaAction(manifesto, nome) {
-  const entrada = Object.entries(manifesto.node).find(([, valor]) =>
-    valor.exportedName === nome && valor.filename.replaceAll('\\', '/').endsWith('/app/actions/portal.ts'))
+  const entrada = Object.entries(manifesto.node).find(([, valor]) => {
+    const arquivo = valor.filename.replaceAll('\\', '/').replace(/^\.\//, '')
+    return valor.exportedName === nome &&
+      (arquivo === 'app/actions/portal.ts' || arquivo.endsWith('/app/actions/portal.ts'))
+  })
   assert.ok(entrada, `Server Action ${nome} não encontrada no manifesto`)
   return entrada[0]
 }
