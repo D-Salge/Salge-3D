@@ -57,7 +57,21 @@ npm run typecheck
 npm run build
 ```
 
-O comando `db:migrate` preserva os registros existentes. Não use `db:reset` em um banco com dados reais.
+Antes de alterar um banco existente com migrações pendentes, tanto a aplicação
+quanto `db:init`, `db:migrate` e `db:restore` criam um snapshot SQLite consistente.
+O snapshot inclui dados confirmados que ainda estejam no WAL, é aberto novamente
+e passa por `integrity_check` antes que a primeira migração seja executada. O
+caminho validado é exibido no terminal. Se o backup ou sua validação falhar, a
+migração é cancelada sem alterações de esquema ou dados.
+
+Os backups pré-migração ficam na pasta `backups` ao lado do banco efetivamente
+configurado, com nomes como
+`antes-migracao-v27-para-v28-<data>.sqlite`. Bancos novos e bancos já atualizados
+não geram esse backup. Processos concorrentes são serializados pelo lock de
+escrita do próprio SQLite e revalidam as pendências antes de criar a cópia.
+
+O comando `db:migrate` preserva os registros existentes e respeita
+`SALGE_DB_PATH`. Não use `db:reset` em um banco com dados reais.
 
 ## Integrações e hospedagem
 
@@ -111,7 +125,19 @@ npm run db:restore -- "C:\\caminho\\backup.sqlite" # restaura com validação e 
 ```
 
 Para restaurar, pare o `npm run dev`. O comando valida a integridade do arquivo,
-preserva automaticamente o banco atual em `database/backups/` e aplica as migrações pendentes.
+preserva automaticamente o banco atual na pasta `backups` ao lado do banco
+configurado e aplica as migrações pendentes. Para recuperar o estado anterior a
+uma migração problemática, pare todos os processos do ERP, volte para uma versão
+do código compatível com a versão indicada no nome do backup e execute:
+
+```bash
+npm run db:restore -- "caminho/para/antes-migracao-vX-para-vY-data.sqlite"
+```
+
+Quando a instalação usa um caminho personalizado, mantenha o mesmo
+`SALGE_DB_PATH` também na restauração. Backups pré-migração são locais, não entram
+na retenção automática nem são enviados ao destino externo; copie ou remova esses
+arquivos conforme a política da instalação depois de validar a atualização.
 
 ## Importar a planilha
 
@@ -151,8 +177,3 @@ falha. Nenhum banco da instalação é utilizado ou removido.
 Ele é um comando de verificação, não de atualização de uma instalação em uso. Para
 iniciar o ERP com `npm start` depois dessa verificação, gere novamente o build com
 `npm run build` usando a configuração apropriada da instalação.
-
-> Limitação conhecida: a aplicação ainda aplica migrações automaticamente ao
-> abrir o banco, sem criar backup antes. A inicialização explícita da CI apenas
-> evita corridas em uma base descartável e não reduz esse risco em instalações
-> reais; a correção deve permanecer em um PR separado.

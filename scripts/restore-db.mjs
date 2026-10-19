@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import Database from 'better-sqlite3'
-import { applyMigrations } from '../lib/migrations.mjs'
+import { aplicarMigracoesComBackup } from '../lib/migracao-segura.mjs'
 
 const origemInformada = process.argv[2]
 if (!origemInformada) {
@@ -11,8 +11,10 @@ if (!origemInformada) {
 }
 
 const origem = path.resolve(origemInformada)
-const destino = path.resolve('database', 'salge3d.sqlite')
-const pastaBackups = path.resolve('database', 'backups')
+const destino = process.env.SALGE_DB_PATH
+  ? path.resolve(process.env.SALGE_DB_PATH)
+  : path.resolve('database', 'salge3d.sqlite')
+const pastaBackups = path.join(path.dirname(destino), 'backups')
 mkdirSync(pastaBackups, { recursive: true })
 
 if (!existsSync(origem)) {
@@ -57,7 +59,7 @@ try {
   const restaurado = new Database(destino)
   try {
     restaurado.pragma('foreign_keys = ON')
-    applyMigrations(restaurado)
+    aplicarMigracoesComBackup(restaurado, { caminhoBanco: destino, pastaBackups })
     const integridade = restaurado.pragma('integrity_check', { simple: true })
     if (integridade !== 'ok') throw new Error(`Banco restaurado inválido: ${integridade}`)
   } finally {

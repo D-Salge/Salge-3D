@@ -11,10 +11,10 @@
  */
 
 import Database from 'better-sqlite3';
-import { readFileSync, existsSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, statSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { applyMigrations } from '../lib/migrations.mjs';
+import { aplicarMigracoesComBackup } from '../lib/migracao-segura.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -37,6 +37,8 @@ if (reset) {
   });
   if (removidos.length > 0) console.log('🗑️  Banco anterior removido.');
 }
+
+const bancoExistente = existsSync(DB_PATH) && statSync(DB_PATH).size > 0;
 
 // ── Lê o schema ────────────────────────────────────────────────────────────
 if (!existsSync(SCHEMA_PATH)) {
@@ -64,10 +66,15 @@ try {
     .filter(line => !line.trim().toUpperCase().startsWith('PRAGMA'))
     .join('\n');
 
-  db.exec(schemaWithoutPragmas);
-
-  // Atualiza bancos novos e existentes sem apagar dados.
-  applyMigrations(db);
+  if (bancoExistente) {
+    // Em uma base existente, protege o estado anterior antes de qualquer migração.
+    aplicarMigracoesComBackup(db, { caminhoBanco: DB_PATH });
+    db.exec(schemaWithoutPragmas);
+  } else {
+    db.exec(schemaWithoutPragmas);
+    // Banco recém-criado não precisa de backup pré-migração.
+    aplicarMigracoesComBackup(db, { caminhoBanco: DB_PATH, bancoExistente: false });
+  }
 
   console.log('✅ Schema aplicado com sucesso!');
 

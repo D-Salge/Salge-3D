@@ -10,9 +10,10 @@
  */
 
 import Database from 'better-sqlite3';
+import { existsSync, statSync } from 'node:fs';
 import path from 'path';
-import { applyMigrations } from './migrations.mjs';
 import { normalizarTextoBusca } from './busca-global.mjs';
+import { aplicarMigracoesComBackup } from './migracao-segura.mjs';
 
 // Permite apontar testes de integração para um banco descartável sem tocar no banco local.
 const DB_PATH = process.env.SALGE_DB_PATH
@@ -25,6 +26,7 @@ declare global {
 }
 
 function createConnection(): Database.Database {
+  const bancoExistente = existsSync(DB_PATH) && statSync(DB_PATH).size > 0;
   const db = new Database(DB_PATH, {
     // verbose: console.log, // Descomente para debugar queries em dev
   });
@@ -36,7 +38,7 @@ function createConnection(): Database.Database {
   db.pragma('busy_timeout = 5000');
   db.function('normalizar_busca', { deterministic: true }, (valor) => normalizarTextoBusca(valor));
 
-  applyMigrations(db);
+  aplicarMigracoesComBackup(db, { caminhoBanco: DB_PATH, bancoExistente });
 
   return db;
 }
