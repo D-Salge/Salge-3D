@@ -154,6 +154,8 @@ test('migra o schema legado uma única vez e preserva os dados', () => {
     assert.ok(extratoColumns.includes('transferencia_financeira_id'))
     assert.ok(extratoColumns.includes('fluxo_capital_id'))
     assert.ok(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'extrato_conciliacoes'`).get())
+    const deliveryColumns = db.prepare(`PRAGMA table_info(entregas_pedido)`).all().map((column) => column.name)
+    assert.ok(deliveryColumns.includes('operacao_id'))
     const fluxoId = Number(db.prepare(`INSERT INTO fluxo_capital
       (tenant_id, usuario_id, tipo, valor, descricao, data_movimentacao)
       VALUES (1, 1, 'Aporte', 50, 'Teste', '2020-01-01')`).run().lastInsertRowid)

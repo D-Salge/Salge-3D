@@ -38,7 +38,9 @@ function criarBancoAntigo(caminho) {
   applyMigrations(db)
   db.exec(`
     DROP TABLE extrato_conciliacoes;
-    DELETE FROM schema_migrations WHERE version = 28;
+    DROP INDEX idx_entregas_operacao;
+    ALTER TABLE entregas_pedido DROP COLUMN operacao_id;
+    DELETE FROM schema_migrations WHERE version >= 28;
     CREATE TABLE dados_anteriores (id INTEGER PRIMARY KEY, valor TEXT NOT NULL);
     INSERT INTO dados_anteriores (valor) VALUES ('registro ainda no WAL');
   `)
@@ -73,7 +75,7 @@ test('cria e valida backup pré-migração com dados ainda presentes no WAL', (t
   const migrador = abrirBanco(caminhoBanco)
   try {
     const resultado = aplicarMigracoesComBackup(migrador, { caminhoBanco })
-    assert.equal(resultado.aplicadas, 1)
+    assert.equal(resultado.aplicadas, 2)
     assert.ok(resultado.backup?.startsWith(path.join(pasta, 'dados', 'backups')))
     assert.ok(existsSync(resultado.backup))
     assert.equal(existeTabela(migrador, 'extrato_conciliacoes'), true)
