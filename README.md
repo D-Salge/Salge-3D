@@ -127,9 +127,32 @@ O mapeamento completo e as regras de reconciliação estão em [`docs/importacao
 
 ## Validação
 
+O projeto usa Node.js `22.20.0`, fixado em `.nvmrc`. Essa versão atende ao
+requisito do `better-sqlite3` (`>=22`), ao Next.js 16 e corresponde ao ambiente
+em que o ERP é validado.
+
+Para reproduzir localmente a mesma sequência da CI:
+
 ```bash
-npm test
-npm run lint
-npm run typecheck
-npm run build
+nvm use
+npm ci
+npm run ci
 ```
+
+O comando `npm run ci` cria um diretório temporário exclusivo e, dentro dele, um
+SQLite descartável. O verificador ignora qualquer `SALGE_DB_PATH` herdado e passa
+explicitamente o caminho seguro aos processos filhos. Ele inicializa a base antes
+do build, executa `npm test`, lint, typecheck e build em sequência e depois roda o
+teste HTTP do portal com outro banco e outro build. Os processos e os recursos
+temporários criados pela execução são encerrados ou removidos mesmo em caso de
+falha. Nenhum banco da instalação é utilizado ou removido.
+
+`npm run ci` também remove os artefatos `.next` antes, entre e depois dos builds.
+Ele é um comando de verificação, não de atualização de uma instalação em uso. Para
+iniciar o ERP com `npm start` depois dessa verificação, gere novamente o build com
+`npm run build` usando a configuração apropriada da instalação.
+
+> Limitação conhecida: a aplicação ainda aplica migrações automaticamente ao
+> abrir o banco, sem criar backup antes. A inicialização explícita da CI apenas
+> evita corridas em uma base descartável e não reduz esse risco em instalações
+> reais; a correção deve permanecer em um PR separado.

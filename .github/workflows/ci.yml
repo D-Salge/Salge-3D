@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Testes, análise e build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Definir pasta temporária da execução
+        shell: bash
+        run: |
+          temp_root="$RUNNER_TEMP/salge3d-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$temp_root"
+          echo "SALGE_CI_TEMP_ROOT=$temp_root" >> "$GITHUB_ENV"
+
+      - name: Instalar dependências pelo lockfile
+        run: npm ci
+
+      - name: Executar verificações reproduzíveis
+        run: npm run ci
+
+      - name: Limpar arquivos temporários
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf -- .next "$SALGE_CI_TEMP_ROOT"

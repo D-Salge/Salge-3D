@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -124,8 +124,11 @@ function prepararCenarios(db) {
 }
 
 function idDaAction(manifesto, nome) {
-  const entrada = Object.entries(manifesto.node).find(([, valor]) =>
-    valor.exportedName === nome && valor.filename.replaceAll('\\', '/').endsWith('/app/actions/portal.ts'))
+  const entrada = Object.entries(manifesto.node).find(([, valor]) => {
+    const arquivo = valor.filename.replaceAll('\\', '/').replace(/^\.\//, '')
+    return valor.exportedName === nome &&
+      (arquivo === 'app/actions/portal.ts' || arquivo.endsWith('/app/actions/portal.ts'))
+  })
   assert.ok(entrada, `Server Action ${nome} não encontrada no manifesto`)
   return entrada[0]
 }
@@ -141,6 +144,21 @@ async function esperarServidor(baseUrl, processo, saidaServidor) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 150))
   }
   throw new Error(`Servidor não ficou pronto.\n${saidaServidor()}`)
+}
+
+async function encerrarServidor(processo) {
+  if (!processo || processo.exitCode !== null) return
+  const encerrado = once(processo, 'exit').then(() => true)
+  processo.kill('SIGTERM')
+  const saiu = await Promise.race([
+    encerrado,
+    new Promise((resolvePromise) => setTimeout(() => resolvePromise(false), 5_000)),
+  ])
+  if (!saiu && processo.exitCode === null) {
+    const forcado = once(processo, 'exit')
+    processo.kill('SIGKILL')
+    await forcado
+  }
 }
 
 async function executarTestesHttp(baseUrl, db, dados, actions) {
@@ -241,7 +259,11 @@ let temporario
 let servidor
 let db
 try {
-  temporario = await mkdtemp(join(tmpdir(), 'salge3d-portal-security-'))
+  const raizTemporaria = process.env.SALGE_CI_TEMP_ROOT
+    ? resolve(process.env.SALGE_CI_TEMP_ROOT)
+    : tmpdir()
+  await mkdir(raizTemporaria, { recursive: true })
+  temporario = await mkdtemp(join(raizTemporaria, 'portal-security-'))
   const caminhoBanco = join(temporario, 'salge3d.sqlite')
   const ambienteTeste = { SALGE_DB_PATH: caminhoBanco }
 
@@ -283,9 +305,6 @@ try {
   console.log('OK: autorização, isolamento entre empresas e portal público validados por HTTP.')
 } finally {
   if (db) db.close()
-  if (servidor && servidor.exitCode === null) {
-    servidor.kill()
-    await Promise.race([once(servidor, 'exit'), new Promise((resolvePromise) => setTimeout(resolvePromise, 5_000))])
-  }
+  await encerrarServidor(servidor)
   if (temporario) await rm(temporario, { recursive: true, force: true })
 }

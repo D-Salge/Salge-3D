@@ -2,6 +2,9 @@
   "name": "salge3d",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.20.0 <23"
+  },
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
@@ -9,6 +12,7 @@
     "lint": "eslint",
     "typecheck": "next typegen --webpack && tsc --noEmit",
     "test": "node --test",
+    "ci": "node scripts/verify-ci.mjs",
     "test:portal-security": "node scripts/portal-security-http.mjs",
     "db:init": "node scripts/init-db.mjs",
     "db:migrate": "node scripts/migrate-db.mjs",
