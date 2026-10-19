@@ -10,6 +10,7 @@
 import db from '@/lib/db'
 import { exigirPerfil } from '@/lib/session'
 import { finalizarPedidoNoBanco, mensagemErroFechamento } from '@/lib/fechamento-pedido.mjs'
+import { iniciarProducaoPedidoNoBanco, mensagemErroInicioProducao } from '@/lib/inicio-producao.mjs'
 import { registrarAuditoria } from '@/lib/auditoria'
 import {
   aplicarPisoHistorico,
@@ -1179,16 +1180,24 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       return { success: false, message: 'Status inválido.' }
     }
 
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    if (novoStatus === 'Imprimindo') {
+      const resultado = iniciarProducaoPedidoNoBanco(db, sessao, pedidoId)
+      if (resultado === 'UNCHANGED') {
+        return { success: true, message: 'O pedido já está em Imprimindo.' }
+      }
+      for (const caminho of ['/producao', '/', '/orcamentos', '/estoque', `/pedidos/${pedidoId}`]) {
+        revalidatePath(caminho)
+      }
+      return { success: true, message: 'Status alterado para Imprimindo' }
+    }
+
     const atualizar = db.transaction(() => {
       const pedido = db
-        .prepare(`SELECT status, orcamento_status, quantidade, quantidade_produzida,
-          valor_total_cobrado, sinal_percentual,
-          COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-            WHERE r.pedido_id = pedidos.id AND r.estornado_em IS NULL), 0) AS total_recebido
+        .prepare(`SELECT status, orcamento_status, quantidade, quantidade_produzida
           FROM pedidos WHERE id = ? AND tenant_id = ?`)
-        .get(pedidoId, TENANT_ID) as {
+        .get(pedidoId, sessao.tenantId) as {
           status: string; orcamento_status: string; quantidade: number; quantidade_produzida: number
-          valor_total_cobrado: number; sinal_percentual: number; total_recebido: number
         } | undefined
 
       if (!pedido) throw new Error('NOT_FOUND')
@@ -1197,19 +1206,13 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       if (!transicoesPermitidas[pedido.status]?.includes(novoStatus)) {
         throw new Error('INVALID_TRANSITION')
       }
-      if (novoStatus === 'Imprimindo' && pedido.sinal_percentual > 0) {
-        const sinalNecessario = arredondarMoeda(pedido.valor_total_cobrado * pedido.sinal_percentual / 100)
-        const sinalPendente = arredondarMoeda(Math.max(0, sinalNecessario - pedido.total_recebido))
-        if (sinalPendente > 0.009) throw new Error(`SIGNAL_PENDING:${sinalPendente}`)
-      }
-
       if (pedido.status === 'Finalizado' && novoStatus === 'Cancelado') {
         const movimentos = db.prepare(`
           SELECT tipo_item, item_id, lote_filamento_id, SUM(quantidade) AS quantidade
           FROM movimentos_estoque
-          WHERE pedido_id = ? AND tipo = 'Saida'
+          WHERE pedido_id = ? AND tenant_id = ? AND tipo = 'Saida'
           GROUP BY tipo_item, item_id, lote_filamento_id
-        `).all(pedidoId) as {
+        `).all(pedidoId, sessao.tenantId) as {
           tipo_item: 'Filamento' | 'Insumo'
           item_id: number
           lote_filamento_id: number | null
@@ -1223,7 +1226,7 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
             ? 'COALESCE(estoque_gramas, peso_rolo_gramas)'
             : 'estoque_atual'
           const row = db.prepare(`SELECT ${fallback} AS saldo FROM ${tabela} WHERE id = ? AND tenant_id = ?`)
-            .get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
+            .get(movimento.item_id, sessao.tenantId) as { saldo: number } | undefined
           if (!row) throw new Error('STOCK_CHANGED')
           const saldoPosterior = row.saldo + movimento.quantidade
           if (movimento.tipo_item === 'Filamento' && movimento.lote_filamento_id) {
@@ -1232,20 +1235,20 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
               WHERE id = ? AND tenant_id = ? AND filamento_id = ?
             `).run(
               movimento.quantidade, movimento.lote_filamento_id,
-              TENANT_ID, movimento.item_id,
+              sessao.tenantId, movimento.item_id,
             )
             if (loteAtualizado.changes !== 1) throw new Error('STOCK_CHANGED')
           }
           db.prepare(`UPDATE ${tabela} SET ${campo} = ? WHERE id = ? AND tenant_id = ?`)
-            .run(saldoPosterior, movimento.item_id, TENANT_ID)
+            .run(saldoPosterior, movimento.item_id, sessao.tenantId)
           db.prepare(`
             INSERT INTO movimentos_estoque (
               tenant_id, usuario_id, tipo_item, item_id, lote_filamento_id,
               pedido_id, tipo, quantidade,
               saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, ?, ?, ?, ?, 'Reversao', ?, ?, ?, 'Estorno por cancelamento do pedido')
+            ) VALUES (?, ?, ?, ?, ?, ?, 'Reversao', ?, ?, ?, 'Estorno por cancelamento do pedido')
           `).run(
-            TENANT_ID, movimento.tipo_item, movimento.item_id,
+            sessao.tenantId, sessao.usuarioId, movimento.tipo_item, movimento.item_id,
             movimento.lote_filamento_id, pedidoId,
             movimento.quantidade, row.saldo, saldoPosterior,
           )
@@ -1266,14 +1269,15 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
                END
            WHERE id = ? AND tenant_id = ? AND status = ?`,
         )
-        .run(novoStatus, novoStatus, novoStatus, pedidoId, TENANT_ID, pedido.status)
+        .run(novoStatus, novoStatus, novoStatus, pedidoId, sessao.tenantId, pedido.status)
 
       if (res.changes !== 1) throw new Error('STATUS_CHANGED')
       db.prepare(`
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
-        VALUES (?, ?, 1, 'Status de produção', ?)
-      `).run(TENANT_ID, pedidoId, `${pedido.status} → ${novoStatus}`)
+        VALUES (?, ?, ?, 'Status de produção', ?)
+      `).run(sessao.tenantId, pedidoId, sessao.usuarioId, `${pedido.status} → ${novoStatus}`)
       registrarAuditoria(db, {
+        tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Pedido', entidadeId: pedidoId, acao: 'STATUS_PRODUCAO',
         descricao: `${pedido.status} → ${novoStatus}`,
       })
@@ -1295,10 +1299,6 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
       }
       if (message === 'NOT_APPROVED') {
         return { success: false, message: 'Aprove o orçamento antes de iniciar a produção.' }
-      }
-      if (message.startsWith('SIGNAL_PENDING:')) {
-        const pendente = Number(message.split(':')[1])
-        return { success: false, message: `Ainda faltam R$ ${pendente.toFixed(2).replace('.', ',')} do sinal para iniciar a produção.` }
       }
       if (message.startsWith('INCOMPLETE_PRODUCTION:')) {
         const [, produzida, total] = message.split(':')
@@ -1323,7 +1323,7 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
     revalidatePath(`/pedidos/${pedidoId}`)
     return { success: true, message: `Status alterado para ${novoStatus}` }
   } catch (err) {
-    const mensagem = mensagemErroFechamento(err)
+    const mensagem = mensagemErroInicioProducao(err) ?? mensagemErroFechamento(err)
     if (mensagem) return { success: false, message: mensagem }
     console.error('[atualizarStatusPedido]', err)
     return { success: false, message: 'Erro interno ao atualizar status.' }

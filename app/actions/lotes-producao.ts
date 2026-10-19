@@ -2,7 +2,9 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { atualizarLoteProducaoNoBanco, mensagemErroInicioProducao } from '@/lib/inicio-producao.mjs'
 import { dividirQuantidadeEmPlacas, validarQuantidadeLote } from '@/lib/lotes-producao.mjs'
+import { exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -256,55 +258,30 @@ export async function atualizarLoteProducao(data: {
         (data.tempoRealHoras !== null && (!Number.isFinite(data.tempoRealHoras) || data.tempoRealHoras < 0))) {
       return { success: false, message: 'Dados do lote inválidos.' }
     }
-    let pedidoId = 0
-    const atualizar = db.transaction(() => {
-      const lote = db.prepare(`
-        SELECT id, pedido_id, codigo, status, quantidade_planejada, quantidade_produzida
-        FROM lotes_producao WHERE id = ? AND tenant_id = ?
-      `).get(data.loteId, TENANT_ID) as LoteProducao | undefined
-      if (!lote) throw new Error('NOT_FOUND')
-      pedidoId = lote.pedido_id
-      if (lote.status === 'Cancelado') throw new Error('CANCELED')
-      if (data.quantidadeProduzida + 0.001 < lote.quantidade_produzida) throw new Error('REGRESSION')
-      if (data.quantidadeProduzida > lote.quantidade_planejada + 0.001) throw new Error('OVER')
-      if (data.status === 'Concluído' && Math.abs(data.quantidadeProduzida - lote.quantidade_planejada) > 0.001) throw new Error('INCOMPLETE')
-      db.prepare(`
-        UPDATE lotes_producao SET status = ?, quantidade_produzida = ?, tempo_real_horas = ?,
-          inicio_em = CASE WHEN ? = 'Imprimindo' AND inicio_em IS NULL THEN strftime('%Y-%m-%dT%H:%M:%SZ', 'now') ELSE inicio_em END,
-          fim_em = CASE WHEN ? = 'Concluído' THEN strftime('%Y-%m-%dT%H:%M:%SZ', 'now') ELSE fim_em END
-        WHERE id = ? AND tenant_id = ?
-      `).run(data.status, data.quantidadeProduzida, data.tempoRealHoras, data.status, data.status, data.loteId, TENANT_ID)
-      const produzido = (db.prepare(`
-        SELECT COALESCE(SUM(quantidade_produzida), 0) AS total FROM lotes_producao
-        WHERE pedido_id = ? AND tenant_id = ? AND status != 'Cancelado'
-      `).get(pedidoId, TENANT_ID) as { total: number }).total
-      db.prepare(`
-        UPDATE pedidos SET quantidade_produzida = MAX(quantidade_produzida, MIN(quantidade, ?)),
-          status = CASE WHEN ? = 'Imprimindo' AND status = 'Fila' THEN 'Imprimindo' ELSE status END
-        WHERE id = ? AND tenant_id = ?
-      `).run(produzido, data.status, pedidoId, TENANT_ID)
-      db.prepare(`
-        INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
-        VALUES (?, ?, ?, 'Lote de produção', ?)
-      `).run(TENANT_ID, pedidoId, USUARIO_ID, `${lote.codigo}: ${lote.status} → ${data.status}; ${data.quantidadeProduzida}/${lote.quantidade_planejada}`)
-      registrarAuditoria(db, {
-        entidade: 'LoteProducao', entidadeId: data.loteId, acao: 'ATUALIZAR',
-        descricao: `${data.status} · ${data.quantidadeProduzida}/${lote.quantidade_planejada}`,
-      })
-    })
-    try { atualizar.immediate() } catch (error) {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    let operacao: { resultado: string; pedidoId: number }
+    try {
+      operacao = atualizarLoteProducaoNoBanco(db, sessao, data)
+    } catch (error) {
       const code = error instanceof Error ? error.message : ''
-      if (code === 'NOT_FOUND') return { success: false, message: 'Lote não encontrado.' }
+      const mensagemInicio = mensagemErroInicioProducao(error)
+      if (mensagemInicio) return { success: false, message: mensagemInicio }
       if (code === 'CANCELED') return { success: false, message: 'Lote cancelado não pode ser alterado.' }
       if (code === 'REGRESSION') return { success: false, message: 'A quantidade produzida não pode diminuir.' }
       if (code === 'OVER') return { success: false, message: 'Produção maior que a quantidade planejada.' }
       if (code === 'INCOMPLETE') return { success: false, message: 'Para concluir, informe toda a quantidade planejada.' }
       throw error
     }
+    if (operacao.resultado === 'UNCHANGED') {
+      return { success: true, message: 'O lote já possui esses dados.' }
+    }
     revalidatePath('/producao')
-    revalidatePath(`/pedidos/${pedidoId}`)
+    revalidatePath(`/pedidos/${operacao.pedidoId}`)
     return { success: true, message: 'Lote atualizado e progresso do pedido sincronizado.' }
   } catch (error) {
+    const code = error instanceof Error ? error.message : ''
+    if (code === 'UNAUTHORIZED') return { success: false, message: 'Sua sessão expirou. Entre novamente.' }
+    if (code === 'FORBIDDEN') return { success: false, message: 'Seu perfil não permite alterar lotes.' }
     console.error('[atualizarLoteProducao]', error)
     return { success: false, message: 'Não foi possível atualizar o lote.' }
   }
