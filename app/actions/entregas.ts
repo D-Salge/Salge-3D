@@ -2,8 +2,8 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { calcularValorProporcional } from '@/lib/entregas.mjs'
-import { distribuirRecebimento } from '@/lib/financeiro.mjs'
+import { registrarEntregaParcialNoBanco } from '@/lib/registro-entrega.mjs'
+import { exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = 1
@@ -28,13 +28,6 @@ export interface ComprovanteEntrega extends EntregaPedido {
   quantidade_entregue_acumulada: number
   quantidade_restante: number
   valor_total_cobrado: number
-}
-
-const FORMAS: Record<string, string> = {
-  Pix: 'Pix', Dinheiro: 'Dinheiro',
-  'Cartão Crédito': 'Cartao Credito', 'Cartao Credito': 'Cartao Credito',
-  'Cartão Débito': 'Cartao Debito', 'Cartao Debito': 'Cartao Debito',
-  Transferência: 'Transferencia', Transferencia: 'Transferencia', Outro: 'Outro',
 }
 
 function revalidarPedido(pedidoId: number) {
@@ -91,6 +84,7 @@ export async function atualizarQuantidadeProduzida(
 }
 
 export async function registrarEntregaParcial(data: {
+  operacaoId: string
   pedidoId: number
   quantidade: number
   entregueEm: string
@@ -100,107 +94,38 @@ export async function registrarEntregaParcial(data: {
   formaPagamento: string
 }): Promise<{ success: boolean; message: string; entregaId?: number }> {
   try {
-    if (!Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0 || !Number.isSafeInteger(data.quantidade) || data.quantidade <= 0) {
-      return { success: false, message: 'Pedido ou quantidade inválida.' }
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.entregueEm)) return { success: false, message: 'Data de entrega inválida.' }
-    if (data.observacao.length > 500) return { success: false, message: 'A observação deve ter no máximo 500 caracteres.' }
-    const forma = FORMAS[data.formaPagamento]
-    if (data.registrarPagamento && !forma) return { success: false, message: 'Forma de pagamento inválida.' }
-    if (data.registrarPagamento && (!Number.isFinite(data.valorRecebido) || data.valorRecebido <= 0)) {
-      return { success: false, message: 'Informe um valor recebido maior que zero.' }
-    }
-
-    let entregaId = 0
-    const registrar = db.transaction(() => {
-      const pedido = db.prepare(`
-        SELECT p.id, p.numero_orcamento, p.nome_da_peca, p.quantidade,
-          p.quantidade_produzida, p.valor_total_cobrado, p.status, p.orcamento_status,
-          COALESCE((SELECT SUM(e.quantidade) FROM entregas_pedido e
-            WHERE e.pedido_id = p.id AND e.cancelada_em IS NULL), 0) AS quantidade_entregue,
-          COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-            WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido
-        FROM pedidos p WHERE p.id = ? AND p.tenant_id = ?
-      `).get(data.pedidoId, TENANT_ID) as {
-        id: number; numero_orcamento: string | null; nome_da_peca: string
-        quantidade: number; quantidade_produzida: number; quantidade_entregue: number
-        valor_total_cobrado: number; total_recebido: number; status: string; orcamento_status: string
-      } | undefined
-      if (!pedido) throw new Error('NOT_FOUND')
-      if (pedido.orcamento_status !== 'Aprovado' || pedido.status === 'Cancelado') throw new Error('INVALID_STATUS')
-      const entregueDepois = pedido.quantidade_entregue + data.quantidade
-      if (entregueDepois > pedido.quantidade) throw new Error(`OVER_DELIVERY:${pedido.quantidade - pedido.quantidade_entregue}`)
-      const valorReferente = calcularValorProporcional(pedido.valor_total_cobrado, pedido.quantidade, data.quantidade)
-      let recebimentoId: number | null = null
-
-      if (data.registrarPagamento) {
-        const saldo = Math.round((pedido.valor_total_cobrado - pedido.total_recebido) * 100) / 100
-        if (data.valorRecebido > saldo + 0.001) throw new Error(`OVERPAYMENT:${saldo}`)
-        const parcelas = db.prepare(`
-          SELECT pr.id, pr.valor,
-            COALESCE((SELECT SUM(ra.valor) FROM recebimento_alocacoes ra
-              JOIN recebimentos rx ON rx.id = ra.recebimento_id
-              WHERE ra.parcela_id = pr.id AND rx.estornado_em IS NULL), 0) AS recebido
-          FROM parcelas_receber pr
-          WHERE pr.pedido_id = ? AND pr.cancelada_em IS NULL
-          ORDER BY date(pr.vencimento_em), pr.numero
-        `).all(data.pedidoId) as { id: number; valor: number; recebido: number }[]
-        const recebimento = db.prepare(`
-          INSERT INTO recebimentos (tenant_id, pedido_id, valor, forma_pagamento, data_recebimento, observacao)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(
-          TENANT_ID, data.pedidoId, data.valorRecebido, forma, data.entregueEm,
-          `Entrega parcial de ${data.quantidade} unidade(s)${data.observacao.trim() ? ` · ${data.observacao.trim()}` : ''}`,
-        )
-        recebimentoId = Number(recebimento.lastInsertRowid)
-        const distribuicao = distribuirRecebimento(data.valorRecebido, parcelas)
-        if (distribuicao.restante > 0.001) throw new Error('INSTALLMENTS_MISMATCH')
-        const alocar = db.prepare(`INSERT INTO recebimento_alocacoes (recebimento_id, parcela_id, valor) VALUES (?, ?, ?)`)
-        for (const item of distribuicao.alocacoes) alocar.run(recebimentoId, item.parcelaId, item.valor)
-        registrarAuditoria(db, {
-          entidade: 'Recebimento', entidadeId: recebimentoId, acao: 'CRIAR',
-          descricao: `R$ ${data.valorRecebido.toFixed(2)} vinculados à entrega parcial do pedido #${data.pedidoId}`,
-        })
-      }
-
-      const entrega = db.prepare(`
-        INSERT INTO entregas_pedido (
-          tenant_id, usuario_id, pedido_id, recebimento_id, quantidade,
-          valor_referente, entregue_em, observacao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        TENANT_ID, USUARIO_ID, data.pedidoId, recebimentoId, data.quantidade,
-        valorReferente, data.entregueEm, data.observacao.trim() || null,
-      )
-      entregaId = Number(entrega.lastInsertRowid)
-      const produzidaDepois = Math.max(pedido.quantidade_produzida, entregueDepois)
-      db.prepare(`UPDATE pedidos SET quantidade_produzida = ? WHERE id = ? AND tenant_id = ?`)
-        .run(produzidaDepois, data.pedidoId, TENANT_ID)
-      db.prepare(`
-        INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
-        VALUES (?, ?, ?, 'Entrega parcial', ?)
-      `).run(
-        TENANT_ID, data.pedidoId, USUARIO_ID,
-        `${data.quantidade} unidade(s) entregues · acumulado ${entregueDepois}/${pedido.quantidade}${recebimentoId ? ` · recebido R$ ${data.valorRecebido.toFixed(2)}` : ''}`,
-      )
-      registrarAuditoria(db, {
-        entidade: 'Entrega', entidadeId: entregaId, acao: 'CRIAR',
-        descricao: `${pedido.numero_orcamento ?? `#${pedido.id}`} · ${data.quantidade} unidade(s)`,
-      })
-    })
-
-    try { registrar() } catch (error) {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    let operacao: { resultado: 'CREATED' | 'UNCHANGED'; entregaId: number }
+    try {
+      operacao = registrarEntregaParcialNoBanco(db, sessao, data)
+    } catch (error) {
       const message = error instanceof Error ? error.message : ''
+      if (message === 'INVALID_INPUT') return { success: false, message: 'Pedido ou quantidade inválida.' }
+      if (message === 'INVALID_OPERATION_ID') return { success: false, message: 'Identificador da operação inválido. Reabra o formulário.' }
+      if (message === 'INVALID_DATE') return { success: false, message: 'Data de entrega inválida.' }
+      if (message === 'INVALID_NOTE') return { success: false, message: 'A observação deve ter no máximo 500 caracteres.' }
+      if (message === 'INVALID_PAYMENT_METHOD') return { success: false, message: 'Forma de pagamento inválida.' }
+      if (message === 'INVALID_PAYMENT_VALUE') return { success: false, message: 'Informe um valor recebido maior que zero.' }
       if (message === 'NOT_FOUND') return { success: false, message: 'Pedido não encontrado.' }
       if (message === 'INVALID_STATUS') return { success: false, message: 'A entrega exige um pedido aprovado e não cancelado.' }
       if (message.startsWith('OVER_DELIVERY:')) return { success: false, message: `A quantidade excede as ${message.split(':')[1]} unidade(s) ainda não entregues.` }
       if (message.startsWith('OVERPAYMENT:')) return { success: false, message: `O pagamento excede o saldo de R$ ${Number(message.split(':')[1]).toFixed(2).replace('.', ',')}.` }
       if (message === 'INSTALLMENTS_MISMATCH') return { success: false, message: 'As parcelas do pedido estão inconsistentes.' }
+      if (message === 'OPERATION_CONFLICT') return { success: false, message: 'A operação já foi usada com outros dados. Reabra o formulário.' }
       throw error
     }
     revalidarPedido(data.pedidoId)
-    return { success: true, message: 'Entrega parcial registrada sem finalizar o pedido.', entregaId }
+    return {
+      success: true,
+      message: operacao.resultado === 'UNCHANGED'
+        ? 'Esta entrega já havia sido registrada.'
+        : 'Entrega parcial registrada sem finalizar o pedido.',
+      entregaId: operacao.entregaId,
+    }
   } catch (error) {
+    const code = error instanceof Error ? error.message : ''
+    if (code === 'UNAUTHORIZED') return { success: false, message: 'Sua sessão expirou. Entre novamente.' }
+    if (code === 'FORBIDDEN') return { success: false, message: 'Seu perfil não permite registrar entregas.' }
     console.error('[registrarEntregaParcial]', error)
     return { success: false, message: 'Não foi possível registrar a entrega.' }
   }
@@ -209,30 +134,40 @@ export async function registrarEntregaParcial(data: {
 export async function estornarEntregaPedido(entregaId: number): Promise<{ success: boolean; message: string }> {
   try {
     if (!Number.isSafeInteger(entregaId) || entregaId <= 0) return { success: false, message: 'Entrega inválida.' }
+    const sessao = await exigirPerfil(['admin', 'operador'])
     let pedidoId = 0
     const estornar = db.transaction(() => {
       const entrega = db.prepare(`
         SELECT id, pedido_id, recebimento_id, quantidade FROM entregas_pedido
         WHERE id = ? AND tenant_id = ? AND cancelada_em IS NULL
-      `).get(entregaId, TENANT_ID) as { id: number; pedido_id: number; recebimento_id: number | null; quantidade: number } | undefined
+      `).get(entregaId, sessao.tenantId) as { id: number; pedido_id: number; recebimento_id: number | null; quantidade: number } | undefined
       if (!entrega) throw new Error('NOT_FOUND')
       pedidoId = entrega.pedido_id
-      db.prepare(`UPDATE entregas_pedido SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?`).run(entregaId)
+      db.prepare(`UPDATE entregas_pedido SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ? AND tenant_id = ?`).run(entregaId, sessao.tenantId)
       if (entrega.recebimento_id) {
         db.prepare(`
           UPDATE recebimentos SET estornado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
             estorno_motivo = 'Estorno da entrega parcial vinculada'
           WHERE id = ? AND tenant_id = ? AND estornado_em IS NULL
-        `).run(entrega.recebimento_id, TENANT_ID)
+        `).run(entrega.recebimento_id, sessao.tenantId)
+        db.prepare(`UPDATE receitas_fiscais
+          SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+          WHERE recebimento_id = ? AND tenant_id = ? AND cancelada_em IS NULL`
+        ).run(entrega.recebimento_id, sessao.tenantId)
       }
       db.prepare(`
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Entrega estornada', ?)
       `).run(
-        TENANT_ID, entrega.pedido_id, USUARIO_ID,
+        sessao.tenantId, entrega.pedido_id, sessao.usuarioId,
         `${entrega.quantidade} unidade(s)${entrega.recebimento_id ? '; pagamento vinculado também estornado' : ''}`,
       )
-      registrarAuditoria(db, { entidade: 'Entrega', entidadeId: entregaId, acao: 'ESTORNAR', descricao: `Entrega do pedido #${entrega.pedido_id}` })
+      registrarAuditoria(db, {
+        tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
+        entidade: 'Entrega', entidadeId: entregaId, acao: 'ESTORNAR',
+        descricao: `Entrega do pedido #${entrega.pedido_id}`,
+      })
     })
     try { estornar() } catch (error) {
       if (error instanceof Error && error.message === 'NOT_FOUND') return { success: false, message: 'Entrega não encontrada.' }
@@ -241,6 +176,9 @@ export async function estornarEntregaPedido(entregaId: number): Promise<{ succes
     revalidarPedido(pedidoId)
     return { success: true, message: 'Entrega e pagamento vinculado foram estornados.' }
   } catch (error) {
+    const code = error instanceof Error ? error.message : ''
+    if (code === 'UNAUTHORIZED') return { success: false, message: 'Sua sessão expirou. Entre novamente.' }
+    if (code === 'FORBIDDEN') return { success: false, message: 'Seu perfil não permite estornar entregas.' }
     console.error('[estornarEntregaPedido]', error)
     return { success: false, message: 'Não foi possível estornar a entrega.' }
   }

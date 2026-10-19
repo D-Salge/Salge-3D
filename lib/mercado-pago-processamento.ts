@@ -2,6 +2,7 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { distribuirRecebimento } from '@/lib/financeiro.mjs'
 import { calcularLiquidacaoMercadoPago } from '@/lib/mercado-pago.mjs'
+import { registrarReceitaFiscalDeRecebimento } from '@/lib/receitas-fiscais.mjs'
 import { classificarRecebimentoAutomatico, percentualDoPedido } from '@/lib/sinal.mjs'
 
 export type PagamentoMercadoPago = {
@@ -56,19 +57,17 @@ export function processarPagamentoMercadoPago(
     ).run(chaveEvento, pagamentoId, acao, JSON.stringify(payload).slice(0, 100_000))
     const cobranca = db.prepare(`
       SELECT mc.*, p.usuario_id, p.valor_total_cobrado, p.sinal_percentual, p.numero_orcamento, p.nome_da_peca,
-        t.mei_natureza_padrao,
         COALESCE((SELECT SUM(r.valor) FROM recebimentos r
           WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido,
         COALESCE((SELECT SUM(r.valor) FROM recebimentos r
           WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido
       FROM mercado_pago_cobrancas mc
       JOIN pedidos p ON p.id = mc.pedido_id AND p.tenant_id = mc.tenant_id
-      JOIN tenants t ON t.id = mc.tenant_id
       WHERE mc.external_reference = ?
     `).get(pagamento.external_reference || '') as {
       id: number; tenant_id: number; pedido_id: number; usuario_id: number; valor: number
       valor_total_cobrado: number; sinal_percentual: number; recebido: number; sinal_recebido: number; numero_orcamento: string | null
-      nome_da_peca: string; mei_natureza_padrao: 'Venda' | 'Serviço'; despesa_taxa_id: number | null
+      nome_da_peca: string; despesa_taxa_id: number | null
     } | undefined
     if (!cobranca) throw new Error('COBRANCA_NOT_FOUND')
     const status = statusInterno(pagamento.status)
@@ -113,12 +112,13 @@ export function processarPagamentoMercadoPago(
         if (distribuicao.restante > 0.001) throw new Error('INSTALLMENTS_MISMATCH')
         const alocar = db.prepare('INSERT INTO recebimento_alocacoes (recebimento_id, parcela_id, valor) VALUES (?, ?, ?)')
         for (const item of distribuicao.alocacoes) alocar.run(recebimentoId, item.parcelaId, item.valor)
-        db.prepare(`INSERT INTO receitas_fiscais (
-          tenant_id, usuario_id, recebimento_id, data_competencia, natureza, origem, descricao, valor
-        ) VALUES (?, ?, ?, ?, ?, 'ERP', ?, ?)`
-        ).run(cobranca.tenant_id, cobranca.usuario_id, recebimentoId, dataRecebimento,
-          cobranca.mei_natureza_padrao,
-          `Mercado Pago ${cobranca.numero_orcamento || `#${cobranca.pedido_id}`} — ${cobranca.nome_da_peca}`, valor)
+        registrarReceitaFiscalDeRecebimento(db, {
+          tenantId: cobranca.tenant_id,
+          usuarioId: cobranca.usuario_id,
+          recebimentoId,
+          pedidoId: cobranca.pedido_id,
+          prefixoDescricao: 'Mercado Pago',
+        })
         db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
           VALUES (?, ?, ?, 'Pagamento confirmado', ?)`
         ).run(cobranca.tenant_id, cobranca.pedido_id, cobranca.usuario_id,

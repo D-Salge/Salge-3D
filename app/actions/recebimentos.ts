@@ -8,6 +8,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { distribuirRecebimento } from '@/lib/financeiro.mjs'
+import { registrarReceitaFiscalDeRecebimento } from '@/lib/receitas-fiscais.mjs'
 import { percentualDoPedido } from '@/lib/sinal.mjs'
 import { revalidatePath } from 'next/cache'
 
@@ -262,18 +263,16 @@ export async function registrarRecebimento(data: {
     const registrar = db.transaction(() => {
       const pedido = db.prepare(`
         SELECT p.valor_total_cobrado, p.sinal_percentual, p.usuario_id, p.numero_orcamento, p.nome_da_peca,
-          t.mei_natureza_padrao,
           COALESCE((SELECT SUM(r.valor) FROM recebimentos r
             WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS recebido,
           COALESCE((SELECT SUM(r.valor) FROM recebimentos r
             WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido
-        FROM pedidos p JOIN tenants t ON t.id = p.tenant_id
+        FROM pedidos p
         WHERE p.id = ? AND p.tenant_id = ? AND p.status != 'Cancelado'
           AND p.orcamento_status = 'Aprovado'
       `).get(data.pedido_id, TENANT_ID) as {
         valor_total_cobrado: number; sinal_percentual: number; recebido: number; sinal_recebido: number; usuario_id: number
         numero_orcamento: string | null; nome_da_peca: string
-        mei_natureza_padrao: 'Venda' | 'Serviço'
       } | undefined
       if (!pedido) throw new Error('NOT_FOUND')
       if (data.conta_financeira_id && !db.prepare(`SELECT 1 FROM contas_financeiras
@@ -316,17 +315,12 @@ export async function registrarRecebimento(data: {
         data.conta_financeira_id || null, tipoRecebimento,
       )
       const recebimentoId = Number(result.lastInsertRowid)
-      db.prepare(`
-        INSERT INTO receitas_fiscais (
-          tenant_id, usuario_id, recebimento_id, data_competencia,
-          natureza, origem, descricao, valor
-        ) VALUES (?, ?, ?, ?, ?, 'ERP', ?, ?)
-      `).run(
-        TENANT_ID, pedido.usuario_id, recebimentoId, dataRecebimento,
-        pedido.mei_natureza_padrao,
-        `Recebimento ${pedido.numero_orcamento || `#${data.pedido_id}`} — ${pedido.nome_da_peca}`,
-        data.valor,
-      )
+      registrarReceitaFiscalDeRecebimento(db, {
+        tenantId: TENANT_ID,
+        usuarioId: pedido.usuario_id,
+        recebimentoId,
+        pedidoId: data.pedido_id,
+      })
       const distribuicao = distribuirRecebimento(data.valor, parcelas)
       if (distribuicao.restante > 0.001) throw new Error('INSTALLMENTS_MISMATCH')
       const alocar = db.prepare(`
