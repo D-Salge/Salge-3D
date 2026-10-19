@@ -4,10 +4,8 @@ import { randomBytes } from 'node:crypto'
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { adicionarMeses, dividirEmParcelas } from '@/lib/financeiro.mjs'
+import { exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface OrcamentoPortal {
   token: string
@@ -36,10 +34,17 @@ export interface OrcamentoPortal {
 
 export async function gerarLinkPortal(pedidoId: number): Promise<{ success: boolean; message: string; caminho?: string }> {
   try {
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return { success: false, message: 'Pedido inválido.' }
     const pedido = db.prepare(`
-      SELECT id, orcamento_status FROM pedidos WHERE id = ? AND tenant_id = ?
-    `).get(pedidoId, TENANT_ID) as { id: number; orcamento_status: string } | undefined
+      SELECT id, orcamento_status, validade_orcamento
+      FROM pedidos
+      WHERE id = ? AND tenant_id = ?
+    `).get(pedidoId, sessao.tenantId) as {
+      id: number
+      orcamento_status: string
+      validade_orcamento: string | null
+    } | undefined
     if (!pedido) return { success: false, message: 'Pedido não encontrado.' }
     if (!['Rascunho', 'Enviado', 'Aprovado'].includes(pedido.orcamento_status)) {
       return { success: false, message: 'Esse orçamento não pode ser compartilhado no estado atual.' }
@@ -49,24 +54,31 @@ export async function gerarLinkPortal(pedidoId: number): Promise<{ success: bool
       WHERE tenant_id = ? AND pedido_id = ? AND revogado_em IS NULL
         AND datetime(expira_em) > datetime('now')
       ORDER BY id DESC LIMIT 1
-    `).get(TENANT_ID, pedidoId) as { token: string } | undefined
+    `).get(sessao.tenantId, pedidoId) as { token: string } | undefined
     if (existente) return { success: true, message: 'Link seguro recuperado.', caminho: `/portal/${existente.token}` }
     const token = randomBytes(24).toString('hex')
-    const validadePedido = (db.prepare('SELECT validade_orcamento FROM pedidos WHERE id = ?').get(pedidoId) as { validade_orcamento: string | null }).validade_orcamento
-    const limiteValidade = validadePedido ? new Date(`${validadePedido}T23:59:59Z`) : null
+    const limiteValidade = pedido.validade_orcamento ? new Date(`${pedido.validade_orcamento}T23:59:59Z`) : null
     const expiraEm = limiteValidade && limiteValidade.getTime() > Date.now()
       ? limiteValidade.toISOString()
       : new Date(Date.now() + 30 * 86_400_000).toISOString()
     const result = db.prepare(`
       INSERT INTO portal_links (tenant_id, usuario_id, pedido_id, token, expira_em)
       VALUES (?, ?, ?, ?, ?)
-    `).run(TENANT_ID, USUARIO_ID, pedidoId, token, expiraEm)
+    `).run(sessao.tenantId, sessao.usuarioId, pedidoId, token, expiraEm)
     registrarAuditoria(db, {
+      tenantId: sessao.tenantId,
+      usuarioId: sessao.usuarioId,
       entidade: 'PortalCliente', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR_LINK',
       descricao: `Link seguro criado para o pedido #${pedidoId}`,
     })
     return { success: true, message: 'Link seguro criado.', caminho: `/portal/${token}` }
   } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+      return { success: false, message: 'Faça login para emitir links do portal.' }
+    }
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return { success: false, message: 'Seu perfil não permite emitir links do portal.' }
+    }
     console.error('[gerarLinkPortal]', error)
     return { success: false, message: 'Não foi possível criar o link.' }
   }
@@ -75,35 +87,42 @@ export async function gerarLinkPortal(pedidoId: number): Promise<{ success: bool
 export async function getOrcamentoPortal(token: string): Promise<OrcamentoPortal | null> {
   if (!/^[a-f0-9]{48}$/.test(token)) return null
   const pedido = db.prepare(`
-    SELECT pl.token, pl.expira_em, pl.resposta, pl.respondido_em,
+    SELECT pl.token, pl.tenant_id, pl.expira_em, pl.resposta, pl.respondido_em,
       p.id, p.numero_orcamento, p.nome_da_peca, p.descricao, c.nome AS cliente_nome,
       p.quantidade, COALESCE(p.preco_unitario, p.valor_total_cobrado / MAX(p.quantidade, 1)) AS preco_unitario,
       p.valor_total_cobrado, p.frete_cobrado, p.data_entrega, p.validade_orcamento, p.orcamento_status,
       p.sinal_percentual,
       COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
+        WHERE r.tenant_id = p.tenant_id AND r.pedido_id = p.id AND r.estornado_em IS NULL), 0) AS total_recebido,
       COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido,
+        WHERE r.tenant_id = p.tenant_id AND r.pedido_id = p.id
+          AND r.estornado_em IS NULL AND r.tipo_recebimento = 'Sinal'), 0) AS sinal_recebido,
       MAX(0, p.valor_total_cobrado - COALESCE((SELECT SUM(r.valor) FROM recebimentos r
-        WHERE r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
+        WHERE r.tenant_id = p.tenant_id AND r.pedido_id = p.id AND r.estornado_em IS NULL), 0)) AS saldo_pendente,
       (SELECT mc.init_point FROM mercado_pago_cobrancas mc
         WHERE mc.tenant_id = p.tenant_id AND mc.pedido_id = p.id AND mc.status = 'Pendente'
         ORDER BY mc.id DESC LIMIT 1) AS link_pagamento
     FROM portal_links pl
     JOIN pedidos p ON p.id = pl.pedido_id AND p.tenant_id = pl.tenant_id
-    JOIN clientes c ON c.id = p.cliente_id
+    JOIN clientes c ON c.id = p.cliente_id AND c.tenant_id = p.tenant_id
     WHERE pl.token = ? AND pl.revogado_em IS NULL AND datetime(pl.expira_em) > datetime('now')
-  `).get(token) as (Omit<OrcamentoPortal, 'entregas' | 'expedicao'> & { id: number }) | undefined
+  `).get(token) as (Omit<OrcamentoPortal, 'entregas' | 'expedicao'> & { id: number; tenant_id: number }) | undefined
   if (!pedido) return null
-  db.prepare(`UPDATE portal_links SET visualizado_em = COALESCE(visualizado_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')) WHERE token = ?`).run(token)
+  db.prepare(`
+    UPDATE portal_links
+    SET visualizado_em = COALESCE(visualizado_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    WHERE token = ? AND tenant_id = ? AND pedido_id = ?
+  `).run(token, pedido.tenant_id, pedido.id)
   const entregas = db.prepare(`
     SELECT quantidade, entregue_em FROM entregas_pedido
-    WHERE pedido_id = ? AND cancelada_em IS NULL ORDER BY entregue_em, id
-  `).all(pedido.id) as OrcamentoPortal['entregas']
+    WHERE tenant_id = ? AND pedido_id = ? AND cancelada_em IS NULL ORDER BY entregue_em, id
+  `).all(pedido.tenant_id, pedido.id) as OrcamentoPortal['entregas']
   const expedicao = db.prepare(`
     SELECT modalidade, status, codigo_rastreio, url_rastreio, previsao_entrega
-    FROM expedicoes WHERE pedido_id = ? AND status != 'Cancelada' ORDER BY id DESC LIMIT 1
-  `).get(pedido.id) as OrcamentoPortal['expedicao']
+    FROM expedicoes
+    WHERE tenant_id = ? AND pedido_id = ? AND status != 'Cancelada'
+    ORDER BY id DESC LIMIT 1
+  `).get(pedido.tenant_id, pedido.id) as OrcamentoPortal['expedicao']
   return {
     token: pedido.token,
     numero_orcamento: pedido.numero_orcamento,
@@ -138,13 +157,13 @@ export async function responderOrcamentoPortal(token: string, resposta: 'Aprovad
     let pedidoId = 0
     const responder = db.transaction(() => {
       const link = db.prepare(`
-        SELECT pl.id, pl.pedido_id, pl.respondido_em, p.orcamento_status,
+        SELECT pl.id, pl.tenant_id, pl.pedido_id, pl.respondido_em, p.orcamento_status,
           p.valor_total_cobrado, p.parcelas,
           COALESCE(p.vencimento_em, substr(p.data_pedido, 1, 10)) AS primeiro_vencimento
         FROM portal_links pl JOIN pedidos p ON p.id = pl.pedido_id AND p.tenant_id = pl.tenant_id
         WHERE pl.token = ? AND pl.revogado_em IS NULL AND datetime(pl.expira_em) > datetime('now')
       `).get(token) as {
-        id: number; pedido_id: number; respondido_em: string | null; orcamento_status: string
+        id: number; tenant_id: number; pedido_id: number; respondido_em: string | null; orcamento_status: string
         valor_total_cobrado: number; parcelas: number; primeiro_vencimento: string
       } | undefined
       if (!link) throw new Error('INVALID_LINK')
@@ -152,28 +171,30 @@ export async function responderOrcamentoPortal(token: string, resposta: 'Aprovad
       if (!['Rascunho', 'Enviado'].includes(link.orcamento_status)) throw new Error('STATUS')
       pedidoId = link.pedido_id
       db.prepare(`
-        UPDATE portal_links SET resposta = ?, respondido_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?
-      `).run(resposta, link.id)
-      db.prepare('UPDATE pedidos SET orcamento_status = ? WHERE id = ?').run(resposta, pedidoId)
+        UPDATE portal_links
+        SET resposta = ?, respondido_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ? AND tenant_id = ? AND pedido_id = ?
+      `).run(resposta, link.id, link.tenant_id, pedidoId)
       db.prepare(`
-        INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
-        VALUES (?, ?, ?, 'Resposta pelo portal', ?)
-      `).run(TENANT_ID, pedidoId, USUARIO_ID, `Cliente marcou o orçamento como ${resposta.toLowerCase()}`)
+        UPDATE pedidos SET orcamento_status = ? WHERE id = ? AND tenant_id = ?
+      `).run(resposta, pedidoId, link.tenant_id)
       if (resposta === 'Aprovado') {
-        const total = (db.prepare('SELECT COUNT(*) AS total FROM parcelas_receber WHERE pedido_id = ?').get(pedidoId) as { total: number }).total
+        const total = (db.prepare(`
+          SELECT COUNT(*) AS total FROM parcelas_receber WHERE tenant_id = ? AND pedido_id = ?
+        `).get(link.tenant_id, pedidoId) as { total: number }).total
         if (total === 0) {
           const inserir = db.prepare(`
             INSERT INTO parcelas_receber (tenant_id, pedido_id, numero, valor, vencimento_em)
             VALUES (?, ?, ?, ?, ?)
           `)
           dividirEmParcelas(link.valor_total_cobrado, link.parcelas).forEach((valor, index) => {
-            inserir.run(TENANT_ID, pedidoId, index + 1, valor, adicionarMeses(link.primeiro_vencimento, index))
+            inserir.run(link.tenant_id, pedidoId, index + 1, valor, adicionarMeses(link.primeiro_vencimento, index))
           })
         }
       }
-      registrarAuditoria(db, {
-        entidade: 'Pedido', entidadeId: pedidoId, acao: 'RESPOSTA_PORTAL', descricao: resposta,
-      })
+      // A resposta e o instante ficam registrados no próprio link. As tabelas de
+      // auditoria interna exigem usuario_id e não devem atribuir a ação do cliente
+      // ao funcionário que criou o link.
     })
     try { responder.immediate() } catch (error) {
       const code = error instanceof Error ? error.message : ''

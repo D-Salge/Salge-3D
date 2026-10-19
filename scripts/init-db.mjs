@@ -12,14 +12,16 @@
 
 import Database from 'better-sqlite3';
 import { readFileSync, existsSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { applyMigrations } from '../lib/migrations.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
-const DB_PATH     = join(ROOT, 'database', 'salge3d.sqlite');
+const DB_PATH     = process.env.SALGE_DB_PATH
+  ? resolve(process.env.SALGE_DB_PATH)
+  : join(ROOT, 'database', 'salge3d.sqlite');
 const SCHEMA_PATH = join(ROOT, 'database', 'schema.sql');
 
 // ── Argumentos de linha de comando ─────────────────────────────────────────

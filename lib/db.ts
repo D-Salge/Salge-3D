@@ -14,8 +14,10 @@ import path from 'path';
 import { applyMigrations } from './migrations.mjs';
 import { normalizarTextoBusca } from './busca-global.mjs';
 
-// Caminho absoluto do arquivo SQLite — fica na pasta /database na raiz do projeto.
-const DB_PATH = path.join(process.cwd(), 'database', 'salge3d.sqlite');
+// Permite apontar testes de integração para um banco descartável sem tocar no banco local.
+const DB_PATH = process.env.SALGE_DB_PATH
+  ? path.resolve(process.env.SALGE_DB_PATH)
+  : path.join(process.cwd(), 'database', 'salge3d.sqlite');
 
 // Tipo estendido para guardar a instância no objeto global do Node
 declare global {
