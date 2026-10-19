@@ -139,11 +139,18 @@ npm ci
 npm run ci
 ```
 
-O comando `npm run ci` cria SQLite temporário com `SALGE_DB_PATH` explícito,
-inicializa a base antes do build, executa `npm test`, lint, typecheck e build em
-sequência e depois roda o teste HTTP do portal com outro banco e outro build.
-Os processos, bancos temporários e artefatos `.next` são encerrados ou removidos
-mesmo em caso de falha. Nenhum banco da instalação é utilizado.
+O comando `npm run ci` cria um diretório temporário exclusivo e, dentro dele, um
+SQLite descartável. O verificador ignora qualquer `SALGE_DB_PATH` herdado e passa
+explicitamente o caminho seguro aos processos filhos. Ele inicializa a base antes
+do build, executa `npm test`, lint, typecheck e build em sequência e depois roda o
+teste HTTP do portal com outro banco e outro build. Os processos e os recursos
+temporários criados pela execução são encerrados ou removidos mesmo em caso de
+falha. Nenhum banco da instalação é utilizado ou removido.
+
+`npm run ci` também remove os artefatos `.next` antes, entre e depois dos builds.
+Ele é um comando de verificação, não de atualização de uma instalação em uso. Para
+iniciar o ERP com `npm start` depois dessa verificação, gere novamente o build com
+`npm run build` usando a configuração apropriada da instalação.
 
 > Limitação conhecida: a aplicação ainda aplica migrações automaticamente ao
 > abrir o banco, sem criar backup antes. A inicialização explícita da CI apenas

@@ -13,13 +13,11 @@ const raizTemporaria = process.env.SALGE_CI_TEMP_ROOT
 
 await mkdir(raizTemporaria, { recursive: true })
 const temporario = await mkdtemp(join(raizTemporaria, 'verify-'))
-const caminhoBanco = process.env.SALGE_DB_PATH
-  ? resolve(process.env.SALGE_DB_PATH)
-  : join(temporario, 'build.sqlite')
+const caminhoBanco = join(temporario, 'build.sqlite')
 const ambiente = {
   ...process.env,
   NEXT_TELEMETRY_DISABLED: '1',
-  SALGE_CI_TEMP_ROOT: raizTemporaria,
+  SALGE_CI_TEMP_ROOT: temporario,
   SALGE_DB_PATH: caminhoBanco,
 }
 
@@ -58,10 +56,5 @@ try {
   await executar(['run', 'test:portal-security'])
 } finally {
   await limparBuild()
-  await Promise.all([
-    rm(caminhoBanco, { force: true }),
-    rm(`${caminhoBanco}-wal`, { force: true }),
-    rm(`${caminhoBanco}-shm`, { force: true }),
-  ])
   await rm(temporario, { recursive: true, force: true })
 }
