@@ -8,7 +8,7 @@ import {
   iniciarProducaoPedidoNoBanco,
 } from '../lib/inicio-producao.mjs'
 
-function base(t, { sinalPercentual = 50 } = {}) {
+function base(t, { sinalPercentual = 50, orcamentoStatus = 'Aprovado' } = {}) {
   const db = new Database(':memory:')
   t.after(() => db.close())
   db.pragma('foreign_keys = ON')
@@ -25,8 +25,8 @@ function base(t, { sinalPercentual = 50 } = {}) {
   const pedidoId = Number(db.prepare(`INSERT INTO pedidos
     (tenant_id, usuario_id, cliente_id, nome_da_peca, tempo_impressao_horas,
       valor_total_cobrado, status, orcamento_status, quantidade, sinal_percentual)
-    VALUES (1, ?, ?, 'Peça com sinal', 2, 100, 'Fila', 'Aprovado', 10, ?)`
-  ).run(usuarioId, clienteId, sinalPercentual).lastInsertRowid)
+    VALUES (1, ?, ?, 'Peça com sinal', 2, 100, 'Fila', ?, 10, ?)`
+  ).run(usuarioId, clienteId, orcamentoStatus, sinalPercentual).lastInsertRowid)
   const loteId = Number(db.prepare(`INSERT INTO lotes_producao
     (tenant_id, usuario_id, pedido_id, codigo, quantidade_planejada)
     VALUES (1, ?, ?, 'LOTE-SINAL-01', 10)`
@@ -43,8 +43,9 @@ function base(t, { sinalPercentual = 50 } = {}) {
 
   function estado() {
     return {
-      pedido: db.prepare('SELECT status, quantidade_produzida FROM pedidos WHERE id = ?').get(pedidoId),
-      lote: db.prepare(`SELECT status, quantidade_produzida, tempo_real_horas, inicio_em
+      pedido: db.prepare(`SELECT status, quantidade_produzida, data_conclusao
+        FROM pedidos WHERE id = ?`).get(pedidoId),
+      lote: db.prepare(`SELECT status, quantidade_produzida, tempo_real_horas, inicio_em, fim_em
         FROM lotes_producao WHERE id = ?`).get(loteId),
       historico: db.prepare('SELECT COUNT(*) AS total FROM historico_pedidos WHERE pedido_id = ?').get(pedidoId).total,
       auditoria: db.prepare(`SELECT COUNT(*) AS total FROM auditoria
@@ -135,6 +136,107 @@ test('bloqueio do lote não deixa quantidade, tempo, status ou histórico parcia
     tempoRealHoras: 1.5,
   }), /SIGNAL_PENDING/)
   confirmarSemEfeitos(f, anterior)
+})
+
+test('sinal pendente bloqueia conclusão direta e avanço sem iniciar, sem efeitos parciais', (t) => {
+  for (const dados of [
+    { status: 'Concluído', quantidadeProduzida: 10, tempoRealHoras: 2 },
+    { status: 'Planejado', quantidadeProduzida: 3, tempoRealHoras: 1 },
+  ]) {
+    const f = base(t)
+    const anterior = f.estado()
+    assert.throws(() => atualizarLoteProducaoNoBanco(f.db, f.contexto, {
+      loteId: f.loteId,
+      ...dados,
+    }), /SIGNAL_PENDING:50/)
+    confirmarSemEfeitos(f, anterior)
+  }
+})
+
+test('orçamento não aprovado bloqueia conclusão direta e avanço sem iniciar', (t) => {
+  for (const dados of [
+    { status: 'Concluído', quantidadeProduzida: 10, tempoRealHoras: 2 },
+    { status: 'Planejado', quantidadeProduzida: 3, tempoRealHoras: 1 },
+  ]) {
+    const f = base(t, { orcamentoStatus: 'Rascunho' })
+    const anterior = f.estado()
+    assert.throws(() => atualizarLoteProducaoNoBanco(f.db, f.contexto, {
+      loteId: f.loteId,
+      ...dados,
+    }), /NOT_APPROVED/)
+    confirmarSemEfeitos(f, anterior)
+  }
+})
+
+test('lote planejado não pode pular o início nem registrar avanço após liberar o sinal', (t) => {
+  for (const dados of [
+    { status: 'Concluído', quantidadeProduzida: 10, tempoRealHoras: 2 },
+    { status: 'Planejado', quantidadeProduzida: 3, tempoRealHoras: 1 },
+  ]) {
+    const f = base(t, { sinalPercentual: 0 })
+    const anterior = f.estado()
+    assert.throws(() => atualizarLoteProducaoNoBanco(f.db, f.contexto, {
+      loteId: f.loteId,
+      ...dados,
+    }), /INVALID_LOT_TRANSITION|PRODUCTION_NOT_STARTED/)
+    confirmarSemEfeitos(f, anterior)
+  }
+})
+
+test('fluxo legítimo inicia, avança e conclui sem duplicar a conclusão', (t) => {
+  const f = base(t)
+  f.receber(50, { tipo: 'Sinal' })
+
+  assert.equal(atualizarLoteProducaoNoBanco(
+    f.db, f.contexto, f.dadosLote,
+  ).resultado, 'UPDATED')
+  assert.equal(atualizarLoteProducaoNoBanco(f.db, f.contexto, {
+    ...f.dadosLote,
+    quantidadeProduzida: 4,
+    tempoRealHoras: 1.25,
+  }).resultado, 'UPDATED')
+  const conclusao = {
+    ...f.dadosLote,
+    status: 'Concluído',
+    quantidadeProduzida: 10,
+    tempoRealHoras: 2,
+  }
+  assert.equal(atualizarLoteProducaoNoBanco(
+    f.db, f.contexto, conclusao,
+  ).resultado, 'UPDATED')
+
+  const concluido = f.estado()
+  assert.equal(concluido.pedido.status, 'Imprimindo')
+  assert.equal(concluido.pedido.quantidade_produzida, 10)
+  assert.equal(concluido.lote.status, 'Concluído')
+  assert.equal(concluido.lote.quantidade_produzida, 10)
+  assert.equal(concluido.lote.tempo_real_horas, 2)
+  assert.ok(concluido.lote.inicio_em)
+  assert.ok(concluido.lote.fim_em)
+  assert.equal(concluido.historico, 3)
+  assert.equal(concluido.auditoria, 3)
+
+  assert.equal(atualizarLoteProducaoNoBanco(
+    f.db, f.contexto, conclusao,
+  ).resultado, 'UNCHANGED')
+  assert.deepEqual(f.estado(), concluido)
+})
+
+test('estorno posterior ao início não bloqueia avanço já em produção', (t) => {
+  const f = base(t)
+  f.receber(50, { tipo: 'Sinal' })
+  assert.equal(atualizarLoteProducaoNoBanco(
+    f.db, f.contexto, f.dadosLote,
+  ).resultado, 'UPDATED')
+  f.db.prepare(`UPDATE recebimentos SET estornado_em = '2026-01-02T00:00:00Z'
+    WHERE pedido_id = ? AND tenant_id = 1`).run(f.pedidoId)
+
+  assert.equal(atualizarLoteProducaoNoBanco(f.db, f.contexto, {
+    ...f.dadosLote,
+    quantidadeProduzida: 2,
+    tempoRealHoras: 0.5,
+  }).resultado, 'UPDATED')
+  assert.equal(f.estado().lote.quantidade_produzida, 2)
 })
 
 test('repetir o início não duplica efeitos pelo pedido nem pelo lote', (t) => {
