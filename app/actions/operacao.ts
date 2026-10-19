@@ -1,6 +1,8 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirPerfil, exigirSessao } from '@/lib/session'
+import { finalizarPedidoNoBanco, salvarOperacaoNoBanco, mensagemErroFechamento } from '@/lib/fechamento-pedido.mjs'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { adicionarMeses, dividirEmParcelas } from '@/lib/financeiro.mjs'
 import { calcularIndicadoresQualidade, calcularStatusManutencao } from '@/lib/manutencao.mjs'
@@ -62,6 +64,7 @@ export interface ManutencaoImpressora {
 export interface PedidoMaterialDetalhe {
   id: number
   filamento_id: number
+  filamento_ativo: number
   nome: string
   peso_gasto_gramas: number
   consumo_real_gramas: number | null
@@ -622,7 +625,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
   if (!pedido) return null
 
   const materiais = db.prepare(`
-    SELECT pf.id, pf.filamento_id, f.material || ' ' || f.cor AS nome,
+    SELECT pf.id, pf.filamento_id, f.ativo AS filamento_ativo, f.material || ' ' || f.cor AS nome,
       pf.peso_gasto_gramas, pf.consumo_real_gramas, pf.custo_calculado,
       COALESCE(pf.consumo_real_gramas, pf.peso_gasto_gramas) * f.preco_rolo / f.peso_rolo_gramas AS custo_real_calculado
     FROM pedido_filamentos pf
@@ -758,7 +761,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
   }
 }
 
-export async function salvarOperacaoPedido(data: {
+export interface OperacaoPedidoInput {
   pedidoId: number
   impressoraId: number | null
   inicioPrevisto: string
@@ -766,88 +769,59 @@ export async function salvarOperacaoPedido(data: {
   tempoRealHoras: number | null
   custoExtraReal: number
   falhasImpressao: number
-  materiais: { id: number; consumoReal: number | null }[]
+  materiais: { id: number; consumoReal: number | null; filamentoIdReal?: number }[]
   insumos: { id: number; consumoReal: number | null }[]
-}): Promise<{ success: boolean; message: string }> {
+}
+
+export interface FilamentoParaConsumo {
+  id: number
+  nome: string
+  estoque_gramas: number
+}
+
+export async function getFilamentosParaConsumo(): Promise<FilamentoParaConsumo[]> {
+  const sessao = await exigirSessao()
+  return db.prepare(`SELECT id,
+      material || ' ' || cor || CASE WHEN marca IS NOT NULL THEN ' · ' || marca ELSE '' END AS nome,
+      COALESCE(estoque_gramas, peso_rolo_gramas) AS estoque_gramas
+    FROM filamentos WHERE tenant_id = ? AND ativo = 1 ORDER BY material, cor, id`)
+    .all(sessao.tenantId) as FilamentoParaConsumo[]
+}
+
+function revalidarOperacao(pedidoId: number) {
+  // A transação já foi confirmada. Uma falha de cache não pode ser reportada como falha na gravação.
   try {
-    if (!Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0) {
-      return { success: false, message: 'Pedido inválido.' }
-    }
-    if (data.impressoraId !== null && (!Number.isSafeInteger(data.impressoraId) || data.impressoraId <= 0)) {
-      return { success: false, message: 'Impressora inválida.' }
-    }
-    if (data.tempoRealHoras !== null && (!Number.isFinite(data.tempoRealHoras) || data.tempoRealHoras < 0)) {
-      return { success: false, message: 'Tempo real inválido.' }
-    }
-    if (!Number.isFinite(data.custoExtraReal) || data.custoExtraReal < 0 ||
-        !Number.isSafeInteger(data.falhasImpressao) || data.falhasImpressao < 0) {
-      return { success: false, message: 'Custos ou falhas inválidos.' }
-    }
+    for (const caminho of ['/', '/producao', '/impressoras', '/estoque', '/orcamentos', `/pedidos/${pedidoId}`]) revalidatePath(caminho)
+  } catch (error) {
+    console.error('[revalidarOperacao]', error)
+  }
+}
 
-    const salvar = db.transaction(() => {
-      if (data.impressoraId !== null) {
-        const impressora = db.prepare(
-          'SELECT id FROM impressoras WHERE id = ? AND tenant_id = ? AND ativo = 1',
-        ).get(data.impressoraId, TENANT_ID)
-        if (!impressora) throw new Error('INVALID_PRINTER')
-      }
-
-      const result = db.prepare(`
-        UPDATE pedidos SET impressora_id = ?, inicio_previsto = ?, fim_previsto = ?,
-          tempo_real_horas = ?, custo_extra_real = ?, falhas_impressao = ?
-        WHERE id = ? AND tenant_id = ? AND status NOT IN ('Finalizado', 'Cancelado')
-      `).run(
-        data.impressoraId, data.inicioPrevisto || null, data.fimPrevisto || null,
-        data.tempoRealHoras, data.custoExtraReal, data.falhasImpressao,
-        data.pedidoId, TENANT_ID,
-      )
-      if (result.changes !== 1) throw new Error('NOT_FOUND')
-
-      const updateMaterial = db.prepare(`
-        UPDATE pedido_filamentos SET consumo_real_gramas = ?
-        WHERE id = ? AND pedido_id = ?
-      `)
-      for (const item of data.materiais) {
-        if (!Number.isSafeInteger(item.id) || item.id <= 0 ||
-            (item.consumoReal !== null && (!Number.isFinite(item.consumoReal) || item.consumoReal < 0))) {
-          throw new Error('INVALID_CONSUMPTION')
-        }
-        if (updateMaterial.run(item.consumoReal, item.id, data.pedidoId).changes !== 1) {
-          throw new Error('INVALID_CONSUMPTION')
-        }
-      }
-
-      const updateInsumo = db.prepare(`
-        UPDATE pedido_insumos SET consumo_real = ? WHERE id = ? AND pedido_id = ?
-      `)
-      for (const item of data.insumos) {
-        if (!Number.isSafeInteger(item.id) || item.id <= 0 ||
-            (item.consumoReal !== null && (!Number.isFinite(item.consumoReal) || item.consumoReal < 0))) {
-          throw new Error('INVALID_CONSUMPTION')
-        }
-        if (updateInsumo.run(item.consumoReal, item.id, data.pedidoId).changes !== 1) {
-          throw new Error('INVALID_CONSUMPTION')
-        }
-      }
-
-      db.prepare(`
-        INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
-        VALUES (?, ?, ?, 'Operação atualizada', 'Planejamento e consumo real revisados')
-      `).run(TENANT_ID, data.pedidoId, USUARIO_ID)
-    })
-    salvar()
-    revalidatePath('/')
-    revalidatePath('/producao')
-    revalidatePath('/impressoras')
-    revalidatePath(`/pedidos/${data.pedidoId}`)
+export async function salvarOperacaoPedido(data: OperacaoPedidoInput): Promise<{ success: boolean; message: string }> {
+  try {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    salvarOperacaoNoBanco(db, sessao, data)
+    revalidarOperacao(data.pedidoId)
     return { success: true, message: 'Operação e custos reais atualizados.' }
   } catch (error) {
-    const code = error instanceof Error ? error.message : ''
-    if (code === 'NOT_FOUND') return { success: false, message: 'Pedido não encontrado ou já encerrado.' }
-    if (code === 'INVALID_PRINTER') return { success: false, message: 'Impressora não encontrada.' }
-    if (code === 'INVALID_CONSUMPTION') return { success: false, message: 'Consumo real inválido.' }
+    const mensagem = mensagemErroFechamento(error)
+    if (mensagem) return { success: false, message: mensagem }
     console.error('[salvarOperacaoPedido]', error)
-    return { success: false, message: 'Erro interno ao atualizar operação.' }
+    return { success: false, message: 'Não foi possível salvar a operação. Nenhuma alteração foi gravada.' }
+  }
+}
+
+export async function finalizarPedidoComRevisao(data: OperacaoPedidoInput): Promise<{ success: boolean; message: string }> {
+  try {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    finalizarPedidoNoBanco(db, sessao, data?.pedidoId, data)
+    revalidarOperacao(data.pedidoId)
+    return { success: true, message: 'Pedido finalizado com a revisão e a baixa de estoque confirmadas.' }
+  } catch (error) {
+    const mensagem = mensagemErroFechamento(error)
+    if (mensagem) return { success: false, message: mensagem }
+    console.error('[finalizarPedidoComRevisao]', error)
+    return { success: false, message: 'Não foi possível finalizar. Nenhuma alteração foi gravada. Confira os materiais e tente novamente.' }
   }
 }
 

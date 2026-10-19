@@ -8,6 +8,8 @@
  */
 
 import db from '@/lib/db'
+import { exigirPerfil } from '@/lib/session'
+import { finalizarPedidoNoBanco, mensagemErroFechamento } from '@/lib/fechamento-pedido.mjs'
 import { registrarAuditoria } from '@/lib/auditoria'
 import {
   aplicarPisoHistorico,
@@ -1157,6 +1159,12 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
 
 export async function atualizarStatusPedido(pedidoId: number, novoStatus: string): Promise<ActionResult> {
   try {
+    if (novoStatus === 'Finalizado') {
+      const sessao = await exigirPerfil(['admin', 'operador'])
+      finalizarPedidoNoBanco(db, sessao, pedidoId)
+      for (const caminho of ['/producao', '/', '/orcamentos', '/estoque', `/pedidos/${pedidoId}`]) revalidatePath(caminho)
+      return { success: true, message: 'Pedido finalizado com a baixa de estoque confirmada.' }
+    }
     const transicoesPermitidas: Record<string, string[]> = {
       Fila: ['Imprimindo', 'Cancelado'],
       Imprimindo: ['Acabamento', 'Cancelado'],
@@ -1193,135 +1201,6 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
         const sinalNecessario = arredondarMoeda(pedido.valor_total_cobrado * pedido.sinal_percentual / 100)
         const sinalPendente = arredondarMoeda(Math.max(0, sinalNecessario - pedido.total_recebido))
         if (sinalPendente > 0.009) throw new Error(`SIGNAL_PENDING:${sinalPendente}`)
-      }
-
-      if (novoStatus === 'Finalizado') {
-        if (pedido.quantidade_produzida > 0 && pedido.quantidade_produzida < pedido.quantidade) {
-          throw new Error(`INCOMPLETE_PRODUCTION:${pedido.quantidade_produzida}:${pedido.quantidade}`)
-        }
-        const filamentosDoPedido = db
-          .prepare(
-            `SELECT
-               pf.filamento_id,
-               SUM(COALESCE(pf.consumo_real_gramas, pf.peso_gasto_gramas)) AS quantidade,
-               f.material || ' ' || f.cor AS nome,
-               COALESCE(f.estoque_gramas, f.peso_rolo_gramas) AS estoque
-             FROM pedido_filamentos pf
-             JOIN filamentos f ON f.id = pf.filamento_id AND f.tenant_id = ?
-             WHERE pf.pedido_id = ?
-             GROUP BY pf.filamento_id, f.material, f.cor, f.estoque_gramas, f.peso_rolo_gramas`,
-          )
-          .all(TENANT_ID, pedidoId) as {
-            filamento_id: number
-            quantidade: number
-            nome: string
-            estoque: number
-          }[]
-
-        const insumosDoPedido = db
-          .prepare(
-            `SELECT
-               pi.insumo_id,
-               SUM(COALESCE(pi.consumo_real, pi.quantidade)) AS quantidade,
-               i.nome,
-               i.estoque_atual AS estoque
-             FROM pedido_insumos pi
-             JOIN insumos i ON i.id = pi.insumo_id AND i.tenant_id = ?
-             WHERE pi.pedido_id = ?
-             GROUP BY pi.insumo_id, i.nome, i.estoque_atual`,
-          )
-          .all(TENANT_ID, pedidoId) as {
-            insumo_id: number
-            quantidade: number
-            nome: string
-            estoque: number
-          }[]
-
-        for (const item of [...filamentosDoPedido, ...insumosDoPedido]) {
-          if (item.estoque < item.quantidade) {
-            throw new Error(`INSUFFICIENT_STOCK:${item.nome}`)
-          }
-        }
-
-        const baixarFilamento = db.prepare(
-          `UPDATE filamentos
-           SET estoque_gramas = COALESCE(estoque_gramas, peso_rolo_gramas) - ?
-           WHERE id = ? AND tenant_id = ?
-             AND COALESCE(estoque_gramas, peso_rolo_gramas) >= ?`,
-        )
-
-        for (const item of filamentosDoPedido) {
-          if (item.quantidade <= 0) continue
-          const saldoAnterior = item.estoque
-          const lotes = db.prepare(`
-            SELECT id, saldo_gramas FROM lotes_filamento
-            WHERE tenant_id = ? AND filamento_id = ? AND ativo = 1 AND saldo_gramas > 0
-            ORDER BY COALESCE(aberto_em, substr(criado_em, 1, 10)), id
-          `).all(TENANT_ID, item.filamento_id) as { id: number; saldo_gramas: number }[]
-          const saldoLotes = lotes.reduce((total, lote) => total + lote.saldo_gramas, 0)
-          if (saldoLotes + 0.001 < item.quantidade) {
-            throw new Error(`INSUFFICIENT_STOCK:${item.nome} (lotes)`)
-          }
-          const baixa = baixarFilamento.run(
-            item.quantidade,
-            item.filamento_id,
-            TENANT_ID,
-            item.quantidade,
-          )
-          if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
-          let restante = item.quantidade
-          let saldoCorrente = saldoAnterior
-          const baixarLote = db.prepare(`
-            UPDATE lotes_filamento SET saldo_gramas = saldo_gramas - ?
-            WHERE id = ? AND tenant_id = ? AND saldo_gramas >= ?
-          `)
-          const movimentoLote = db.prepare(`
-            INSERT INTO movimentos_estoque (
-              tenant_id, usuario_id, tipo_item, item_id, lote_filamento_id,
-              pedido_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, 'Filamento', ?, ?, ?, 'Saida', ?, ?, ?, 'Consumo do pedido finalizado')
-          `)
-          for (const lote of lotes) {
-            if (restante <= 0) break
-            const quantidade = Math.min(restante, lote.saldo_gramas)
-            if (baixarLote.run(quantidade, lote.id, TENANT_ID, quantidade).changes !== 1) {
-              throw new Error('STOCK_CHANGED')
-            }
-            movimentoLote.run(
-              TENANT_ID, item.filamento_id, lote.id, pedidoId, quantidade,
-              saldoCorrente, saldoCorrente - quantidade,
-            )
-            saldoCorrente -= quantidade
-            restante = Math.round((restante - quantidade) * 1000) / 1000
-          }
-        }
-
-        const baixarInsumo = db.prepare(
-          `UPDATE insumos
-           SET estoque_atual = estoque_atual - ?
-           WHERE id = ? AND tenant_id = ? AND estoque_atual >= ?`,
-        )
-
-        for (const item of insumosDoPedido) {
-          if (item.quantidade <= 0) continue
-          const saldoAnterior = item.estoque
-          const baixa = baixarInsumo.run(
-            item.quantidade,
-            item.insumo_id,
-            TENANT_ID,
-            item.quantidade,
-          )
-          if (baixa.changes !== 1) throw new Error('STOCK_CHANGED')
-          db.prepare(`
-            INSERT INTO movimentos_estoque (
-              tenant_id, usuario_id, tipo_item, item_id, pedido_id, tipo, quantidade,
-              saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, 'Insumo', ?, ?, 'Saida', ?, ?, ?, 'Consumo do pedido finalizado')
-          `).run(
-            TENANT_ID, item.insumo_id, pedidoId, item.quantidade,
-            saldoAnterior, saldoAnterior - item.quantidade,
-          )
-        }
       }
 
       if (pedido.status === 'Finalizado' && novoStatus === 'Cancelado') {
@@ -1444,6 +1323,8 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
     revalidatePath(`/pedidos/${pedidoId}`)
     return { success: true, message: `Status alterado para ${novoStatus}` }
   } catch (err) {
+    const mensagem = mensagemErroFechamento(err)
+    if (mensagem) return { success: false, message: mensagem }
     console.error('[atualizarStatusPedido]', err)
     return { success: false, message: 'Erro interno ao atualizar status.' }
   }

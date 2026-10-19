@@ -9,6 +9,8 @@ import {
   removerAnexoPedido,
   salvarAnexoPedido,
   salvarOperacaoPedido,
+  finalizarPedidoComRevisao,
+  type FilamentoParaConsumo,
   type Impressora,
   type PedidoDetalhes,
 } from '@/app/actions/operacao'
@@ -27,10 +29,11 @@ function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export function PedidoDetalhesPage({ pedido, impressoras, mercadoPagoTeste }: { pedido: PedidoDetalhes; impressoras: Impressora[]; mercadoPagoTeste: boolean }) {
+export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPagoTeste }: { pedido: PedidoDetalhes; impressoras: Impressora[]; filamentos: FilamentoParaConsumo[]; mercadoPagoTeste: boolean }) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const [mensagem, setMensagem] = useState('')
+  const [resultadoFechamento, setResultadoFechamento] = useState<{ success: boolean; message: string } | null>(null)
   const [receber, setReceber] = useState(false)
   const [whatsApp, setWhatsApp] = useState(false)
   const [salvarModelo, setSalvarModelo] = useState(false)
@@ -43,7 +46,7 @@ export function PedidoDetalhesPage({ pedido, impressoras, mercadoPagoTeste }: { 
   const [tempoReal, setTempoReal] = useState(pedido.tempo_real_horas?.toString() ?? '')
   const [custoExtra, setCustoExtra] = useState(String(pedido.custo_extra_real))
   const [falhas, setFalhas] = useState(String(pedido.falhas_impressao))
-  const [materiais, setMateriais] = useState(pedido.materiais.map((item) => ({ id: item.id, consumoReal: item.consumo_real_gramas?.toString() ?? '' })))
+  const [materiais, setMateriais] = useState(pedido.materiais.map((item) => ({ id: item.id, consumoReal: item.consumo_real_gramas?.toString() ?? '', filamentoIdReal: item.filamento_id })))
   const [insumos, setInsumos] = useState(pedido.insumos.map((item) => ({ id: item.id, consumoReal: item.consumo_real?.toString() ?? '' })))
 
   function mudarOrcamento(status: string) {
@@ -66,6 +69,8 @@ export function PedidoDetalhesPage({ pedido, impressoras, mercadoPagoTeste }: { 
     startTransition(async () => {
       const result = await salvarOperacaoPedido(montarPayloadOperacao(false))
       setMensagem(result.message)
+      setResultadoFechamento(result)
+      if (result.success) router.refresh()
     })
   }
 
@@ -82,6 +87,7 @@ export function PedidoDetalhesPage({ pedido, impressoras, mercadoPagoTeste }: { 
         falhasImpressao: Number(falhas) || 0,
         materiais: materiais.map((item, index) => ({
           id: item.id,
+          filamentoIdReal: item.filamentoIdReal,
           consumoReal: item.consumoReal === ''
             ? (usarEstimativas ? pedido.materiais[index].peso_gasto_gramas : null)
             : Number(item.consumoReal),
@@ -110,15 +116,16 @@ export function PedidoDetalhesPage({ pedido, impressoras, mercadoPagoTeste }: { 
       : avisoBase
     if (!confirm(aviso)) return
 
+    setResultadoFechamento(null)
     startTransition(async () => {
-      const operacao = await salvarOperacaoPedido(montarPayloadOperacao(true))
-      if (!operacao.success) {
-        setMensagem(operacao.message)
-        return
+      try {
+        const result = await finalizarPedidoComRevisao(montarPayloadOperacao(true))
+        setResultadoFechamento(result)
+        setMensagem(result.message)
+        if (result.success) router.refresh()
+      } catch {
+        setResultadoFechamento({ success: false, message: 'Não foi possível confirmar o resultado da finalização. Atualize o pedido antes de tentar novamente.' })
       }
-      const status = await atualizarStatusPedido(pedido.id, 'Finalizado')
-      setMensagem(status.message)
-      if (status.success) router.refresh()
     })
   }
 
@@ -197,11 +204,15 @@ export function PedidoDetalhesPage({ pedido, impressoras, mercadoPagoTeste }: { 
             <label className="text-xs text-white/50">Custos extras reais<input type="number" min="0" step="0.01" value={custoExtra} onChange={(e) => setCustoExtra(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
             <label className="text-xs text-white/50">Falhas/reimpressões<input type="number" min="0" step="1" value={falhas} onChange={(e) => setFalhas(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>
           </div>
-          <div className="mt-6 space-y-3"><p className="text-xs font-medium uppercase text-white/35">Filamentos</p>{pedido.materiais.map((item, index) => <label key={item.id} className="flex items-center justify-between gap-4 rounded-lg bg-white/[0.03] p-3 text-sm"><span>{item.nome}<small className="ml-2 text-white/35">estimado {item.peso_gasto_gramas}g</small></span><input type="number" min="0" step="0.1" placeholder="real (g)" value={materiais[index]?.consumoReal ?? ''} onChange={(e) => setMateriais((lista) => lista.map((valor, i) => i === index ? { ...valor, consumoReal: e.target.value } : valor))} className="h-9 w-28 rounded-lg border border-white/10 bg-[#101114] px-2" /></label>)}</div>
+          <div className="mt-6 space-y-3"><p className="text-xs font-medium uppercase text-white/35">Filamentos</p>{pedido.materiais.map((item, index) => <div key={item.id} className="space-y-3 rounded-lg bg-white/[0.03] p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3"><span>{item.nome}{item.filamento_ativo === 0 && <small className="ml-2 text-amber-300">Arquivado</small>}<small className="ml-2 text-white/35">estimado {item.peso_gasto_gramas}g</small></span><label className="text-xs text-white/50">Consumo real (g)<input type="number" min="0" step="0.1" disabled={isPending || ['Finalizado', 'Cancelado'].includes(pedido.status)} placeholder="real (g)" value={materiais[index]?.consumoReal ?? ''} onChange={(e) => setMateriais((lista) => lista.map((valor, i) => i === index ? { ...valor, consumoReal: e.target.value } : valor))} className="ml-2 h-9 w-28 rounded-lg border border-white/10 bg-[#101114] px-2" /></label></div>
+            {!['Finalizado', 'Cancelado'].includes(pedido.status) && <label className="block text-xs text-white/50">Filamento realmente utilizado<select disabled={isPending} value={materiais[index]?.filamentoIdReal ?? item.filamento_id} onChange={(event) => setMateriais((lista) => lista.map((valor, i) => i === index ? { ...valor, filamentoIdReal: Number(event.target.value) } : valor))} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#101114] px-2"><option value={item.filamento_id}>Manter {item.nome} (#{item.filamento_id}){item.filamento_ativo === 0 ? ' · arquivado' : ''}</option>{filamentos.filter((filamento) => filamento.id !== item.filamento_id).map((filamento) => <option key={filamento.id} value={filamento.id}>{filamento.nome} (#{filamento.id}) · {filamento.estoque_gramas.toLocaleString('pt-BR')} g disponíveis</option>)}</select>{item.filamento_ativo === 0 && <span className="mt-2 block leading-5 text-amber-200/80">Este cadastro foi arquivado. Se usou outro filamento, selecione-o aqui para dar baixa no estoque correto. O preço do pedido será preservado.</span>}</label>}
+          </div>)}</div>
           <div className="mt-6 space-y-3"><p className="text-xs font-medium uppercase text-white/35">Insumos</p>{pedido.insumos.length === 0 && <p className="text-xs text-white/30">Nenhum insumo.</p>}{pedido.insumos.map((item, index) => <label key={item.id} className="flex items-center justify-between gap-4 rounded-lg bg-white/[0.03] p-3 text-sm"><span>{item.nome}<small className="ml-2 text-white/35">estimado {item.quantidade} {item.unidade}</small></span><input type="number" min="0" step="0.1" placeholder="real" value={insumos[index]?.consumoReal ?? ''} onChange={(e) => setInsumos((lista) => lista.map((valor, i) => i === index ? { ...valor, consumoReal: e.target.value } : valor))} className="h-9 w-28 rounded-lg border border-white/10 bg-[#101114] px-2" /></label>)}</div>
           {pedido.status === 'Finalizado' && <p className="mt-5 text-xs text-amber-300">O consumo foi fechado junto com a baixa de estoque e não pode mais ser alterado.</p>}
           {pedido.status === 'Acabamento' && <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-3 text-xs leading-5 text-amber-100/70"><AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-300" /> A finalização dará baixa definitiva no estoque. Confira os consumos antes de continuar.</div>}
-          <div className="mt-6 flex flex-wrap gap-2"><button disabled={isPending || ['Finalizado', 'Cancelado'].includes(pedido.status)} className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70 disabled:opacity-50"><Save size={14} /> Salvar operação</button>{pedido.status === 'Acabamento' && <button type="button" onClick={finalizarComRevisao} disabled={isPending} className="flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-50"><PackageCheck size={14} /> Revisar e finalizar</button>}</div></form>
+          {resultadoFechamento && <p role={resultadoFechamento.success ? 'status' : 'alert'} aria-live="polite" className={`mt-5 rounded-xl border p-4 text-sm leading-6 ${resultadoFechamento.success ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' : 'border-red-400/30 bg-red-400/10 text-red-200'}`}>{resultadoFechamento.message}</p>}
+          <div className="mt-6 flex flex-wrap gap-2"><button disabled={isPending || ['Finalizado', 'Cancelado'].includes(pedido.status)} className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-4 py-2.5 text-xs text-white/70 disabled:opacity-50"><Save size={14} /> Salvar operação</button>{pedido.status === 'Acabamento' && <button type="button" onClick={finalizarComRevisao} disabled={isPending} className="flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] disabled:opacity-50"><PackageCheck size={14} /> {isPending ? 'Finalizando...' : 'Revisar e finalizar'}</button>}</div></form>
         </div>
 
         <div className="space-y-6">
