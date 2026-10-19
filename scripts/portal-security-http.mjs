@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -143,6 +143,21 @@ async function esperarServidor(baseUrl, processo, saidaServidor) {
   throw new Error(`Servidor não ficou pronto.\n${saidaServidor()}`)
 }
 
+async function encerrarServidor(processo) {
+  if (!processo || processo.exitCode !== null) return
+  const encerrado = once(processo, 'exit').then(() => true)
+  processo.kill('SIGTERM')
+  const saiu = await Promise.race([
+    encerrado,
+    new Promise((resolvePromise) => setTimeout(() => resolvePromise(false), 5_000)),
+  ])
+  if (!saiu && processo.exitCode === null) {
+    const forcado = once(processo, 'exit')
+    processo.kill('SIGKILL')
+    await forcado
+  }
+}
+
 async function executarTestesHttp(baseUrl, db, dados, actions) {
   const chamarAction = async (id, argumentos, tokenSessao) => {
     const resposta = await fetch(`${baseUrl}/portal/teste-de-autorizacao`, {
@@ -241,7 +256,11 @@ let temporario
 let servidor
 let db
 try {
-  temporario = await mkdtemp(join(tmpdir(), 'salge3d-portal-security-'))
+  const raizTemporaria = process.env.SALGE_CI_TEMP_ROOT
+    ? resolve(process.env.SALGE_CI_TEMP_ROOT)
+    : tmpdir()
+  await mkdir(raizTemporaria, { recursive: true })
+  temporario = await mkdtemp(join(raizTemporaria, 'portal-security-'))
   const caminhoBanco = join(temporario, 'salge3d.sqlite')
   const ambienteTeste = { SALGE_DB_PATH: caminhoBanco }
 
@@ -283,9 +302,6 @@ try {
   console.log('OK: autorização, isolamento entre empresas e portal público validados por HTTP.')
 } finally {
   if (db) db.close()
-  if (servidor && servidor.exitCode === null) {
-    servidor.kill()
-    await Promise.race([once(servidor, 'exit'), new Promise((resolvePromise) => setTimeout(resolvePromise, 5_000))])
-  }
+  await encerrarServidor(servidor)
   if (temporario) await rm(temporario, { recursive: true, force: true })
 }

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Testes, análise e build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      SALGE_CI_TEMP_ROOT: ${{ runner.temp }}/salge3d-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      SALGE_DB_PATH: ${{ runner.temp }}/salge3d-ci-${{ github.run_id }}-${{ github.run_attempt }}/build.sqlite
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Instalar dependências pelo lockfile
+        run: npm ci
+
+      - name: Executar verificações reproduzíveis
+        run: npm run ci
+
+      - name: Limpar arquivos temporários
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf -- .next "$SALGE_CI_TEMP_ROOT"
