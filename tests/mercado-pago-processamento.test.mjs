@@ -140,6 +140,39 @@ test('status_detail diferente reconhece o pagamento antes de validar o saldo con
     .get(f.cobrancaId).status_detalhe, 'settled')
 })
 
+test('taxa informada posteriormente cria somente a despesa faltante', (t) => {
+  const f = criarBase(t)
+  processar(f, f.pagamento({ transaction_details: { net_received_amount: 40 } }))
+  assert.deepEqual(f.estadoFinanceiro(), {
+    recebimentos: 1, alocacoes: 1, receitas: 1, taxas: 0, historico: 1, auditoria: 1,
+  })
+
+  const pagamentoComTaxa = f.pagamento({ status_detail: 'fee-reported',
+    transaction_details: { net_received_amount: 38 } })
+  assert.deepEqual(processar(f, pagamentoComTaxa), {
+    duplicado: true, status: 'Aprovado', valor: 40,
+  })
+  assert.deepEqual(f.estadoFinanceiro(), {
+    recebimentos: 1, alocacoes: 1, receitas: 1, taxas: 1, historico: 1, auditoria: 2,
+  })
+  assert.deepEqual(f.db.prepare(`SELECT mc.valor_liquido, mc.taxa_valor,
+      d.valor AS despesa_valor, d.codigo_externo
+    FROM mercado_pago_cobrancas mc
+    JOIN despesas d ON d.id = mc.despesa_taxa_id
+    WHERE mc.id = ?`).get(f.cobrancaId), {
+    valor_liquido: 38,
+    taxa_valor: 2,
+    despesa_valor: 2,
+    codigo_externo: 'MP-TAXA-987654321',
+  })
+
+  const estadoReconhecido = f.estadoFinanceiro()
+  assert.deepEqual(processar(f, pagamentoComTaxa), {
+    duplicado: true, status: 'Aprovado', valor: null,
+  })
+  assert.deepEqual(f.estadoFinanceiro(), estadoReconhecido)
+})
+
 test('chamadas concorrentes com detalhes diferentes serializam sem duplicar efeitos', async (t) => {
   const diretorio = mkdtempSync(path.join(tmpdir(), 'salge-mp-concorrencia-'))
   const caminhoBanco = path.join(diretorio, 'teste.sqlite')
@@ -174,6 +207,83 @@ test('chamadas concorrentes com detalhes diferentes serializam sem duplicar efei
     historico: 1, auditoria: 2, eventos: 2,
   })
   verificacao.close()
+})
+
+test('taxa tardia concorrente cria uma única despesa sem repetir efeitos fiscais', async (t) => {
+  const diretorio = mkdtempSync(path.join(tmpdir(), 'salge-mp-taxa-concorrente-'))
+  const caminhoBanco = path.join(diretorio, 'teste.sqlite')
+  t.after(() => rmSync(diretorio, { recursive: true, force: true }))
+  const f = criarBase(null, { arquivo: caminhoBanco })
+  processar(f, f.pagamento({ transaction_details: { net_received_amount: 40 } }))
+  const pagamentoA = f.pagamento({
+    status_detail: 'fee-reported-a',
+    transaction_details: { net_received_amount: 38 },
+  })
+  const pagamentoB = f.pagamento({
+    status_detail: 'fee-reported-b',
+    transaction_details: { net_received_amount: 38 },
+  })
+  f.db.close()
+
+  const inicio = Date.now() + 400
+  const resultados = await Promise.all([
+    executarWorker(caminhoBanco, pagamentoA, inicio),
+    executarWorker(caminhoBanco, pagamentoB, inicio),
+  ])
+  assert.equal(resultados.every((resultado) => resultado.duplicado === true), true)
+
+  const verificacao = new Database(caminhoBanco, { readonly: true })
+  const contar = (tabela, filtro = '') => verificacao.prepare(
+    `SELECT COUNT(*) AS total FROM ${tabela} ${filtro}`,
+  ).get().total
+  assert.deepEqual({
+    recebimentos: contar('recebimentos'),
+    alocacoes: contar('recebimento_alocacoes'),
+    receitas: contar('receitas_fiscais'),
+    taxas: contar('despesas', "WHERE codigo_externo LIKE 'MP-TAXA-%'"),
+    historico: contar('historico_pedidos', "WHERE evento = 'Pagamento confirmado'"),
+    auditoria: contar('auditoria', "WHERE acao = 'CRIAR_AUTOMATICO'"),
+    eventos: contar('mercado_pago_eventos'),
+  }, {
+    recebimentos: 1, alocacoes: 1, receitas: 1, taxas: 1,
+    historico: 1, auditoria: 2, eventos: 3,
+  })
+  assert.deepEqual(verificacao.prepare(`SELECT mc.valor_liquido, mc.taxa_valor,
+      d.valor AS despesa_valor
+    FROM mercado_pago_cobrancas mc
+    JOIN despesas d ON d.id = mc.despesa_taxa_id
+    WHERE mc.id = ?`).get(f.cobrancaId), {
+    valor_liquido: 38,
+    taxa_valor: 2,
+    despesa_valor: 2,
+  })
+  verificacao.close()
+})
+
+test('taxa divergente já contabilizada é rejeitada sem gravações parciais', (t) => {
+  const f = criarBase(t)
+  processar(f)
+  const estadoAnterior = f.estadoFinanceiro()
+  const cobrancaAnterior = f.db.prepare(`SELECT status, status_detalhe, valor_liquido,
+      taxa_valor, despesa_taxa_id, atualizado_em
+    FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId)
+  const eventosAnteriores = f.db.prepare('SELECT COUNT(*) AS total FROM mercado_pago_eventos').get().total
+
+  assert.throws(
+    () => processar(f, f.pagamento({
+      status_detail: 'fee-divergent',
+      transaction_details: { net_received_amount: 37 },
+    })),
+    /PAYMENT_FEE_MISMATCH:3:2/,
+  )
+  assert.deepEqual(f.estadoFinanceiro(), estadoAnterior)
+  assert.deepEqual(f.db.prepare(`SELECT status, status_detalhe, valor_liquido,
+      taxa_valor, despesa_taxa_id, atualizado_em
+    FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId), cobrancaAnterior)
+  assert.equal(f.db.prepare('SELECT COUNT(*) AS total FROM mercado_pago_eventos').get().total,
+    eventosAnteriores)
+  assert.equal(f.db.prepare('SELECT valor FROM despesas WHERE id = ?')
+    .get(cobrancaAnterior.despesa_taxa_id).valor, 2)
 })
 
 test('associações divergentes de pagamento, cobrança ou pedido são rejeitadas', (t) => {
@@ -245,17 +355,26 @@ test('pagamento novo com valor incompatível continua bloqueado sem efeitos parc
 
 test('recebimento estornado não é recriado, reativado nem recoloca a cobrança como aprovada', (t) => {
   const f = criarBase(t)
-  processar(f)
-  processar(f, f.pagamento({ status: 'refunded', status_detail: 'refunded' }))
+  processar(f, f.pagamento({ transaction_details: { net_received_amount: 40 } }))
+  processar(f, f.pagamento({ status: 'refunded', status_detail: 'refunded',
+    transaction_details: { net_received_amount: 40 } }))
   const recebimentoAntes = f.db.prepare(`SELECT id, estornado_em, estorno_motivo
     FROM recebimentos WHERE mercado_pago_pagamento_id = '987654321'`).get()
   const anterior = f.estadoFinanceiro()
-  const resultado = processar(f, f.pagamento({ status_detail: 'approved-again' }))
+  const resultado = processar(f, f.pagamento({ status_detail: 'approved-again',
+    transaction_details: { net_received_amount: 38 } }))
   assert.deepEqual(resultado, { duplicado: true, status: 'Aprovado', valor: 40 })
   assert.deepEqual(f.estadoFinanceiro(), anterior)
   assert.deepEqual(f.db.prepare(`SELECT id, estornado_em, estorno_motivo
     FROM recebimentos WHERE mercado_pago_pagamento_id = '987654321'`).get(), recebimentoAntes)
   assert.equal(f.db.prepare('SELECT status FROM mercado_pago_cobrancas WHERE id = ?')
     .get(f.cobrancaId).status, 'Reembolsado')
+  assert.deepEqual(f.db.prepare(`SELECT valor_liquido, taxa_valor, despesa_taxa_id
+    FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId), {
+    valor_liquido: 40,
+    taxa_valor: 0,
+    despesa_taxa_id: null,
+  })
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM despesas WHERE codigo_externo LIKE 'MP-TAXA-%'").get().total, 0)
   assert.notEqual(f.db.prepare('SELECT cancelada_em FROM receitas_fiscais').get().cancelada_em, null)
 })
