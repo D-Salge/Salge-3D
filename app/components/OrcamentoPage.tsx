@@ -18,6 +18,11 @@ import {
 } from '@/lib/orcamento.mjs'
 import { calcularValorSinal } from '@/lib/sinal.mjs'
 import { MODO_CALCULO_PLATES, MODO_CALCULO_TRADICIONAL, validarEAgruparPlates } from '@/lib/orcamento-plates.mjs'
+import {
+  aplicarAlteracaoQuantidade,
+  converterPlatesParaTradicional,
+  resolverAtivacaoModoPlates,
+} from '@/lib/orcamento-formulario.mjs'
 
 type PlateFormulario = {
   id: string
@@ -90,6 +95,7 @@ export function OrcamentoPage({
   const [quantidade, setQuantidade] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
   const [modoCalculo, setModoCalculo] = useState<'Tradicional' | 'Plates'>(pedidoInicial?.modo_calculo ?? MODO_CALCULO_TRADICIONAL)
   const [quantidadePlatesRevisada, setQuantidadePlatesRevisada] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
+  const [assinaturaUltimaConversao, setAssinaturaUltimaConversao] = useState<string | null>(null)
   const [tipoPedido, setTipoPedido] = useState(
     pedidoInicial?.tipo_venda && TIPOS_PEDIDO.includes(pedidoInicial.tipo_venda)
       ? pedidoInicial.tipo_venda
@@ -156,7 +162,14 @@ export function OrcamentoPage({
     }
   }
   function ativarModoPlates() {
-    if (plates.length === 0) {
+    const transicao = resolverAtivacaoModoPlates({
+      modoAtual: modoCalculo,
+      possuiPlates: plates.length > 0,
+      quantidade,
+      quantidadeRevisada: quantidadePlatesRevisada,
+    })
+    if (!transicao.alterarModo) return
+    if (transicao.inicializarPlates) {
       setPlates([{
         ...criarPlateBase(),
         nome: nomeDaPeca || 'Plate 1',
@@ -166,7 +179,7 @@ export function OrcamentoPage({
         })) : [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }],
       }])
     }
-    setQuantidadePlatesRevisada(quantidade)
+    setQuantidadePlatesRevisada(transicao.quantidadeRevisada)
     setModoCalculo(MODO_CALCULO_PLATES)
   }
   function duplicarPlate(id: string) {
@@ -189,16 +202,13 @@ export function OrcamentoPage({
   }
   function alterarQuantidade(novaQuantidade: number) {
     if (!Number.isSafeInteger(novaQuantidade) || novaQuantidade < 1) return
-    if (modoCalculo === MODO_CALCULO_PLATES) {
-      setQuantidade(novaQuantidade)
-      return
-    }
-    const fator = novaQuantidade / quantidade
-    const escalar = (valor: number | '') => valor === '' ? '' : Math.round(Number(valor) * fator * 1000) / 1000
-    setTempoHoras(escalar(tempoHoras))
-    setMateriais(lista => lista.map(item => ({ ...item, pesoGasto: escalar(item.pesoGasto) })))
-    setInsumos(lista => lista.map(item => ({ ...item, quantidade: escalar(item.quantidade) })))
-    setQuantidade(novaQuantidade)
+    const proximo = aplicarAlteracaoQuantidade({
+      modoCalculo, quantidadeAtual: quantidade, novaQuantidade, tempoHoras, materiais, insumos,
+    })
+    setTempoHoras(proximo.tempoHoras)
+    setMateriais(proximo.materiais)
+    setInsumos(proximo.insumos)
+    setQuantidade(proximo.quantidade)
   }
 
   // ─── CALCULATIONS ────────────────────────────────────────────────
@@ -226,6 +236,25 @@ export function OrcamentoPage({
     ? (agregacaoPlates?.materiais ?? [])
     : materiais.map((material) => ({ filamento_id: Number(material.filamentoId), peso_gasto_gramas: Number(material.pesoGasto) })),
   [modoCalculo, agregacaoPlates, materiais])
+  function ativarModoTradicional() {
+    if (modoCalculo === MODO_CALCULO_TRADICIONAL) return
+    if (!agregacaoPlates) {
+      setErrorMsg('Revise as plates antes de converter para o cálculo tradicional.')
+      return
+    }
+    const conversao = converterPlatesParaTradicional({
+      quantidade,
+      agregacao: agregacaoPlates,
+      assinaturaAnterior: assinaturaUltimaConversao,
+      tempoHoras,
+      materiais,
+    })
+    setTempoHoras(conversao.tempoHoras)
+    setMateriais(conversao.materiais)
+    setAssinaturaUltimaConversao(conversao.assinatura)
+    setErrorMsg('')
+    setModoCalculo(MODO_CALCULO_TRADICIONAL)
+  }
   const impressoraSelecionada = impressoras.find(item => item.id === Number(impressoraId))
   const potenciaAplicada = impressoraSelecionada?.potencia_w ?? potenciaW
   const custoHoraAplicado = impressoraSelecionada && impressoraSelecionada.custo_hora > 0
@@ -433,11 +462,11 @@ export function OrcamentoPage({
         <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
           <h2 className="mb-5 text-sm font-semibold text-white">Dados do Pedido</h2>
           <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
-            <button type="button" onClick={() => setModoCalculo(MODO_CALCULO_TRADICIONAL)}
+            <button type="button" onClick={ativarModoTradicional} aria-pressed={modoCalculo === MODO_CALCULO_TRADICIONAL}
               className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_TRADICIONAL ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
-              Cálculo tradicional
+              {modoCalculo === MODO_CALCULO_PLATES ? 'Converter para tradicional' : 'Cálculo tradicional'}
             </button>
-            <button type="button" onClick={ativarModoPlates}
+            <button type="button" onClick={ativarModoPlates} aria-pressed={modoCalculo === MODO_CALCULO_PLATES}
               className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_PLATES ? 'bg-[#d8f45a]/15 text-[#d8f45a]' : 'text-white/45 hover:text-white/70'}`}>
               Cálculo por plates
             </button>

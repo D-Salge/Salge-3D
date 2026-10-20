@@ -10,6 +10,11 @@ import {
   substituirPlatesPedidoNoBanco,
   validarEAgruparPlates,
 } from '../lib/orcamento-plates.mjs'
+import {
+  aplicarAlteracaoQuantidade,
+  converterPlatesParaTradicional,
+  resolverAtivacaoModoPlates,
+} from '../lib/orcamento-formulario.mjs'
 
 function abrirBanco() {
   const db = new Database(':memory:')
@@ -103,6 +108,91 @@ test('repetições e plates parciais usam os valores reais sem proporcionalidade
     { filamento_id: 1, peso_gasto_gramas: 491 },
     { filamento_id: 2, peso_gasto_gramas: 179 },
   ])
+})
+
+test('clique no modo plates ativo não confirma revisão pendente', () => {
+  const transicao = resolverAtivacaoModoPlates({
+    modoAtual: 'Plates', possuiPlates: true, quantidade: 50, quantidadeRevisada: 23,
+  })
+  assert.deepEqual(transicao, {
+    alterarModo: false, inicializarPlates: false, quantidadeRevisada: 23,
+  })
+})
+
+test('ida e volta entre modos preserva a revisão pendente quando já existem plates', () => {
+  const retorno = resolverAtivacaoModoPlates({
+    modoAtual: 'Tradicional', possuiPlates: true, quantidade: 50, quantidadeRevisada: 23,
+  })
+  assert.deepEqual(retorno, {
+    alterarModo: true, inicializarPlates: false, quantidadeRevisada: 23,
+  })
+})
+
+test('insumos acompanham a quantidade sem multiplicar tempos, gramagens ou repetições das plates', () => {
+  const plates = [{ nome: 'Potes', repeticoes: 2, tempoMinutos: 180, gramas: 220 }]
+  const resultado = aplicarAlteracaoQuantidade({
+    modoCalculo: 'Plates', quantidadeAtual: 23, novaQuantidade: 46, tempoHoras: 4.5,
+    materiais: [{ id: 'filamento-1', filamentoId: '1', pesoGasto: 300 }],
+    insumos: [{ id: 'insumo-1', insumoId: '1', quantidade: 23 }],
+  })
+  assert.equal(resultado.quantidade, 46)
+  assert.equal(resultado.tempoHoras, 4.5)
+  assert.equal(resultado.materiais[0].pesoGasto, 300)
+  assert.equal(resultado.insumos[0].quantidade, 46)
+  assert.deepEqual(plates, [{ nome: 'Potes', repeticoes: 2, tempoMinutos: 180, gramas: 220 }])
+})
+
+test('conversão para tradicional preserva tempo, materiais e preço agregado', () => {
+  const agregado = validarEAgruparPlates([
+    { nome: 'Potes', quantidade_pecas: 23, repeticoes: 1, tempo_execucao_minutos: 180,
+      filamentos: [{ filamento_id: 1, gramas_por_execucao: 220 }] },
+    { nome: 'Tampas', quantidade_pecas: 23, repeticoes: 1, tempo_execucao_minutos: 90,
+      filamentos: [{ filamento_id: 1, gramas_por_execucao: 80 }] },
+  ])
+  const conversao = converterPlatesParaTradicional({
+    quantidade: 23, agregacao: agregado, assinaturaAnterior: null,
+    tempoHoras: 99, materiais: [{ id: 'antigo', filamentoId: '2', pesoGasto: 999 }],
+  })
+  assert.equal(conversao.tempoHoras, 4.5)
+  assert.deepEqual(conversao.materiais, [{
+    id: 'plate-total-1', filamentoId: '1', pesoGasto: 300,
+  }])
+  const porPlates = calcularPrecoPlanilha({
+    ...parametrosPreco, tempoImpressaoHoras: agregado.tempoTotalHoras,
+    materiais: agregado.materiais.map((item) => ({ pesoGramas: item.peso_gasto_gramas, custoPorGrama: 0.1 })),
+  })
+  const tradicional = calcularPrecoPlanilha({
+    ...parametrosPreco, tempoImpressaoHoras: conversao.tempoHoras,
+    materiais: conversao.materiais.map((item) => ({ pesoGramas: item.pesoGasto, custoPorGrama: 0.1 })),
+  })
+  assert.deepEqual(tradicional, porPlates)
+})
+
+test('alternâncias repetidas não duplicam materiais nem aplicam escalonamento cumulativo', () => {
+  const agregado = validarEAgruparPlates([{ nome: 'Única', quantidade_pecas: 23, repeticoes: 2,
+    tempo_execucao_minutos: 120, filamentos: [{ filamento_id: 1, gramas_por_execucao: 100 }] }])
+  const primeira = converterPlatesParaTradicional({
+    quantidade: 23, agregacao: agregado, assinaturaAnterior: null,
+    tempoHoras: 1, materiais: [],
+  })
+  const rascunhoTradicional = primeira.materiais.map((item) => ({ ...item, pesoGasto: 210 }))
+  const repetida = converterPlatesParaTradicional({
+    quantidade: 23, agregacao: agregado, assinaturaAnterior: primeira.assinatura,
+    tempoHoras: 4.25, materiais: rascunhoTradicional,
+  })
+  assert.equal(repetida.sincronizou, false)
+  assert.equal(repetida.tempoHoras, 4.25)
+  assert.deepEqual(repetida.materiais, rascunhoTradicional)
+  assert.equal(repetida.materiais.length, 1)
+
+  const alterada = aplicarAlteracaoQuantidade({
+    modoCalculo: 'Plates', quantidadeAtual: 23, novaQuantidade: 46,
+    tempoHoras: repetida.tempoHoras, materiais: repetida.materiais,
+    insumos: [{ id: 'insumo', insumoId: '1', quantidade: 2 }],
+  })
+  assert.equal(alterada.tempoHoras, 4.25)
+  assert.equal(alterada.materiais[0].pesoGasto, 210)
+  assert.equal(alterada.insumos[0].quantidade, 4)
 })
 
 test('criação, edição, duplicação e reabertura preservam a composição', (t) => {
