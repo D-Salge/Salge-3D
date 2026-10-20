@@ -260,30 +260,53 @@ test('taxa tardia concorrente cria uma única despesa sem repetir efeitos fiscai
   verificacao.close()
 })
 
-test('taxa divergente já contabilizada é rejeitada sem gravações parciais', (t) => {
+test('diferença de um centavo na taxa é rejeitada nos dois sentidos com rollback completo', (t) => {
   const f = criarBase(t)
   processar(f)
-  const estadoAnterior = f.estadoFinanceiro()
-  const cobrancaAnterior = f.db.prepare(`SELECT status, status_detalhe, valor_liquido,
+  const estadoCompleto = () => ({
+    cobranca: f.db.prepare(`SELECT status, status_detalhe, valor_liquido,
       taxa_valor, despesa_taxa_id, atualizado_em
-    FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId)
-  const eventosAnteriores = f.db.prepare('SELECT COUNT(*) AS total FROM mercado_pago_eventos').get().total
+      FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId),
+    despesas: f.db.prepare('SELECT * FROM despesas ORDER BY id').all(),
+    recebimentos: f.db.prepare('SELECT * FROM recebimentos ORDER BY id').all(),
+    alocacoes: f.db.prepare('SELECT * FROM recebimento_alocacoes ORDER BY id').all(),
+    receitas: f.db.prepare('SELECT * FROM receitas_fiscais ORDER BY id').all(),
+    eventos: f.db.prepare('SELECT * FROM mercado_pago_eventos ORDER BY id').all(),
+  })
+  const estadoAnterior = estadoCompleto()
 
-  assert.throws(
-    () => processar(f, f.pagamento({
-      status_detail: 'fee-divergent',
-      transaction_details: { net_received_amount: 37 },
-    })),
-    /PAYMENT_FEE_MISMATCH:3:2/,
-  )
+  for (const caso of [
+    { detalhe: 'fee-one-cent-up', liquido: 37.99, esperado: /PAYMENT_FEE_MISMATCH:2.01:2/ },
+    { detalhe: 'fee-one-cent-down', liquido: 38.01, esperado: /PAYMENT_FEE_MISMATCH:1.99:2/ },
+  ]) {
+    assert.throws(
+      () => processar(f, f.pagamento({
+        status_detail: caso.detalhe,
+        transaction_details: { net_received_amount: caso.liquido },
+      })),
+      caso.esperado,
+    )
+    assert.deepEqual(estadoCompleto(), estadoAnterior)
+  }
+})
+
+test('valores equivalentes em centavos permitem reprocessar sem duplicação', (t) => {
+  const f = criarBase(t)
+  processar(f)
+  const despesaId = f.db.prepare(`SELECT despesa_taxa_id
+    FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId).despesa_taxa_id
+  f.db.prepare('UPDATE despesas SET valor = 2.0000000000000004 WHERE id = ?').run(despesaId)
+  const estadoAnterior = f.estadoFinanceiro()
+
+  assert.deepEqual(processar(f, f.pagamento({ status_detail: 'same-cents' })), {
+    duplicado: true,
+    status: 'Aprovado',
+    valor: 40,
+  })
   assert.deepEqual(f.estadoFinanceiro(), estadoAnterior)
-  assert.deepEqual(f.db.prepare(`SELECT status, status_detalhe, valor_liquido,
-      taxa_valor, despesa_taxa_id, atualizado_em
-    FROM mercado_pago_cobrancas WHERE id = ?`).get(f.cobrancaId), cobrancaAnterior)
-  assert.equal(f.db.prepare('SELECT COUNT(*) AS total FROM mercado_pago_eventos').get().total,
-    eventosAnteriores)
-  assert.equal(f.db.prepare('SELECT valor FROM despesas WHERE id = ?')
-    .get(cobrancaAnterior.despesa_taxa_id).valor, 2)
+  assert.equal(f.db.prepare('SELECT valor FROM despesas WHERE id = ?').get(despesaId).valor,
+    2.0000000000000004)
+  assert.equal(f.db.prepare('SELECT COUNT(*) AS total FROM mercado_pago_eventos').get().total, 2)
 })
 
 test('associações divergentes de pagamento, cobrança ou pedido são rejeitadas', (t) => {
