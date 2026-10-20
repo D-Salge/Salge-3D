@@ -9,6 +9,7 @@ import { calcularIndicadoresQualidade, calcularStatusManutencao } from '@/lib/ma
 import { revalidatePath } from 'next/cache'
 import type { EntregaPedido } from '@/app/actions/entregas'
 import { calcularDesviosOperacao } from '@/lib/desvios-operacao.mjs'
+import { obterPlatesPedidoNoBanco } from '@/lib/orcamento-plates.mjs'
 
 const TENANT_ID = 1
 const USUARIO_ID = 1
@@ -166,6 +167,7 @@ export interface PedidoDetalhes {
   frete_cobrado: number
   condicao_pagamento: string | null
   tempo_impressao_horas: number
+  modo_calculo: 'Tradicional' | 'Plates'
   tempo_real_horas: number | null
   custo_filamento: number
   custo_insumos: number
@@ -192,6 +194,15 @@ export interface PedidoDetalhes {
   inicio_previsto: string | null
   fim_previsto: string | null
   materiais: PedidoMaterialDetalhe[]
+  plates: Array<{
+    id: number
+    ordem: number
+    nome: string
+    quantidade_pecas: number
+    repeticoes: number
+    tempo_execucao_minutos: number
+    filamentos: Array<{ filamento_id: number; gramas_por_execucao: number }>
+  }>
   insumos: PedidoInsumoDetalhe[]
   historico: HistoricoPedido[]
   anexos: AnexoPedido[]
@@ -572,6 +583,7 @@ export async function atualizarStatusOrcamento(
 
 export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhes | null> {
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return null
+  const sessao = await exigirSessao()
 
   const pedido = db.prepare(`
     SELECT p.*, c.nome AS cliente_nome, c.telefone AS cliente_telefone,
@@ -619,7 +631,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     JOIN tenants t ON t.id = p.tenant_id
     LEFT JOIN impressoras imp ON imp.id = p.impressora_id
     WHERE p.id = ? AND p.tenant_id = ?
-  `).get(pedidoId, TENANT_ID) as (Omit<PedidoDetalhes, 'materiais' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'perfil_tecnico' | 'desvios' | 'parcelas_receber' | 'entregas' | 'cobranca_mercado_pago' | 'link_pagamento' | 'lucro_liquido' | 'margem_percentual'> & {
+  `).get(pedidoId, sessao.tenantId) as (Omit<PedidoDetalhes, 'materiais' | 'plates' | 'insumos' | 'historico' | 'anexos' | 'arquivos_producao' | 'checklist' | 'perfil_tecnico' | 'desvios' | 'parcelas_receber' | 'entregas' | 'cobranca_mercado_pago' | 'link_pagamento' | 'lucro_liquido' | 'margem_percentual'> & {
     custo_real: number
   }) | undefined
   if (!pedido) return null
@@ -661,7 +673,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
       )
     )
     ORDER BY ap.nome_chave, ap.versao DESC, ap.id DESC
-  `).all(TENANT_ID, pedidoId, pedidoId, TENANT_ID) as ArquivoProducaoPedido[]
+  `).all(sessao.tenantId, pedidoId, pedidoId, sessao.tenantId) as ArquivoProducaoPedido[]
   const checklist = db.prepare(`
     SELECT pci.id, pci.etapa, pci.texto, pci.ordem,
       COALESCE(pcr.concluido, 0) AS concluido, pcr.concluido_em
@@ -671,7 +683,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
       ON pcr.checklist_item_id = pci.id AND pcr.pedido_id = p.id
     WHERE pci.tenant_id = ? AND pci.ativo = 1
     ORDER BY CASE pci.etapa WHEN 'Produção' THEN 0 ELSE 1 END, pci.ordem, pci.id
-  `).all(pedidoId, TENANT_ID) as ChecklistPedidoItem[]
+  `).all(pedidoId, sessao.tenantId) as ChecklistPedidoItem[]
   const perfilTecnico = db.prepare(`
     SELECT pv.versao, imp.nome AS impressora_nome, pv.diametro_bico_mm,
       pv.altura_camada_mm, pv.unidades_por_placa, pv.perfil_fatiamento,
@@ -721,7 +733,9 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     FROM mercado_pago_cobrancas
     WHERE tenant_id = ? AND pedido_id = ?
     ORDER BY id DESC LIMIT 1
-  `).get(TENANT_ID, pedidoId) as PedidoDetalhes['cobranca_mercado_pago']
+  `).get(sessao.tenantId, pedidoId) as PedidoDetalhes['cobranca_mercado_pago']
+
+  const plates = obterPlatesPedidoNoBanco(db, sessao, pedidoId) as PedidoDetalhes['plates']
 
   const lucroLiquido = Math.round((pedido.valor_total_cobrado - pedido.custo_real) * 100) / 100
   const margemPercentual = pedido.valor_total_cobrado > 0
@@ -747,6 +761,7 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
     lucro_liquido: lucroLiquido,
     margem_percentual: margemPercentual,
     materiais,
+    plates,
     insumos,
     historico,
     anexos,

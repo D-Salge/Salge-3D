@@ -40,6 +40,9 @@ function criarBancoAntigo(caminho) {
     DROP TABLE extrato_conciliacoes;
     DROP INDEX idx_entregas_operacao;
     ALTER TABLE entregas_pedido DROP COLUMN operacao_id;
+    DROP TABLE pedido_plate_filamentos;
+    DROP TABLE pedido_plates;
+    ALTER TABLE pedidos DROP COLUMN modo_calculo;
     DELETE FROM schema_migrations WHERE version >= 28;
     CREATE TABLE dados_anteriores (id INTEGER PRIMARY KEY, valor TEXT NOT NULL);
     INSERT INTO dados_anteriores (valor) VALUES ('registro ainda no WAL');
@@ -75,16 +78,20 @@ test('cria e valida backup pré-migração com dados ainda presentes no WAL', (t
   const migrador = abrirBanco(caminhoBanco)
   try {
     const resultado = aplicarMigracoesComBackup(migrador, { caminhoBanco })
-    assert.equal(resultado.aplicadas, 2)
+    assert.equal(resultado.aplicadas, migrations.length - 27)
     assert.ok(resultado.backup?.startsWith(path.join(pasta, 'dados', 'backups')))
     assert.ok(existsSync(resultado.backup))
     assert.equal(existeTabela(migrador, 'extrato_conciliacoes'), true)
+    assert.equal(existeTabela(migrador, 'pedido_plates'), true)
+    assert.ok(migrador.prepare(`PRAGMA table_info(pedidos)`).all().some((coluna) => coluna.name === 'modo_calculo'))
     assert.equal(migrador.prepare('SELECT valor FROM dados_anteriores').get().valor, 'registro ainda no WAL')
 
     const backup = new Database(resultado.backup, { readonly: true, fileMustExist: true })
     try {
       assert.equal(backup.pragma('integrity_check', { simple: true }), 'ok')
       assert.equal(existeTabela(backup, 'extrato_conciliacoes'), false)
+      assert.equal(existeTabela(backup, 'pedido_plates'), false)
+      assert.equal(backup.prepare(`PRAGMA table_info(pedidos)`).all().some((coluna) => coluna.name === 'modo_calculo'), false)
       assert.equal(backup.prepare('SELECT valor FROM dados_anteriores').get().valor, 'registro ainda no WAL')
       assert.equal(backup.prepare('SELECT MAX(version) AS versao FROM schema_migrations').get().versao, 27)
     } finally {

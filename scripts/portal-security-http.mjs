@@ -76,6 +76,13 @@ function prepararCenarios(db) {
   `)
   const clienteA = Number(inserirCliente.run(administradorA.tenant_id, administradorA.id, 'Cliente A').lastInsertRowid)
   const clienteB = Number(inserirCliente.run(tenantB, administradorB, 'Cliente B').lastInsertRowid)
+  const inserirFilamento = db.prepare(`
+    INSERT INTO filamentos (
+      tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas
+    ) VALUES (?, ?, 'PLA', ?, 1000, 100, 1000)
+  `)
+  const filamentoA = Number(inserirFilamento.run(administradorA.tenant_id, administradorA.id, 'Preto').lastInsertRowid)
+  const filamentoB = Number(inserirFilamento.run(tenantB, administradorB, 'Branco').lastInsertRowid)
 
   const inserirPedido = db.prepare(`
     INSERT INTO pedidos (
@@ -110,6 +117,10 @@ function prepararCenarios(db) {
     administradorA: administradorA.id,
     operadorA,
     administradorB,
+    clienteA,
+    clienteB,
+    filamentoA,
+    filamentoB,
     pedidoPublico,
     pedidoOperador,
     pedidoAdministrador,
@@ -123,11 +134,11 @@ function prepararCenarios(db) {
   }
 }
 
-function idDaAction(manifesto, nome) {
+function idDaAction(manifesto, nome, arquivoAction = 'portal.ts') {
   const entrada = Object.entries(manifesto.node).find(([, valor]) => {
     const arquivo = valor.filename.replaceAll('\\', '/').replace(/^\.\//, '')
     return valor.exportedName === nome &&
-      (arquivo === 'app/actions/portal.ts' || arquivo.endsWith('/app/actions/portal.ts'))
+      (arquivo === `app/actions/${arquivoAction}` || arquivo.endsWith(`/app/actions/${arquivoAction}`))
   })
   assert.ok(entrada, `Server Action ${nome} não encontrada no manifesto`)
   return entrada[0]
@@ -255,6 +266,102 @@ async function executarTestesHttp(baseUrl, db, dados, actions) {
   assert.equal(db.prepare("SELECT COUNT(*) AS total FROM historico_pedidos WHERE evento = 'Resposta pelo portal'").get().total, 0)
 }
 
+async function executarTestesPlates(baseUrl, db, dados, actions) {
+  const chamarAction = async (id, argumentos, tokenSessao) => {
+    const resposta = await fetch(`${baseUrl}/portal/teste-de-autorizacao`, {
+      method: 'POST',
+      headers: {
+        Accept: 'text/x-component',
+        'Content-Type': 'text/plain;charset=UTF-8',
+        'Next-Action': id,
+        ...(tokenSessao ? { Cookie: `salge_session=${tokenSessao}` } : {}),
+      },
+      body: JSON.stringify(argumentos),
+    })
+    return { status: resposta.status, corpo: await resposta.text() }
+  }
+  const payload = (sobrescritas = {}) => ({
+    nome_da_peca: 'Kit por plates', cliente_id: dados.clienteA,
+    tempo_impressao_horas: 0.01, quantidade: 23, tipo_pedido: 'B2C lote (4+)',
+    materials: [{ filamento_id: dados.filamentoB, peso_gasto_gramas: 0.01 }],
+    insumos: [], custo_embalagem: 0, desconto: 0, frete_cobrado: 0, frete_pago: 0,
+    materiais_avulsos_por_unidade: 0, horas_trabalho_ativo: 0, setup_projeto: 0,
+    margem_perdas: 0.1, modo_calculo: 'Plates', plates_quantidade_revisada: 23,
+    plates: [
+      { nome: 'Potes', quantidade_pecas: 23, repeticoes: 1, tempo_execucao_minutos: 180,
+        filamentos: [{ filamento_id: dados.filamentoA, gramas_por_execucao: 220 }] },
+      { nome: 'Tampas', quantidade_pecas: 23, repeticoes: 1, tempo_execucao_minutos: 90,
+        filamentos: [{ filamento_id: dados.filamentoA, gramas_por_execucao: 80 }] },
+    ],
+    ...sobrescritas,
+  })
+  const contar = () => ({
+    pedidos: db.prepare(`SELECT COUNT(*) AS total FROM pedidos WHERE nome_da_peca = 'Kit por plates'`).get().total,
+    plates: db.prepare('SELECT COUNT(*) AS total FROM pedido_plates').get().total,
+  })
+
+  const antes = contar()
+  const anonimo = await chamarAction(actions.criarPedido, [payload()])
+  assert.equal(anonimo.status, 200)
+  assert.deepEqual(contar(), antes)
+  const visualizador = await chamarAction(actions.criarPedido, [payload()], dados.sessoes.visualizadorA)
+  assert.equal(visualizador.status, 200)
+  assert.deepEqual(contar(), antes)
+
+  const cruzado = await chamarAction(actions.criarPedido, [payload({ cliente_id: dados.clienteB })], dados.sessoes.adminA)
+  assert.equal(cruzado.status, 200)
+  assert.deepEqual(contar(), antes)
+
+  const criado = await chamarAction(actions.criarPedido, [payload()], dados.sessoes.operadorA)
+  assert.equal(criado.status, 200)
+  const pedido = db.prepare(`SELECT id, tenant_id, usuario_id, quantidade, tempo_impressao_horas,
+    modo_calculo FROM pedidos WHERE nome_da_peca = 'Kit por plates' ORDER BY id DESC LIMIT 1`).get()
+  assert.deepEqual({ ...pedido, tempo_impressao_horas: Number(pedido.tempo_impressao_horas.toFixed(2)) }, {
+    id: pedido.id, tenant_id: dados.tenantA, usuario_id: dados.operadorA,
+    quantidade: 23, tempo_impressao_horas: 4.5, modo_calculo: 'Plates',
+  })
+  assert.deepEqual(db.prepare(`SELECT filamento_id, peso_gasto_gramas FROM pedido_filamentos
+    WHERE pedido_id = ?`).all(pedido.id), [{ filamento_id: dados.filamentoA, peso_gasto_gramas: 300 }])
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM pedido_plates WHERE pedido_id = ?').get(pedido.id).total, 2)
+  assert.deepEqual(db.prepare(`SELECT tenant_id, usuario_id FROM auditoria
+    WHERE entidade = 'Pedido' AND entidade_id = ? AND acao = 'CRIAR'`).get(pedido.id), {
+    tenant_id: dados.tenantA, usuario_id: dados.operadorA,
+  })
+
+  const semRevisao = await chamarAction(actions.atualizarOrcamento, [pedido.id, payload({
+    quantidade: 50, plates_quantidade_revisada: 23,
+  })], dados.sessoes.operadorA)
+  assert.equal(semRevisao.status, 200)
+  assert.deepEqual(db.prepare('SELECT quantidade, tempo_impressao_horas FROM pedidos WHERE id = ?').get(pedido.id), {
+    quantidade: 23, tempo_impressao_horas: 4.5,
+  })
+
+  const invalidoAntes = contar()
+  const invalido = await chamarAction(actions.criarPedido, [payload({
+    plates: [{ nome: 'Inválida', quantidade_pecas: 1, repeticoes: 1, tempo_execucao_minutos: 10,
+      filamentos: [{ filamento_id: dados.filamentoB, gramas_por_execucao: 5 }] }],
+  })], dados.sessoes.adminA)
+  assert.equal(invalido.status, 200)
+  assert.deepEqual(contar(), invalidoAntes)
+
+  const editado = await chamarAction(actions.atualizarOrcamento, [pedido.id, payload({
+    nome_da_peca: 'Kit por plates editado', quantidade: 50, plates_quantidade_revisada: 50,
+    plates: [
+      { nome: 'Potes', quantidade_pecas: 23, repeticoes: 2, tempo_execucao_minutos: 180,
+        filamentos: [{ filamento_id: dados.filamentoA, gramas_por_execucao: 220 }] },
+      { nome: 'Potes — parcial', quantidade_pecas: 4, repeticoes: 1, tempo_execucao_minutos: 57,
+        filamentos: [{ filamento_id: dados.filamentoA, gramas_por_execucao: 51 }] },
+    ],
+  })], dados.sessoes.operadorA)
+  assert.equal(editado.status, 200)
+  assert.deepEqual(db.prepare('SELECT quantidade, tempo_impressao_horas FROM pedidos WHERE id = ?').get(pedido.id), {
+    quantidade: 50, tempo_impressao_horas: 6.95,
+  })
+  assert.deepEqual(db.prepare('SELECT nome, repeticoes FROM pedido_plates WHERE pedido_id = ? ORDER BY ordem').all(pedido.id), [
+    { nome: 'Potes', repeticoes: 2 }, { nome: 'Potes — parcial', repeticoes: 1 },
+  ])
+}
+
 let temporario
 let servidor
 let db
@@ -280,6 +387,8 @@ try {
   const actions = {
     gerar: idDaAction(manifesto, 'gerarLinkPortal'),
     responder: idDaAction(manifesto, 'responderOrcamentoPortal'),
+    criarPedido: idDaAction(manifesto, 'criarPedido', 'pedidos.ts'),
+    atualizarOrcamento: idDaAction(manifesto, 'atualizarOrcamento', 'pedidos.ts'),
   }
 
   const porta = await portaLivre()
@@ -302,7 +411,8 @@ try {
   db = new Database(caminhoBanco)
   db.pragma('foreign_keys = ON')
   await executarTestesHttp(baseUrl, db, dados, actions)
-  console.log('OK: autorização, isolamento entre empresas e portal público validados por HTTP.')
+  await executarTestesPlates(baseUrl, db, dados, actions)
+  console.log('OK: autorização, isolamento entre empresas, portal público e orçamento por plates validados por HTTP.')
 } finally {
   if (db) db.close()
   await encerrarServidor(servidor)
