@@ -196,6 +196,21 @@ export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPag
 
           {pedido.orcamento_status === 'Aprovado' && <ChecklistPedido pedidoId={pedido.id} itens={pedido.checklist} />}
 
+          {pedido.modo_calculo === 'Plates' && <section className="rounded-2xl border border-[#d8f45a]/15 bg-[#15171b] p-6">
+            <h2 className="font-semibold">Composição técnica por plates</h2>
+            <p className="mt-1 text-xs text-white/35">{pedido.quantidade} unidades comerciais · {pedido.plates.reduce((total, plate) => total + plate.repeticoes, 0)} execuções físicas · {pedido.tempo_impressao_horas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h no total</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {pedido.plates.map((plate) => <article key={plate.id} className="rounded-xl bg-white/[0.03] p-4 text-sm">
+                <div className="flex items-start justify-between gap-3"><strong>{plate.nome}</strong><span className="rounded-full bg-[#d8f45a]/10 px-2 py-1 text-[10px] text-[#d8f45a]">{plate.repeticoes}×</span></div>
+                <p className="mt-2 text-xs text-white/45">{plate.quantidade_pecas} peças/plate · {Math.floor(plate.tempo_execucao_minutos / 60)}h {plate.tempo_execucao_minutos % 60}min por execução</p>
+                <div className="mt-3 space-y-1 border-t border-white/[0.07] pt-3 text-xs text-white/40">{plate.filamentos.map((material) => {
+                  const agregado = pedido.materiais.find((item) => item.filamento_id === material.filamento_id)
+                  return <p key={material.filamento_id} className="flex justify-between gap-3"><span>{agregado?.nome ?? `Filamento #${material.filamento_id}`}</span><span>{material.gramas_por_execucao.toLocaleString('pt-BR')} g/execução</span></p>
+                })}</div>
+              </article>)}
+            </div>
+          </section>}
+
           <form id="fechamento" onSubmit={salvarOperacao} className="scroll-mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6"><div className="mb-5"><h2 className="font-semibold">Planejamento e consumo real</h2><p className="mt-1 text-xs leading-5 text-white/35">Antes de finalizar, informe o que realmente foi usado. Campos vazios serão preenchidos com a estimativa após sua confirmação.</p></div><div className="grid gap-4 sm:grid-cols-2">
             <label className="text-xs text-white/50">Impressora<select value={impressoraId} onChange={(e) => setImpressoraId(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3"><option value="">Não atribuída</option>{impressoras.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
             <label className="text-xs text-white/50">Tempo real (horas)<input type="number" min="0" step="0.1" value={tempoReal} onChange={(e) => setTempoReal(e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3" /></label>

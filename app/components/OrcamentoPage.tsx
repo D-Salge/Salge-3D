@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { Plus, Trash2, CheckCircle2, ChevronRight, Zap } from 'lucide-react'
-import { atualizarOrcamento, criarPedido, type PedidoParaDuplicar, type ReferenciaPreco } from '@/app/actions/pedidos'
+import { Plus, Trash2, CheckCircle2, ChevronRight, Copy, Zap } from 'lucide-react'
+import { atualizarOrcamento, criarPedido, type PedidoParaDuplicar, type PlateInput, type ReferenciaPreco } from '@/app/actions/pedidos'
 import { useRouter } from 'next/navigation'
 import type { Cliente } from '@/app/actions/clientes'
 import type { FilamentoCompleto } from '@/app/actions/filamentos'
@@ -17,6 +17,21 @@ import {
   TIPOS_PEDIDO,
 } from '@/lib/orcamento.mjs'
 import { calcularValorSinal } from '@/lib/sinal.mjs'
+import { MODO_CALCULO_PLATES, MODO_CALCULO_TRADICIONAL, validarEAgruparPlates } from '@/lib/orcamento-plates.mjs'
+import {
+  aplicarAlteracaoQuantidade,
+  converterPlatesParaTradicional,
+  resolverAtivacaoModoPlates,
+} from '@/lib/orcamento-formulario.mjs'
+
+type PlateFormulario = {
+  id: string
+  nome: string
+  quantidadePecas: number | ''
+  repeticoes: number | ''
+  tempoMinutos: number | ''
+  filamentos: Array<{ id: string; filamentoId: string; gramasPorExecucao: number | '' }>
+}
 
 function formaPagamentoInicial(valor?: string | null) {
   const mapa: Record<string, string> = {
@@ -78,6 +93,9 @@ export function OrcamentoPage({
   )
   const [tempoHoras, setTempoHoras] = useState<number | ''>(pedidoInicial?.tempo_impressao_horas ?? '')
   const [quantidade, setQuantidade] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
+  const [modoCalculo, setModoCalculo] = useState<'Tradicional' | 'Plates'>(pedidoInicial?.modo_calculo ?? MODO_CALCULO_TRADICIONAL)
+  const [quantidadePlatesRevisada, setQuantidadePlatesRevisada] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
+  const [assinaturaUltimaConversao, setAssinaturaUltimaConversao] = useState<string | null>(null)
   const [tipoPedido, setTipoPedido] = useState(
     pedidoInicial?.tipo_venda && TIPOS_PEDIDO.includes(pedidoInicial.tipo_venda)
       ? pedidoInicial.tipo_venda
@@ -90,6 +108,20 @@ export function OrcamentoPage({
   // Arrays
   const [materiais, setMateriais] = useState<{ id: string; filamentoId: string; pesoGasto: number | '' }[]>(
     pedidoInicial?.materiais.map((item, index) => ({ id: `duplicado-filamento-${index}`, filamentoId: String(item.filamento_id), pesoGasto: item.peso_gasto_gramas })) ?? [],
+  )
+  const [plates, setPlates] = useState<PlateFormulario[]>(
+    pedidoInicial?.plates.map((plate, index) => ({
+      id: `plate-inicial-${index}`,
+      nome: plate.nome,
+      quantidadePecas: plate.quantidade_pecas,
+      repeticoes: plate.repeticoes,
+      tempoMinutos: plate.tempo_execucao_minutos,
+      filamentos: plate.filamentos.map((item, materialIndex) => ({
+        id: `plate-inicial-${index}-filamento-${materialIndex}`,
+        filamentoId: String(item.filamento_id),
+        gramasPorExecucao: item.gramas_por_execucao,
+      })),
+    })) ?? [],
   )
   const [insumos, setInsumos] = useState<{ id: string; insumoId: string; quantidade: number | '' }[]>(
     pedidoInicial?.insumos.map((item, index) => ({ id: `duplicado-insumo-${index}`, insumoId: String(item.insumo_id), quantidade: item.quantidade })) ?? [],
@@ -123,6 +155,45 @@ export function OrcamentoPage({
   function removeMaterial(id: string) {
     setMateriais(materiais.filter(m => m.id !== id))
   }
+  function criarPlateBase(): PlateFormulario {
+    return {
+      id: crypto.randomUUID(), nome: '', quantidadePecas: quantidade, repeticoes: 1,
+      tempoMinutos: '', filamentos: [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }],
+    }
+  }
+  function ativarModoPlates() {
+    const transicao = resolverAtivacaoModoPlates({
+      modoAtual: modoCalculo,
+      possuiPlates: plates.length > 0,
+      quantidade,
+      quantidadeRevisada: quantidadePlatesRevisada,
+    })
+    if (!transicao.alterarModo) return
+    if (transicao.inicializarPlates) {
+      setPlates([{
+        ...criarPlateBase(),
+        nome: nomeDaPeca || 'Plate 1',
+        tempoMinutos: tempoHoras === '' ? '' : Math.max(1, Math.round(Number(tempoHoras) * 60)),
+        filamentos: materiais.length > 0 ? materiais.map((material) => ({
+          id: crypto.randomUUID(), filamentoId: material.filamentoId, gramasPorExecucao: material.pesoGasto,
+        })) : [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }],
+      }])
+    }
+    setQuantidadePlatesRevisada(transicao.quantidadeRevisada)
+    setModoCalculo(MODO_CALCULO_PLATES)
+  }
+  function duplicarPlate(id: string) {
+    const original = plates.find((plate) => plate.id === id)
+    if (!original) return
+    const copia = {
+      ...original,
+      id: crypto.randomUUID(),
+      nome: `${original.nome || 'Plate'} — cópia`,
+      filamentos: original.filamentos.map((item) => ({ ...item, id: crypto.randomUUID() })),
+    }
+    const indice = plates.findIndex((plate) => plate.id === id)
+    setPlates([...plates.slice(0, indice + 1), copia, ...plates.slice(indice + 1)])
+  }
   function addInsumo() {
     setInsumos([...insumos, { id: crypto.randomUUID(), insumoId: '', quantidade: '' }])
   }
@@ -131,16 +202,59 @@ export function OrcamentoPage({
   }
   function alterarQuantidade(novaQuantidade: number) {
     if (!Number.isSafeInteger(novaQuantidade) || novaQuantidade < 1) return
-    const fator = novaQuantidade / quantidade
-    const escalar = (valor: number | '') => valor === '' ? '' : Math.round(Number(valor) * fator * 1000) / 1000
-    setTempoHoras(escalar(tempoHoras))
-    setMateriais(lista => lista.map(item => ({ ...item, pesoGasto: escalar(item.pesoGasto) })))
-    setInsumos(lista => lista.map(item => ({ ...item, quantidade: escalar(item.quantidade) })))
-    setQuantidade(novaQuantidade)
+    const proximo = aplicarAlteracaoQuantidade({
+      modoCalculo, quantidadeAtual: quantidade, novaQuantidade, tempoHoras, materiais, insumos,
+    })
+    setTempoHoras(proximo.tempoHoras)
+    setMateriais(proximo.materiais)
+    setInsumos(proximo.insumos)
+    setQuantidade(proximo.quantidade)
   }
 
   // ─── CALCULATIONS ────────────────────────────────────────────────
-  const th = Number(tempoHoras) || 0
+  const agregacaoPlates = useMemo(() => {
+    if (modoCalculo !== MODO_CALCULO_PLATES) return null
+    try {
+      return validarEAgruparPlates(plates.map((plate) => ({
+        nome: plate.nome,
+        quantidade_pecas: Number(plate.quantidadePecas),
+        repeticoes: Number(plate.repeticoes),
+        tempo_execucao_minutos: Number(plate.tempoMinutos),
+        filamentos: plate.filamentos.map((item) => ({
+          filamento_id: Number(item.filamentoId),
+          gramas_por_execucao: Number(item.gramasPorExecucao),
+        })),
+      })))
+    } catch {
+      return null
+    }
+  }, [modoCalculo, plates])
+  const th = modoCalculo === MODO_CALCULO_PLATES
+    ? (agregacaoPlates?.tempoTotalHoras ?? 0)
+    : Number(tempoHoras) || 0
+  const materiaisCalculados = useMemo(() => modoCalculo === MODO_CALCULO_PLATES
+    ? (agregacaoPlates?.materiais ?? [])
+    : materiais.map((material) => ({ filamento_id: Number(material.filamentoId), peso_gasto_gramas: Number(material.pesoGasto) })),
+  [modoCalculo, agregacaoPlates, materiais])
+  function ativarModoTradicional() {
+    if (modoCalculo === MODO_CALCULO_TRADICIONAL) return
+    if (!agregacaoPlates) {
+      setErrorMsg('Revise as plates antes de converter para o cálculo tradicional.')
+      return
+    }
+    const conversao = converterPlatesParaTradicional({
+      quantidade,
+      agregacao: agregacaoPlates,
+      assinaturaAnterior: assinaturaUltimaConversao,
+      tempoHoras,
+      materiais,
+    })
+    setTempoHoras(conversao.tempoHoras)
+    setMateriais(conversao.materiais)
+    setAssinaturaUltimaConversao(conversao.assinatura)
+    setErrorMsg('')
+    setModoCalculo(MODO_CALCULO_TRADICIONAL)
+  }
   const impressoraSelecionada = impressoras.find(item => item.id === Number(impressoraId))
   const potenciaAplicada = impressoraSelecionada?.potencia_w ?? potenciaW
   const custoHoraAplicado = impressoraSelecionada && impressoraSelecionada.custo_hora > 0
@@ -153,9 +267,9 @@ export function OrcamentoPage({
     potenciaW: potenciaAplicada,
     tarifaEnergiaKwh: tarifaEnergia,
     custoHoraMaquina: custoHoraAplicado,
-    materiais: materiais.map((material) => {
-      const filamento = filamentos.find(f => f.id === Number(material.filamentoId))
-      const peso = Number(material.pesoGasto)
+    materiais: materiaisCalculados.map((material) => {
+      const filamento = filamentos.find(f => f.id === material.filamento_id)
+      const peso = material.peso_gasto_gramas
       return {
         pesoGramas: Number.isFinite(peso) && peso >= 0 ? peso : 0,
         custoPorGrama: filamento ? filamento.preco_rolo / filamento.peso_rolo_gramas : 0,
@@ -180,7 +294,7 @@ export function OrcamentoPage({
     pedidoMinimoB2B,
   }), [
     tipoPedido, quantidade, th, potenciaAplicada, tarifaEnergia, custoHoraAplicado,
-    materiais, filamentos, insumos, insumosList, materiaisAvulsosPorUnidade,
+    materiaisCalculados, filamentos, insumos, insumosList, materiaisAvulsosPorUnidade,
     horasTrabalhoAtivo, valorHoraTrabalho, custoEmbalagem, fretePago,
     setupProjeto, margemPerdas, taxaVenda, fatorB2CPersonalizado,
     fatorB2BPiloto, fatorB2BRecorrente, pedidoMinimoB2B,
@@ -233,6 +347,14 @@ export function OrcamentoPage({
       setErrorMsg('Preencha os dados básicos corretamente.')
       return
     }
+    if (modoCalculo === MODO_CALCULO_PLATES && !agregacaoPlates) {
+      setErrorMsg('Revise nomes, quantidades, repetições, tempos e filamentos das plates.')
+      return
+    }
+    if (modoCalculo === MODO_CALCULO_PLATES && quantidadePlatesRevisada !== quantidade) {
+      setErrorMsg('Revise as plates depois de alterar a quantidade comercial.')
+      return
+    }
     if (precoUnitario !== null && (!Number.isFinite(precoUnitario) || precoUnitario <= 0)) {
       setErrorMsg('Informe um preço de venda unitário válido.')
       return
@@ -250,7 +372,9 @@ export function OrcamentoPage({
       return
     }
 
-    const payloadMateriais = materiais
+    const payloadMateriais = (modoCalculo === MODO_CALCULO_PLATES ? materiaisCalculados.map((item) => ({
+      filamentoId: String(item.filamento_id), pesoGasto: item.peso_gasto_gramas,
+    })) : materiais)
       .filter(m => m.filamentoId && m.pesoGasto)
       .map(m => ({ filamento_id: Number(m.filamentoId), peso_gasto_gramas: Number(m.pesoGasto) }))
 
@@ -284,6 +408,18 @@ export function OrcamentoPage({
         condicao_pagamento: condicaoPagamento,
         pedido_origem_id: pedidoEdicaoId ? undefined : pedidoInicial?.origem_id,
         preco_unitario: precoUnitario ?? undefined,
+        modo_calculo: modoCalculo,
+        plates: modoCalculo === MODO_CALCULO_PLATES ? plates.map((plate): PlateInput => ({
+          nome: plate.nome,
+          quantidade_pecas: Number(plate.quantidadePecas),
+          repeticoes: Number(plate.repeticoes),
+          tempo_execucao_minutos: Number(plate.tempoMinutos),
+          filamentos: plate.filamentos.map((item) => ({
+            filamento_id: Number(item.filamentoId),
+            gramas_por_execucao: Number(item.gramasPorExecucao),
+          })),
+        })) : [],
+        plates_quantidade_revisada: modoCalculo === MODO_CALCULO_PLATES ? quantidadePlatesRevisada : undefined,
       }
       const res = pedidoEdicaoId
         ? await atualizarOrcamento(pedidoEdicaoId, payload)
@@ -325,6 +461,16 @@ export function OrcamentoPage({
         {/* 1. Dados Básicos */}
         <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
           <h2 className="mb-5 text-sm font-semibold text-white">Dados do Pedido</h2>
+          <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
+            <button type="button" onClick={ativarModoTradicional} aria-pressed={modoCalculo === MODO_CALCULO_TRADICIONAL}
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_TRADICIONAL ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
+              {modoCalculo === MODO_CALCULO_PLATES ? 'Converter para tradicional' : 'Cálculo tradicional'}
+            </button>
+            <button type="button" onClick={ativarModoPlates} aria-pressed={modoCalculo === MODO_CALCULO_PLATES}
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_PLATES ? 'bg-[#d8f45a]/15 text-[#d8f45a]' : 'text-white/45 hover:text-white/70'}`}>
+              Cálculo por plates
+            </button>
+          </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="flex flex-col gap-2 sm:col-span-2">
               <span className="text-xs font-medium text-white/55">Nome da peça / Projeto</span>
@@ -340,15 +486,15 @@ export function OrcamentoPage({
               </select>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Quantidade de peças</span>
+              <span className="text-xs font-medium text-white/55">Quantidade comercial</span>
               <input required type="number" step="1" min="1" max="100000" value={quantidade} onChange={e => alterarQuantidade(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
-            <label className="flex flex-col gap-2">
+            {modoCalculo === MODO_CALCULO_TRADICIONAL && <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-white/55">Tempo de Impressão (Horas)</span>
               <input required type="number" step="0.1" min="0" value={tempoHoras} onChange={e => setTempoHoras(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
-            </label>
+            </label>}
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-white/55">Tipo de pedido</span>
               <select value={tipoPedido} onChange={e => setTipoPedido(e.target.value)}
@@ -370,7 +516,7 @@ export function OrcamentoPage({
         </section>
 
         {/* 2. Filamentos */}
-        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+        {modoCalculo === MODO_CALCULO_TRADICIONAL && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white">Materiais e Cores</h2>
           </div>
@@ -401,7 +547,55 @@ export function OrcamentoPage({
               <Plus size={14} /> Adicionar filamento
             </button>
           </div>
-        </section>
+        </section>}
+
+        {modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-4 shadow-2xl sm:p-6">
+          <div className="mb-5">
+            <h2 className="text-sm font-semibold text-white">Composição por plates</h2>
+            <p className="mt-1 text-xs leading-5 text-white/40">Informe os dados reais de cada execução do fatiador. Peças na plate não alteram a quantidade comercial.</p>
+          </div>
+
+          {quantidadePlatesRevisada !== quantidade && <div className="mb-5 rounded-xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-xs leading-5 text-amber-100">
+            A quantidade comercial mudou para <strong>{quantidade}</strong>. Os tempos e consumos foram preservados, sem escalonamento. Revise as plates antes de salvar.
+            <button type="button" onClick={() => setQuantidadePlatesRevisada(quantidade)} className="mt-3 block rounded-lg bg-amber-300 px-3 py-2 font-semibold text-amber-950">
+              Confirmar revisão para {quantidade}
+            </button>
+          </div>}
+
+          <div className="space-y-5">
+            {plates.map((plate, plateIndex) => {
+              const horas = plate.tempoMinutos === '' ? '' : Math.floor(Number(plate.tempoMinutos) / 60)
+              const minutos = plate.tempoMinutos === '' ? '' : Number(plate.tempoMinutos) % 60
+              const atualizarPlate = (parcial: Partial<PlateFormulario>) => setPlates((lista) => lista.map((item) => item.id === plate.id ? { ...item, ...parcial } : item))
+              return <article key={plate.id} className="rounded-xl border border-white/10 bg-[#101114] p-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[#d8f45a]">Plate {plateIndex + 1}</span>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => duplicarPlate(plate.id)} aria-label={`Duplicar plate ${plateIndex + 1}`} className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-white"><Copy size={15} /></button>
+                    <button type="button" onClick={() => setPlates((lista) => lista.filter((item) => item.id !== plate.id))} aria-label={`Remover plate ${plateIndex + 1}`} className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-red-400"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="text-[11px] font-medium uppercase text-white/35">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value })} placeholder="Ex.: Potes — parcial" className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Peças nesta plate</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Horas / execução</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Minutos / execução</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                </div>
+
+                <div className="mt-4 space-y-3 border-t border-white/[0.08] pt-4">
+                  {plate.filamentos.map((material, materialIndex) => <div key={material.id} className="grid grid-cols-[1fr_110px_40px] items-end gap-2 sm:grid-cols-[1fr_160px_40px]">
+                    <label className="flex min-w-0 flex-col gap-2"><span className="text-[10px] uppercase text-white/30">Filamento {materialIndex + 1}</span><select value={material.filamentoId} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, filamentoId: e.target.value } : item) })} className="h-11 min-w-0 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none"><option value="">Selecione...</option>{filamentos.map((item) => <option key={item.id} value={item.id}>{item.material} — {item.cor}</option>)}</select></label>
+                    <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/30">g / execução</span><input type="number" min="0.01" step="0.01" value={material.gramasPorExecucao} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasPorExecucao: e.target.value === '' ? '' : Number(e.target.value) } : item) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none" /></label>
+                    <button type="button" onClick={() => atualizarPlate({ filamentos: plate.filamentos.filter((item) => item.id !== material.id) })} aria-label="Remover filamento da plate" className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-white/35 hover:text-red-400"><Trash2 size={14} /></button>
+                  </div>)}
+                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }] })} className="flex items-center gap-2 text-xs text-[#d8f45a]/75 hover:text-[#d8f45a]"><Plus size={13} /> Outro filamento nesta plate</button>
+                </div>
+              </article>
+            })}
+          </div>
+          <button type="button" onClick={() => setPlates((lista) => [...lista, criarPlateBase()])} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#d8f45a]/35 py-3 text-xs font-medium text-[#d8f45a]/80 hover:bg-[#d8f45a]/5"><Plus size={14} /> Adicionar plate</button>
+        </section>}
 
         {/* 3. Insumos */}
         <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
@@ -537,6 +731,21 @@ export function OrcamentoPage({
       {/* Painel Lateral - Resumo */}
       <aside className="sticky top-6 w-full lg:w-[360px] rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
         <h2 className="mb-6 text-sm font-semibold text-white">Resumo do Orçamento</h2>
+
+        {modoCalculo === MODO_CALCULO_PLATES && <div className="mb-5 rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.05] p-4 text-xs">
+          <div className="grid grid-cols-2 gap-3 text-white/55">
+            <div><span className="block text-[10px] uppercase text-white/30">Quantidade comercial</span><strong className="text-base text-white">{quantidade}</strong></div>
+            <div><span className="block text-[10px] uppercase text-white/30">Execuções físicas</span><strong className="text-base text-white">{agregacaoPlates?.totalExecucoes ?? 0}</strong></div>
+            <div className="col-span-2"><span className="block text-[10px] uppercase text-white/30">Tempo total</span><strong className="text-white">{Math.floor((agregacaoPlates?.tempoTotalMinutos ?? 0) / 60)}h {(agregacaoPlates?.tempoTotalMinutos ?? 0) % 60}min</strong></div>
+          </div>
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <span className="text-[10px] uppercase text-white/30">Consumo total por filamento</span>
+            <div className="mt-2 space-y-1 text-white/65">{(agregacaoPlates?.materiais ?? []).map((material) => {
+              const filamento = filamentos.find((item) => item.id === material.filamento_id)
+              return <div key={material.filamento_id} className="flex justify-between gap-3"><span>{filamento ? `${filamento.material} — ${filamento.cor}` : `Filamento #${material.filamento_id}`}</span><strong>{material.peso_gasto_gramas.toLocaleString('pt-BR')} g</strong></div>
+            })}</div>
+          </div>
+        </div>}
         
         <div className="space-y-3 text-sm">
           <div className="flex justify-between text-white/60">

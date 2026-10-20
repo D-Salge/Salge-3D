@@ -7,6 +7,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Dashboard com faturamento, lucro, margem, pendências e alertas de estoque.
 - Busca global por pedido, cliente, produto, filamento e insumo com `Ctrl+K`.
 - Orçamentos com validade, PDF, aprovação e conversão para produção.
+- Orçamentos com cálculo tradicional ou composição técnica por várias plates do fatiador.
 - Produção em Kanban, planejamento por impressora e registro de falhas.
 - Prioridade e ordem manual da fila, com distribuição automática dos pedidos sem impressora.
 - Planejamento que respeita bloqueios de máquina e intervalos de preparação entre impressões.
@@ -139,6 +140,26 @@ Quando a instalação usa um caminho personalizado, mantenha o mesmo
 na retenção automática nem são enviados ao destino externo; copie ou remova esses
 arquivos conforme a política da instalação depois de validar a atualização.
 
+## Orçamentos por plates
+
+Na calculadora de orçamento, escolha **Cálculo por plates** quando o produto
+comercial for composto por várias execuções físicas. Cada plate guarda nome,
+quantidade de peças naquela plate, repetições, tempo por execução e consumo de
+um ou mais filamentos. A quantidade comercial continua sendo informada à parte:
+um kit de pote e tampa com 23 unidades comerciais pode ter uma plate de 23 potes
+e outra de 23 tampas sem virar 46 produtos.
+
+O ERP soma tempo e gramagem de cada plate multiplicados apenas pelas respectivas
+repetições, agrupa o mesmo filamento e entrega esses totais à fórmula e ao fluxo
+de estoque já existentes. Ao mudar a quantidade comercial nesse modo, os dados
+do fatiador são preservados e o orçamento só pode ser salvo depois da confirmação
+explícita de que as plates foram revisadas. Plates parciais devem receber seus
+tempos e consumos reais; o sistema não faz estimativa proporcional.
+
+O detalhamento aparece somente nas telas internas. O portal e os documentos
+comerciais continuam sem gramagens e custos. Nesta versão, plates não criam
+automaticamente componentes, unidades produzidas, entregas ou lotes de produção.
+
 ## Importar a planilha
 
 Abra **Configurações → Importar planilha**, selecione o arquivo `.xlsx`, revise a prévia e confirme. O ERP:
@@ -169,7 +190,8 @@ O comando `npm run ci` cria um diretório temporário exclusivo e, dentro dele, 
 SQLite descartável. O verificador ignora qualquer `SALGE_DB_PATH` herdado e passa
 explicitamente o caminho seguro aos processos filhos. Ele inicializa a base antes
 do build, executa `npm test`, lint, typecheck e build em sequência e depois roda o
-teste HTTP do portal com outro banco e outro build. Os processos e os recursos
+teste HTTP do portal e das ações de orçamento com outro banco e outro build. Os
+processos e os recursos
 temporários criados pela execução são encerrados ou removidos mesmo em caso de
 falha. Nenhum banco da instalação é utilizado ou removido.
 
