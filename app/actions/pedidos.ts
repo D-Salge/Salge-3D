@@ -22,10 +22,13 @@ import {
 } from '@/lib/orcamento.mjs'
 import { revalidatePath } from 'next/cache'
 import {
+  DIMENSIONAMENTO_PLATES_AUTOMATICO,
+  DIMENSIONAMENTO_PLATES_MANUAL,
   MODO_CALCULO_PLATES,
   MODO_CALCULO_TRADICIONAL,
   obterPlatesPedidoNoBanco,
   substituirPlatesPedidoNoBanco,
+  validarEDimensionarPlatesAutomaticamente,
   validarEAgruparPlates,
 } from '@/lib/orcamento-plates.mjs'
 
@@ -154,6 +157,7 @@ export interface PedidoParaDuplicar {
   setup_projeto: number
   margem_perdas: number
   modo_calculo: 'Tradicional' | 'Plates'
+  plates_dimensionamento: 'Manual' | 'Automatico'
   materiais: MaterialInput[]
   insumos: InsumoInput[]
   plates: PlateInput[]
@@ -419,7 +423,7 @@ export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoPar
   }
   const pedido = db.prepare(`
     SELECT id AS origem_id, numero_orcamento AS origem_numero, cliente_id,
-      orcamento_status, nome_da_peca, modo_calculo,
+      orcamento_status, nome_da_peca, modo_calculo, plates_dimensionamento,
       quantidade, tempo_impressao_horas, custo_embalagem, desconto,
       frete_cobrado, frete_pago, parcelas, condicao_pagamento,
       sinal_percentual,
@@ -508,9 +512,13 @@ export interface PlateInput {
   quantidade_pecas: number
   repeticoes: number
   tempo_execucao_minutos: number
+  capacidade_comercial?: number
+  parcial_quantidade_comercial?: number | null
+  parcial_tempo_segundos?: number | null
   filamentos: Array<{
     filamento_id: number
     gramas_por_execucao: number
+    gramas_parcial?: number | null
   }>
 }
 
@@ -540,6 +548,7 @@ export interface CriarPedidoInput {
   margem_perdas: number
   impressora_id?: number | null
   modo_calculo?: 'Tradicional' | 'Plates'
+  plates_dimensionamento?: 'Manual' | 'Automatico'
   plates?: PlateInput[]
   plates_quantidade_revisada?: number
 }
@@ -577,6 +586,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       margem_perdas,
       impressora_id = null,
       modo_calculo = MODO_CALCULO_TRADICIONAL,
+      plates_dimensionamento = DIMENSIONAMENTO_PLATES_MANUAL,
       plates = [],
       plates_quantidade_revisada,
     } = data
@@ -584,20 +594,25 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
     if (![MODO_CALCULO_TRADICIONAL, MODO_CALCULO_PLATES].includes(modo_calculo)) {
       return { success: false, message: 'Modo de cálculo inválido.' }
     }
+    if (![DIMENSIONAMENTO_PLATES_MANUAL, DIMENSIONAMENTO_PLATES_AUTOMATICO].includes(plates_dimensionamento)) {
+      return { success: false, message: 'Dimensionamento de plates inválido.' }
+    }
     let tempoImpressaoValidado = tempo_impressao_horas
     let materiaisInformados = materials
     let platesValidadas: ReturnType<typeof validarEAgruparPlates>['plates'] = []
     if (modo_calculo === MODO_CALCULO_PLATES) {
-      if (plates_quantidade_revisada !== quantidade) {
+      if (plates_dimensionamento === DIMENSIONAMENTO_PLATES_MANUAL && plates_quantidade_revisada !== quantidade) {
         return { success: false, message: 'Revise as plates para a quantidade comercial informada.' }
       }
       try {
-        const agregacao = validarEAgruparPlates(plates)
+        const agregacao = plates_dimensionamento === DIMENSIONAMENTO_PLATES_AUTOMATICO
+          ? validarEDimensionarPlatesAutomaticamente(plates, quantidade)
+          : validarEAgruparPlates(plates)
         tempoImpressaoValidado = agregacao.tempoTotalHoras
         materiaisInformados = agregacao.materiais
         platesValidadas = agregacao.plates
       } catch {
-        return { success: false, message: 'Revise nomes, quantidades, tempos, repetições e filamentos das plates.' }
+        return { success: false, message: 'Revise as referências, capacidades, tempos e filamentos das plates.' }
       }
     }
 
@@ -829,8 +844,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             valor_total_cobrado, data_entrega, validade_orcamento, vencimento_em,
             parcelas, sinal_percentual, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
             materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas, modo_calculo,
+            plates_dimensionamento,
             orcamento_status, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           tenantId,
@@ -866,6 +882,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           setup_projeto,
           margem_perdas,
           modo_calculo,
+          plates_dimensionamento,
         )
 
       const pedidoId = pedidoResult.lastInsertRowid as number
@@ -953,24 +970,30 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
       data_entrega, validade_orcamento, vencimento_em, parcelas = 1, sinal_percentual = 0, condicao_pagamento,
       preco_unitario, materiais_avulsos_por_unidade, horas_trabalho_ativo,
       setup_projeto, margem_perdas, impressora_id = null,
-      modo_calculo = MODO_CALCULO_TRADICIONAL, plates = [], plates_quantidade_revisada,
+      modo_calculo = MODO_CALCULO_TRADICIONAL,
+      plates_dimensionamento = DIMENSIONAMENTO_PLATES_MANUAL,
+      plates = [], plates_quantidade_revisada,
     } = data
 
     if (![MODO_CALCULO_TRADICIONAL, MODO_CALCULO_PLATES].includes(modo_calculo))
       return { success: false, message: 'Modo de cálculo inválido.' }
+    if (![DIMENSIONAMENTO_PLATES_MANUAL, DIMENSIONAMENTO_PLATES_AUTOMATICO].includes(plates_dimensionamento))
+      return { success: false, message: 'Dimensionamento de plates inválido.' }
     let tempoImpressaoValidado = tempo_impressao_horas
     let materiaisInformados = materials
     let platesValidadas: ReturnType<typeof validarEAgruparPlates>['plates'] = []
     if (modo_calculo === MODO_CALCULO_PLATES) {
-      if (plates_quantidade_revisada !== quantidade)
+      if (plates_dimensionamento === DIMENSIONAMENTO_PLATES_MANUAL && plates_quantidade_revisada !== quantidade)
         return { success: false, message: 'Revise as plates para a quantidade comercial informada.' }
       try {
-        const agregacao = validarEAgruparPlates(plates)
+        const agregacao = plates_dimensionamento === DIMENSIONAMENTO_PLATES_AUTOMATICO
+          ? validarEDimensionarPlatesAutomaticamente(plates, quantidade)
+          : validarEAgruparPlates(plates)
         tempoImpressaoValidado = agregacao.tempoTotalHoras
         materiaisInformados = agregacao.materiais
         platesValidadas = agregacao.plates
       } catch {
-        return { success: false, message: 'Revise nomes, quantidades, tempos, repetições e filamentos das plates.' }
+        return { success: false, message: 'Revise as referências, capacidades, tempos e filamentos das plates.' }
       }
     }
 
@@ -1111,7 +1134,8 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
         custo_embalagem = ?, desconto = ?, frete_cobrado = ?, frete_pago = ?, valor_total_cobrado = ?,
         data_entrega = ?, validade_orcamento = ?, vencimento_em = ?, parcelas = ?, sinal_percentual = ?, condicao_pagamento = ?,
         quantidade = ?, preco_unitario = ?, tipo_venda = ?, taxas_comissoes = ?, impressora_id = ?,
-        materiais_avulsos_por_unidade = ?, horas_trabalho_ativo = ?, setup_projeto = ?, margem_perdas = ?, modo_calculo = ?
+        materiais_avulsos_por_unidade = ?, horas_trabalho_ativo = ?, setup_projeto = ?, margem_perdas = ?, modo_calculo = ?,
+        plates_dimensionamento = ?
         WHERE id = ? AND tenant_id = ?`).run(
           cliente_id, produtoCatalogo?.produtoId ?? null, produtoCatalogo?.produtoVersaoId ?? null,
           nome_da_peca.trim(), tempoImpressaoValidado, calculo.filamentoSemPerdas,
@@ -1121,6 +1145,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
           vencimento_em ?? null, parcelas, sinal_percentual, condicao_pagamento?.trim() || null, quantidade,
           precoUnitarioAplicado, tipo_pedido, taxasComissoes, impressora_id,
           materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas, modo_calculo,
+          plates_dimensionamento,
           pedidoId, tenantId,
         )
 

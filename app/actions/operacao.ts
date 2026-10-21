@@ -168,6 +168,7 @@ export interface PedidoDetalhes {
   condicao_pagamento: string | null
   tempo_impressao_horas: number
   modo_calculo: 'Tradicional' | 'Plates'
+  plates_dimensionamento: 'Manual' | 'Automatico'
   tempo_real_horas: number | null
   custo_filamento: number
   custo_insumos: number
@@ -201,7 +202,10 @@ export interface PedidoDetalhes {
     quantidade_pecas: number
     repeticoes: number
     tempo_execucao_minutos: number
-    filamentos: Array<{ filamento_id: number; gramas_por_execucao: number }>
+    capacidade_comercial?: number
+    parcial_quantidade_comercial?: number
+    parcial_tempo_segundos?: number
+    filamentos: Array<{ filamento_id: number; gramas_por_execucao: number; gramas_parcial?: number }>
   }>
   insumos: PedidoInsumoDetalhe[]
   historico: HistoricoPedido[]

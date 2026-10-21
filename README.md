@@ -153,8 +153,24 @@ O ERP soma tempo e gramagem de cada plate multiplicados apenas pelas respectivas
 repetições, agrupa o mesmo filamento e entrega esses totais à fórmula e ao fluxo
 de estoque já existentes. Ao mudar a quantidade comercial nesse modo, os dados
 do fatiador são preservados e o orçamento só pode ser salvo depois da confirmação
-explícita de que as plates foram revisadas. Plates parciais devem receber seus
-tempos e consumos reais; o sistema não faz estimativa proporcional.
+explícita de que as plates foram revisadas. Na composição manual, plates parciais
+devem receber seus tempos e consumos reais; o sistema não presume proporcionalidade.
+
+Como alternativa explícita, **Automático por quantidade** trata cada plate como
+uma referência cheia: peças físicas, capacidade em unidades comerciais, tempo e
+filamentos por execução. A partir da quantidade comercial, o ERP calcula as
+execuções cheias e, somente quando há restante, uma plate parcial. Essa parcial é
+identificada como estimativa proporcional e pode ser substituída pelos valores
+reais do fatiador sem alterar a referência cheia. Se quantidade ou referência
+mudarem de forma incompatível, a substituição é removida e a estimativa é
+recalculada com aviso no formulário.
+
+O tempo proporcional é calculado a partir da referência em segundos, arredondado
+uma única vez ao segundo mais próximo e limitado a pelo menos um segundo quando
+positivo. Gramagens proporcionais não sofrem arredondamento intermediário; a
+interface apenas limita a quantidade de casas exibidas. Insumos usam a quantidade
+em que foram informados como referência, evitando escalonamento acumulado em
+alterações sucessivas.
 
 O detalhamento aparece somente nas telas internas. O portal e os documentos
 comerciais continuam sem gramagens e custos. Nesta versão, plates não criam

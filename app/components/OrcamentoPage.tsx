@@ -17,10 +17,18 @@ import {
   TIPOS_PEDIDO,
 } from '@/lib/orcamento.mjs'
 import { calcularValorSinal } from '@/lib/sinal.mjs'
-import { MODO_CALCULO_PLATES, MODO_CALCULO_TRADICIONAL, validarEAgruparPlates } from '@/lib/orcamento-plates.mjs'
+import {
+  DIMENSIONAMENTO_PLATES_AUTOMATICO,
+  DIMENSIONAMENTO_PLATES_MANUAL,
+  MODO_CALCULO_PLATES,
+  MODO_CALCULO_TRADICIONAL,
+  validarEDimensionarPlatesAutomaticamente,
+  validarEAgruparPlates,
+} from '@/lib/orcamento-plates.mjs'
 import {
   aplicarAlteracaoQuantidade,
   converterPlatesParaTradicional,
+  invalidarParciaisIncompativeis,
   resolverAtivacaoModoPlates,
 } from '@/lib/orcamento-formulario.mjs'
 
@@ -30,7 +38,23 @@ type PlateFormulario = {
   quantidadePecas: number | ''
   repeticoes: number | ''
   tempoMinutos: number | ''
-  filamentos: Array<{ id: string; filamentoId: string; gramasPorExecucao: number | '' }>
+  capacidadeComercial: number | ''
+  parcialQuantidadeComercial: number | null
+  tempoParcialSegundos: number | ''
+  filamentos: Array<{
+    id: string
+    filamentoId: string
+    gramasPorExecucao: number | ''
+    gramasParcial: number | ''
+  }>
+}
+
+type InsumoFormulario = {
+  id: string
+  insumoId: string
+  quantidade: number | ''
+  quantidadeReferencia: number | ''
+  quantidadeComercialReferencia: number
 }
 
 function formaPagamentoInicial(valor?: string | null) {
@@ -40,6 +64,14 @@ function formaPagamentoInicial(valor?: string | null) {
     Transferencia: 'Transferência',
   }
   return valor ? (mapa[valor] ?? valor) : 'Pix'
+}
+
+function formatarDuracao(segundos: number) {
+  const total = Math.max(0, Math.round(segundos))
+  const horas = Math.floor(total / 3600)
+  const minutos = Math.floor((total % 3600) / 60)
+  const resto = total % 60
+  return `${horas}h ${minutos}min${resto ? ` ${resto}s` : ''}`
 }
 
 export function OrcamentoPage({ 
@@ -94,6 +126,7 @@ export function OrcamentoPage({
   const [tempoHoras, setTempoHoras] = useState<number | ''>(pedidoInicial?.tempo_impressao_horas ?? '')
   const [quantidade, setQuantidade] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
   const [modoCalculo, setModoCalculo] = useState<'Tradicional' | 'Plates'>(pedidoInicial?.modo_calculo ?? MODO_CALCULO_TRADICIONAL)
+  const [dimensionamentoPlates, setDimensionamentoPlates] = useState<'Manual' | 'Automatico'>(pedidoInicial?.plates_dimensionamento ?? DIMENSIONAMENTO_PLATES_MANUAL)
   const [quantidadePlatesRevisada, setQuantidadePlatesRevisada] = useState(Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)))
   const [assinaturaUltimaConversao, setAssinaturaUltimaConversao] = useState<string | null>(null)
   const [tipoPedido, setTipoPedido] = useState(
@@ -116,15 +149,25 @@ export function OrcamentoPage({
       quantidadePecas: plate.quantidade_pecas,
       repeticoes: plate.repeticoes,
       tempoMinutos: plate.tempo_execucao_minutos,
+      capacidadeComercial: plate.capacidade_comercial ?? plate.quantidade_pecas,
+      parcialQuantidadeComercial: plate.parcial_quantidade_comercial ?? null,
+      tempoParcialSegundos: plate.parcial_tempo_segundos ?? '',
       filamentos: plate.filamentos.map((item, materialIndex) => ({
         id: `plate-inicial-${index}-filamento-${materialIndex}`,
         filamentoId: String(item.filamento_id),
         gramasPorExecucao: item.gramas_por_execucao,
+        gramasParcial: item.gramas_parcial ?? '',
       })),
     })) ?? [],
   )
-  const [insumos, setInsumos] = useState<{ id: string; insumoId: string; quantidade: number | '' }[]>(
-    pedidoInicial?.insumos.map((item, index) => ({ id: `duplicado-insumo-${index}`, insumoId: String(item.insumo_id), quantidade: item.quantidade })) ?? [],
+  const [insumos, setInsumos] = useState<InsumoFormulario[]>(
+    pedidoInicial?.insumos.map((item, index) => ({
+      id: `duplicado-insumo-${index}`,
+      insumoId: String(item.insumo_id),
+      quantidade: item.quantidade,
+      quantidadeReferencia: item.quantidade,
+      quantidadeComercialReferencia: Math.max(1, Math.round(pedidoInicial?.quantidade ?? 1)),
+    })) ?? [],
   )
 
   // Faturamento e Custos Extras
@@ -147,6 +190,7 @@ export function OrcamentoPage({
   // UI state
   const [sucesso, setSucesso] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [avisoDimensionamento, setAvisoDimensionamento] = useState('')
 
   // ─── ADD ITEMS ──────────────────────────────────────────────────
   function addMaterial() {
@@ -158,7 +202,9 @@ export function OrcamentoPage({
   function criarPlateBase(): PlateFormulario {
     return {
       id: crypto.randomUUID(), nome: '', quantidadePecas: quantidade, repeticoes: 1,
-      tempoMinutos: '', filamentos: [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }],
+      tempoMinutos: '', capacidadeComercial: quantidade, parcialQuantidadeComercial: null,
+      tempoParcialSegundos: '',
+      filamentos: [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }],
     }
   }
   function ativarModoPlates() {
@@ -175,8 +221,9 @@ export function OrcamentoPage({
         nome: nomeDaPeca || 'Plate 1',
         tempoMinutos: tempoHoras === '' ? '' : Math.max(1, Math.round(Number(tempoHoras) * 60)),
         filamentos: materiais.length > 0 ? materiais.map((material) => ({
-          id: crypto.randomUUID(), filamentoId: material.filamentoId, gramasPorExecucao: material.pesoGasto,
-        })) : [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }],
+          id: crypto.randomUUID(), filamentoId: material.filamentoId,
+          gramasPorExecucao: material.pesoGasto, gramasParcial: '',
+        })) : [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }],
       }])
     }
     setQuantidadePlatesRevisada(transicao.quantidadeRevisada)
@@ -194,8 +241,32 @@ export function OrcamentoPage({
     const indice = plates.findIndex((plate) => plate.id === id)
     setPlates([...plates.slice(0, indice + 1), copia, ...plates.slice(indice + 1)])
   }
+  function atualizarPlateFormulario(id: string, parcial: Partial<PlateFormulario>, invalidaParcial = false) {
+    const existente = plates.find((item) => item.id === id)
+    const deveInvalidar = Boolean(existente && invalidaParcial &&
+      dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO &&
+      (existente.parcialQuantidadeComercial != null || existente.tempoParcialSegundos !== '' ||
+       existente.filamentos.some((material) => material.gramasParcial !== '')))
+    if (deveInvalidar) {
+      setAvisoDimensionamento('A referência mudou. Os valores reais da plate parcial foram removidos e a estimativa proporcional foi recalculada.')
+    }
+    setPlates((lista) => lista.map((item) => {
+      if (item.id !== id) return item
+      const atualizada = { ...item, ...parcial }
+      if (!deveInvalidar) return atualizada
+      return {
+        ...atualizada,
+        parcialQuantidadeComercial: null,
+        tempoParcialSegundos: '',
+        filamentos: atualizada.filamentos.map((material) => ({ ...material, gramasParcial: '' })),
+      }
+    }))
+  }
   function addInsumo() {
-    setInsumos([...insumos, { id: crypto.randomUUID(), insumoId: '', quantidade: '' }])
+    setInsumos([...insumos, {
+      id: crypto.randomUUID(), insumoId: '', quantidade: '', quantidadeReferencia: '',
+      quantidadeComercialReferencia: quantidade,
+    }])
   }
   function removeInsumo(id: string) {
     setInsumos(insumos.filter(i => i.id !== id))
@@ -208,6 +279,13 @@ export function OrcamentoPage({
     setTempoHoras(proximo.tempoHoras)
     setMateriais(proximo.materiais)
     setInsumos(proximo.insumos)
+    if (modoCalculo === MODO_CALCULO_PLATES && dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO) {
+      const parciais = invalidarParciaisIncompativeis(plates, novaQuantidade)
+      setPlates(parciais.plates)
+      if (parciais.invalidou) {
+        setAvisoDimensionamento('A quantidade mudou o restante das plates. Os valores reais das parciais foram removidos e as estimativas proporcionais foram recalculadas.')
+      }
+    }
     setQuantidade(proximo.quantidade)
   }
 
@@ -215,20 +293,31 @@ export function OrcamentoPage({
   const agregacaoPlates = useMemo(() => {
     if (modoCalculo !== MODO_CALCULO_PLATES) return null
     try {
-      return validarEAgruparPlates(plates.map((plate) => ({
+      const referencias = plates.map((plate) => ({
         nome: plate.nome,
         quantidade_pecas: Number(plate.quantidadePecas),
         repeticoes: Number(plate.repeticoes),
         tempo_execucao_minutos: Number(plate.tempoMinutos),
+        capacidade_comercial: Number(plate.capacidadeComercial),
+        parcial_quantidade_comercial: plate.parcialQuantidadeComercial,
+        parcial_tempo_segundos: plate.tempoParcialSegundos === '' ? null : Number(plate.tempoParcialSegundos),
         filamentos: plate.filamentos.map((item) => ({
           filamento_id: Number(item.filamentoId),
           gramas_por_execucao: Number(item.gramasPorExecucao),
+          gramas_parcial: item.gramasParcial === '' ? null : Number(item.gramasParcial),
         })),
-      })))
+      }))
+      return dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO
+        ? validarEDimensionarPlatesAutomaticamente(referencias, quantidade)
+        : validarEAgruparPlates(referencias)
     } catch {
       return null
     }
-  }, [modoCalculo, plates])
+  }, [modoCalculo, dimensionamentoPlates, plates, quantidade])
+  const agregacaoAutomatica = dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO
+    ? agregacaoPlates as ReturnType<typeof validarEDimensionarPlatesAutomaticamente> | null
+    : null
+  const execucoesAutomaticas = agregacaoAutomatica?.execucoes ?? []
   const th = modoCalculo === MODO_CALCULO_PLATES
     ? (agregacaoPlates?.tempoTotalHoras ?? 0)
     : Number(tempoHoras) || 0
@@ -351,7 +440,9 @@ export function OrcamentoPage({
       setErrorMsg('Revise nomes, quantidades, repetições, tempos e filamentos das plates.')
       return
     }
-    if (modoCalculo === MODO_CALCULO_PLATES && quantidadePlatesRevisada !== quantidade) {
+    if (modoCalculo === MODO_CALCULO_PLATES &&
+        dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL &&
+        quantidadePlatesRevisada !== quantidade) {
       setErrorMsg('Revise as plates depois de alterar a quantidade comercial.')
       return
     }
@@ -409,14 +500,19 @@ export function OrcamentoPage({
         pedido_origem_id: pedidoEdicaoId ? undefined : pedidoInicial?.origem_id,
         preco_unitario: precoUnitario ?? undefined,
         modo_calculo: modoCalculo,
+        plates_dimensionamento: dimensionamentoPlates,
         plates: modoCalculo === MODO_CALCULO_PLATES ? plates.map((plate): PlateInput => ({
           nome: plate.nome,
           quantidade_pecas: Number(plate.quantidadePecas),
           repeticoes: Number(plate.repeticoes),
           tempo_execucao_minutos: Number(plate.tempoMinutos),
+          capacidade_comercial: Number(plate.capacidadeComercial),
+          parcial_quantidade_comercial: plate.parcialQuantidadeComercial,
+          parcial_tempo_segundos: plate.tempoParcialSegundos === '' ? null : Number(plate.tempoParcialSegundos),
           filamentos: plate.filamentos.map((item) => ({
             filamento_id: Number(item.filamentoId),
             gramas_por_execucao: Number(item.gramasPorExecucao),
+            gramas_parcial: item.gramasParcial === '' ? null : Number(item.gramasParcial),
           })),
         })) : [],
         plates_quantidade_revisada: modoCalculo === MODO_CALCULO_PLATES ? quantidadePlatesRevisada : undefined,
@@ -552,21 +648,43 @@ export function OrcamentoPage({
         {modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-4 shadow-2xl sm:p-6">
           <div className="mb-5">
             <h2 className="text-sm font-semibold text-white">Composição por plates</h2>
-            <p className="mt-1 text-xs leading-5 text-white/40">Informe os dados reais de cada execução do fatiador. Peças na plate não alteram a quantidade comercial.</p>
+            <p className="mt-1 text-xs leading-5 text-white/40">Peças físicas e unidades comerciais são dados separados. Escolha se as execuções serão informadas manualmente ou dimensionadas pela quantidade.</p>
           </div>
 
-          {quantidadePlatesRevisada !== quantidade && <div className="mb-5 rounded-xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-xs leading-5 text-amber-100">
+          <div className="mb-5 grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-[#101114] p-1 sm:grid-cols-2">
+            <button type="button" aria-pressed={dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL}
+              onClick={() => setDimensionamentoPlates(DIMENSIONAMENTO_PLATES_MANUAL)}
+              className={`rounded-lg px-3 py-2.5 text-xs font-medium ${dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
+              Composição manual
+            </button>
+            <button type="button" aria-pressed={dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO}
+              onClick={() => {
+                setDimensionamentoPlates(DIMENSIONAMENTO_PLATES_AUTOMATICO)
+                setPlates((lista) => lista.map((plate) => ({
+                  ...plate,
+                  capacidadeComercial: plate.capacidadeComercial || plate.quantidadePecas || quantidade,
+                })))
+                setAvisoDimensionamento('O dimensionamento automático recalcula sempre a partir das referências cheias, sem alterar os dados originais do fatiador.')
+              }}
+              className={`rounded-lg px-3 py-2.5 text-xs font-medium ${dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO ? 'bg-[#d8f45a]/15 text-[#d8f45a]' : 'text-white/45 hover:text-white/70'}`}>
+              Automático por quantidade
+            </button>
+          </div>
+
+          {dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL && quantidadePlatesRevisada !== quantidade && <div className="mb-5 rounded-xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-xs leading-5 text-amber-100">
             A quantidade comercial mudou para <strong>{quantidade}</strong>. Os tempos e consumos foram preservados, sem escalonamento. Revise as plates antes de salvar.
             <button type="button" onClick={() => setQuantidadePlatesRevisada(quantidade)} className="mt-3 block rounded-lg bg-amber-300 px-3 py-2 font-semibold text-amber-950">
               Confirmar revisão para {quantidade}
             </button>
           </div>}
+          {avisoDimensionamento && <div className="mb-5 rounded-xl border border-blue-400/20 bg-blue-400/[0.07] p-4 text-xs leading-5 text-blue-100">{avisoDimensionamento}</div>}
 
           <div className="space-y-5">
             {plates.map((plate, plateIndex) => {
               const horas = plate.tempoMinutos === '' ? '' : Math.floor(Number(plate.tempoMinutos) / 60)
               const minutos = plate.tempoMinutos === '' ? '' : Number(plate.tempoMinutos) % 60
-              const atualizarPlate = (parcial: Partial<PlateFormulario>) => setPlates((lista) => lista.map((item) => item.id === plate.id ? { ...item, ...parcial } : item))
+              const atualizarPlate = (parcial: Partial<PlateFormulario>, invalidaParcial = false) => atualizarPlateFormulario(plate.id, parcial, invalidaParcial)
+              const execucaoAutomatica = execucoesAutomaticas[plateIndex] ?? null
               return <article key={plate.id} className="rounded-xl border border-white/10 bg-[#101114] p-4">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs font-semibold uppercase tracking-wide text-[#d8f45a]">Plate {plateIndex + 1}</span>
@@ -576,21 +694,48 @@ export function OrcamentoPage({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="text-[11px] font-medium uppercase text-white/35">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value })} placeholder="Ex.: Potes — parcial" className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Peças nesta plate</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Horas / execução</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Minutos / execução</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="text-[11px] font-medium uppercase text-white/35">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value }, true)} placeholder="Ex.: Potes" className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Peças físicas na plate cheia</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  {dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO
+                    ? <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Kits comerciais atendidos</span><input type="number" min="1" step="1" value={plate.capacidadeComercial} onChange={(e) => atualizarPlate({ capacidadeComercial: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-[#d8f45a]/25 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]" /></label>
+                    : <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>}
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Horas / plate cheia</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Minutos / plate cheia</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
                 </div>
+
+                {execucaoAutomatica && <div className="mt-4 rounded-lg border border-[#d8f45a]/15 bg-[#d8f45a]/[0.04] p-3 text-xs text-white/55">
+                  <strong className="text-white">{execucaoAutomatica.repeticoesCheias} execução(ões) cheia(s)</strong>
+                  {execucaoAutomatica.parcial && <> + <strong className="text-[#d8f45a]">1 parcial para {execucaoAutomatica.quantidadeParcial} kit(s)</strong></>}
+                  {!execucaoAutomatica.parcial && <span> · sem execução parcial</span>}
+                </div>}
 
                 <div className="mt-4 space-y-3 border-t border-white/[0.08] pt-4">
                   {plate.filamentos.map((material, materialIndex) => <div key={material.id} className="grid grid-cols-[1fr_110px_40px] items-end gap-2 sm:grid-cols-[1fr_160px_40px]">
-                    <label className="flex min-w-0 flex-col gap-2"><span className="text-[10px] uppercase text-white/30">Filamento {materialIndex + 1}</span><select value={material.filamentoId} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, filamentoId: e.target.value } : item) })} className="h-11 min-w-0 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none"><option value="">Selecione...</option>{filamentos.map((item) => <option key={item.id} value={item.id}>{item.material} — {item.cor}</option>)}</select></label>
-                    <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/30">g / execução</span><input type="number" min="0.01" step="0.01" value={material.gramasPorExecucao} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasPorExecucao: e.target.value === '' ? '' : Number(e.target.value) } : item) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none" /></label>
+                    <label className="flex min-w-0 flex-col gap-2"><span className="text-[10px] uppercase text-white/30">Filamento {materialIndex + 1}</span><select value={material.filamentoId} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, filamentoId: e.target.value } : item) }, true)} className="h-11 min-w-0 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none"><option value="">Selecione...</option>{filamentos.map((item) => <option key={item.id} value={item.id}>{item.material} — {item.cor}</option>)}</select></label>
+                    <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/30">g / plate cheia</span><input type="number" min="0.01" step="0.01" value={material.gramasPorExecucao} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasPorExecucao: e.target.value === '' ? '' : Number(e.target.value) } : item) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none" /></label>
                     <button type="button" onClick={() => atualizarPlate({ filamentos: plate.filamentos.filter((item) => item.id !== material.id) })} aria-label="Remover filamento da plate" className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-white/35 hover:text-red-400"><Trash2 size={14} /></button>
                   </div>)}
-                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '' }] })} className="flex items-center gap-2 text-xs text-[#d8f45a]/75 hover:text-[#d8f45a]"><Plus size={13} /> Outro filamento nesta plate</button>
+                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }] }, true)} className="flex items-center gap-2 text-xs text-[#d8f45a]/75 hover:text-[#d8f45a]"><Plus size={13} /> Outro filamento nesta plate</button>
                 </div>
+
+                {execucaoAutomatica?.parcial && <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><strong className="text-xs text-amber-100">{execucaoAutomatica.parcial.estimada ? 'Plate parcial estimada proporcionalmente' : 'Plate parcial com valores reais do fatiador'}</strong><p className="mt-1 text-[11px] leading-5 text-white/45">{execucaoAutomatica.quantidadeParcial} kit(s) · {execucaoAutomatica.parcial.quantidade_pecas_estimada.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} peça(s) física(s) estimada(s)</p></div>
+                    {execucaoAutomatica.parcial.estimada
+                      ? <button type="button" onClick={() => atualizarPlate({
+                          parcialQuantidadeComercial: execucaoAutomatica.quantidadeParcial,
+                          tempoParcialSegundos: execucaoAutomatica.parcial!.tempo_segundos,
+                          filamentos: plate.filamentos.map((material, index) => ({ ...material, gramasParcial: execucaoAutomatica.parcial!.filamentos[index]?.gramas ?? '' })),
+                        })} className="rounded-lg border border-amber-300/25 px-3 py-2 text-[11px] text-amber-100">Informar valores reais</button>
+                      : <button type="button" onClick={() => atualizarPlate({ parcialQuantidadeComercial: null, tempoParcialSegundos: '', filamentos: plate.filamentos.map((material) => ({ ...material, gramasParcial: '' })) })} className="rounded-lg border border-white/10 px-3 py-2 text-[11px] text-white/55">Voltar à estimativa</button>}
+                  </div>
+                  {execucaoAutomatica.parcial.estimada
+                    ? <p className="mt-3 text-xs text-amber-50/70">Tempo estimado: {(execucaoAutomatica.parcial.tempo_segundos / 3600).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h. Os consumos abaixo são proporcionais à capacidade usada.</p>
+                    : <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/35">Tempo real da parcial (min)</span><input type="number" min="0.01" step="0.01" value={plate.tempoParcialSegundos === '' ? '' : Number(plate.tempoParcialSegundos) / 60} onChange={(e) => atualizarPlate({ tempoParcialSegundos: e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value) * 60)) })} className="h-10 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm" /></label>
+                        {plate.filamentos.map((material) => <label key={material.id} className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/35">Gramas reais da parcial</span><input type="number" min="0.01" step="0.01" value={material.gramasParcial} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasParcial: e.target.value === '' ? '' : Number(e.target.value) } : item) })} className="h-10 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm" /></label>)}
+                      </div>}
+                </div>}
               </article>
             })}
           </div>
@@ -617,7 +762,13 @@ export function OrcamentoPage({
                 <label className="flex w-full flex-col gap-2 sm:w-32">
                   {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Quantidade</span>}
                   <input type="number" step="0.1" min="0" value={ins.quantidade} onChange={e => {
-                    const newI = [...insumos]; newI[idx].quantidade = Number(e.target.value); setInsumos(newI)
+                    const valor = e.target.value === '' ? '' : Number(e.target.value)
+                    const newI = [...insumos]
+                    newI[idx] = {
+                      ...newI[idx], quantidade: valor, quantidadeReferencia: valor,
+                      quantidadeComercialReferencia: quantidade,
+                    }
+                    setInsumos(newI)
                   }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
                 </label>
                 <button type="button" onClick={() => removeInsumo(ins.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/[0.1] text-white/30 hover:bg-white/[0.05] hover:text-red-400">
@@ -736,13 +887,19 @@ export function OrcamentoPage({
           <div className="grid grid-cols-2 gap-3 text-white/55">
             <div><span className="block text-[10px] uppercase text-white/30">Quantidade comercial</span><strong className="text-base text-white">{quantidade}</strong></div>
             <div><span className="block text-[10px] uppercase text-white/30">Execuções físicas</span><strong className="text-base text-white">{agregacaoPlates?.totalExecucoes ?? 0}</strong></div>
-            <div className="col-span-2"><span className="block text-[10px] uppercase text-white/30">Tempo total</span><strong className="text-white">{Math.floor((agregacaoPlates?.tempoTotalMinutos ?? 0) / 60)}h {(agregacaoPlates?.tempoTotalMinutos ?? 0) % 60}min</strong></div>
+            <div className="col-span-2"><span className="block text-[10px] uppercase text-white/30">Tempo total</span><strong className="text-white">{formatarDuracao(agregacaoAutomatica?.tempoTotalSegundos ?? Number(agregacaoPlates?.tempoTotalMinutos ?? 0) * 60)}</strong></div>
           </div>
+          {execucoesAutomaticas.length > 0 && <div className="mt-3 space-y-2 border-t border-white/10 pt-3 text-white/55">
+            {execucoesAutomaticas.map((execucao) => <div key={execucao.ordem}>
+              <strong className="text-white/75">{execucao.nome}:</strong> {execucao.repeticoesCheias} cheia(s)
+              {execucao.parcial && <span> + 1 parcial · <span className={execucao.parcial.estimada ? 'text-amber-200' : 'text-emerald-300'}>{execucao.parcial.estimada ? 'Plate parcial estimada proporcionalmente' : 'Parcial com valores reais'}</span></span>}
+            </div>)}
+          </div>}
           <div className="mt-3 border-t border-white/10 pt-3">
             <span className="text-[10px] uppercase text-white/30">Consumo total por filamento</span>
             <div className="mt-2 space-y-1 text-white/65">{(agregacaoPlates?.materiais ?? []).map((material) => {
               const filamento = filamentos.find((item) => item.id === material.filamento_id)
-              return <div key={material.filamento_id} className="flex justify-between gap-3"><span>{filamento ? `${filamento.material} — ${filamento.cor}` : `Filamento #${material.filamento_id}`}</span><strong>{material.peso_gasto_gramas.toLocaleString('pt-BR')} g</strong></div>
+              return <div key={material.filamento_id} className="flex justify-between gap-3"><span>{filamento ? `${filamento.material} — ${filamento.cor}` : `Filamento #${material.filamento_id}`}</span><strong>{material.peso_gasto_gramas.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} g</strong></div>
             })}</div>
           </div>
         </div>}

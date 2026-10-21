@@ -42,6 +42,7 @@ function criarBancoAntigo(caminho) {
     ALTER TABLE entregas_pedido DROP COLUMN operacao_id;
     DROP TABLE pedido_plate_filamentos;
     DROP TABLE pedido_plates;
+    ALTER TABLE pedidos DROP COLUMN plates_dimensionamento;
     ALTER TABLE pedidos DROP COLUMN modo_calculo;
     DELETE FROM schema_migrations WHERE version >= 28;
     CREATE TABLE dados_anteriores (id INTEGER PRIMARY KEY, valor TEXT NOT NULL);
@@ -84,6 +85,7 @@ test('cria e valida backup pré-migração com dados ainda presentes no WAL', (t
     assert.equal(existeTabela(migrador, 'extrato_conciliacoes'), true)
     assert.equal(existeTabela(migrador, 'pedido_plates'), true)
     assert.ok(migrador.prepare(`PRAGMA table_info(pedidos)`).all().some((coluna) => coluna.name === 'modo_calculo'))
+    assert.ok(migrador.prepare(`PRAGMA table_info(pedidos)`).all().some((coluna) => coluna.name === 'plates_dimensionamento'))
     assert.equal(migrador.prepare('SELECT valor FROM dados_anteriores').get().valor, 'registro ainda no WAL')
 
     const backup = new Database(resultado.backup, { readonly: true, fileMustExist: true })
@@ -92,6 +94,7 @@ test('cria e valida backup pré-migração com dados ainda presentes no WAL', (t
       assert.equal(existeTabela(backup, 'extrato_conciliacoes'), false)
       assert.equal(existeTabela(backup, 'pedido_plates'), false)
       assert.equal(backup.prepare(`PRAGMA table_info(pedidos)`).all().some((coluna) => coluna.name === 'modo_calculo'), false)
+      assert.equal(backup.prepare(`PRAGMA table_info(pedidos)`).all().some((coluna) => coluna.name === 'plates_dimensionamento'), false)
       assert.equal(backup.prepare('SELECT valor FROM dados_anteriores').get().valor, 'registro ainda no WAL')
       assert.equal(backup.prepare('SELECT MAX(version) AS versao FROM schema_migrations').get().versao, 27)
     } finally {
