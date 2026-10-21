@@ -165,6 +165,13 @@ reais do fatiador sem alterar a referência cheia. Se quantidade ou referência
 mudarem de forma incompatível, a substituição é removida e a estimativa é
 recalculada com aviso no formulário.
 
+A troca do dimensionamento automático para o manual exige confirmação e reabre
+a revisão das repetições, porque uma referência cheia não representa sozinha a
+produção total. A alternância preserva as referências e os valores reais das
+parciais. Durante a edição de uma parcial real, campos vazios ou zerados exibem
+a validação sem fechar o editor; o salvamento fica bloqueado e a opção de voltar
+à estimativa permanece disponível.
+
 O tempo proporcional é calculado a partir da referência em segundos, arredondado
 uma única vez ao segundo mais próximo e limitado a pelo menos um segundo quando
 positivo. Gramagens proporcionais não sofrem arredondamento intermediário; a

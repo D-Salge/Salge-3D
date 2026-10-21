@@ -404,6 +404,58 @@ async function executarTestesPlates(baseUrl, db, dados, actions) {
     { capacidade_comercial: 14, repeticoes: 1 },
   ])
 
+  const automaticoTrinta = await chamarAction(actions.atualizarOrcamento, [pedidoAutomatico.id, payloadAutomatico({
+    quantidade: 30,
+  })], dados.sessoes.operadorA)
+  assert.equal(automaticoTrinta.status, 200)
+  assert.equal(db.prepare('SELECT quantidade, tempo_impressao_horas FROM pedidos WHERE id = ?')
+    .get(pedidoAutomatico.id).tempo_impressao_horas, 61.5)
+  assert.deepEqual(db.prepare('SELECT repeticoes FROM pedido_plates WHERE pedido_id = ? ORDER BY ordem')
+    .all(pedidoAutomatico.id), [{ repeticoes: 1 }, { repeticoes: 1 }])
+
+  const snapshotAutomatico = () => ({
+    pedido: db.prepare(`SELECT quantidade, tempo_impressao_horas, modo_calculo, plates_dimensionamento
+      FROM pedidos WHERE id = ?`).get(pedidoAutomatico.id),
+    plates: db.prepare(`SELECT ordem, nome, repeticoes, capacidade_comercial,
+      parcial_quantidade_comercial, parcial_tempo_segundos
+      FROM pedido_plates WHERE pedido_id = ? ORDER BY ordem`).all(pedidoAutomatico.id),
+    materiais: db.prepare(`SELECT filamento_id, peso_gasto_gramas
+      FROM pedido_filamentos WHERE pedido_id = ? ORDER BY id`).all(pedidoAutomatico.id),
+    auditoria: db.prepare(`SELECT COUNT(*) AS total FROM auditoria
+      WHERE entidade = 'Pedido' AND entidade_id = ?`).get(pedidoAutomatico.id).total,
+  })
+  const antesDaTrocaManual = snapshotAutomatico()
+  const manualSemRevisao = await chamarAction(actions.atualizarOrcamento, [pedidoAutomatico.id, payloadAutomatico({
+    quantidade: 30, plates_dimensionamento: 'Manual', plates_quantidade_revisada: null,
+  })], dados.sessoes.operadorA)
+  assert.equal(manualSemRevisao.status, 200)
+  assert.match(manualSemRevisao.corpo, /Revise as plates para a quantidade comercial informada/)
+  assert.deepEqual(snapshotAutomatico(), antesDaTrocaManual)
+
+  const automaticoVinte = await chamarAction(actions.atualizarOrcamento, [pedidoAutomatico.id, payloadAutomatico()], dados.sessoes.operadorA)
+  assert.equal(automaticoVinte.status, 200)
+  assert.deepEqual(db.prepare('SELECT quantidade, tempo_impressao_horas FROM pedidos WHERE id = ?')
+    .get(pedidoAutomatico.id), { quantidade: 20, tempo_impressao_horas: 41 })
+  const antesDaParcialInvalida = snapshotAutomatico()
+  const referenciaComParcial = (sobrescritasParcial) => ({
+    nome: 'Potes', quantidade_pecas: 14, capacidade_comercial: 14, repeticoes: 1,
+    tempo_execucao_minutos: 1087, parcial_quantidade_comercial: 6,
+    parcial_tempo_segundos: 1,
+    filamentos: [{ filamento_id: dados.filamentoA, gramas_por_execucao: 334.31, gramas_parcial: 1 }],
+    ...sobrescritasParcial,
+  })
+  for (const plateInvalida of [
+    referenciaComParcial({ parcial_tempo_segundos: null }),
+    referenciaComParcial({ filamentos: [{ filamento_id: dados.filamentoA, gramas_por_execucao: 334.31, gramas_parcial: 0 }] }),
+  ]) {
+    const tentativa = await chamarAction(actions.atualizarOrcamento, [pedidoAutomatico.id, payloadAutomatico({
+      plates: [plateInvalida],
+    })], dados.sessoes.operadorA)
+    assert.equal(tentativa.status, 200)
+    assert.match(tentativa.corpo, /Revise as refer.ncias, capacidades, tempos e filamentos das plates/)
+    assert.deepEqual(snapshotAutomatico(), antesDaParcialInvalida)
+  }
+
   const totalAntesManipulacao = db.prepare(`SELECT COUNT(*) AS total FROM pedidos
     WHERE nome_da_peca = 'Kit automático inválido'`).get().total
   const manipulado = await chamarAction(actions.criarPedido, [payloadAutomatico({

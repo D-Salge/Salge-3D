@@ -14,8 +14,10 @@ import {
 import {
   aplicarAlteracaoQuantidade,
   converterPlatesParaTradicional,
+  estadoParcialRealFormulario,
   invalidarParciaisIncompativeis,
   resolverAtivacaoModoPlates,
+  resolverTrocaParaDimensionamentoManual,
 } from '../lib/orcamento-formulario.mjs'
 
 function abrirBanco() {
@@ -301,6 +303,67 @@ test('insumos automáticos usam uma referência estável e parciais reais são i
   assert.equal(invalidada.plates[0].parcialQuantidadeComercial, null)
   assert.equal(invalidada.plates[0].tempoParcialSegundos, '')
   assert.equal(invalidada.plates[0].filamentos[0].gramasParcial, '')
+})
+
+test('troca do automático para o manual exige decisão e reabre a revisão sem alterar referências', () => {
+  const referencias = structuredClone(referenciasKit)
+  const solicitada = resolverTrocaParaDimensionamentoManual({
+    dimensionamentoAtual: 'Automatico', quantidadeRevisada: 30,
+  })
+  assert.deepEqual(solicitada, {
+    alterar: false, solicitarConfirmacao: true, quantidadeRevisada: 30,
+  })
+  assert.deepEqual(referencias, referenciasKit)
+
+  const confirmada = resolverTrocaParaDimensionamentoManual({
+    dimensionamentoAtual: 'Automatico', quantidadeRevisada: 30, confirmar: true,
+  })
+  assert.deepEqual(confirmada, {
+    alterar: true, solicitarConfirmacao: false, quantidadeRevisada: null,
+  })
+  assert.deepEqual(referencias, referenciasKit)
+
+  const cliqueNoModoAtivo = resolverTrocaParaDimensionamentoManual({
+    dimensionamentoAtual: 'Manual', quantidadeRevisada: null,
+  })
+  assert.deepEqual(cliqueNoModoAtivo, {
+    alterar: false, solicitarConfirmacao: false, quantidadeRevisada: null,
+  })
+})
+
+test('editor da parcial real permanece identificável com tempo ou gramagem vazios e zerados', () => {
+  const plate = {
+    capacidadeComercial: 14,
+    parcialQuantidadeComercial: 6,
+    tempoParcialSegundos: 120,
+    filamentos: [{ gramasParcial: 40 }, { gramasParcial: 5 }],
+  }
+  assert.equal(estadoParcialRealFormulario(plate, 20).valida, true)
+
+  for (const tempoParcialSegundos of ['', 0]) {
+    const estado = estadoParcialRealFormulario({ ...plate, tempoParcialSegundos }, 20)
+    assert.equal(estado.editando, true)
+    assert.equal(estado.valida, false)
+    assert.match(estado.erros.join(' '), /tempo real/i)
+  }
+  for (const gramasParcial of ['', 0]) {
+    const estado = estadoParcialRealFormulario({
+      ...plate,
+      filamentos: [{ gramasParcial }, { gramasParcial: 5 }],
+    }, 20)
+    assert.equal(estado.editando, true)
+    assert.equal(estado.valida, false)
+    assert.match(estado.erros.join(' '), /gramagem real/i)
+  }
+
+  const abandonada = estadoParcialRealFormulario({
+    ...plate,
+    parcialQuantidadeComercial: null,
+    tempoParcialSegundos: '',
+    filamentos: plate.filamentos.map(() => ({ gramasParcial: '' })),
+  }, 20)
+  assert.equal(abandonada.editando, false)
+  assert.equal(abandonada.valida, true)
 })
 
 test('criação, edição, duplicação e reabertura preservam a composição', (t) => {
