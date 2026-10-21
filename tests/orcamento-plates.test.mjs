@@ -8,12 +8,16 @@ import { calcularPrecoPlanilha } from '../lib/orcamento.mjs'
 import {
   obterPlatesPedidoNoBanco,
   substituirPlatesPedidoNoBanco,
+  validarEDimensionarPlatesAutomaticamente,
   validarEAgruparPlates,
 } from '../lib/orcamento-plates.mjs'
 import {
   aplicarAlteracaoQuantidade,
   converterPlatesParaTradicional,
+  estadoParcialRealFormulario,
+  invalidarParciaisIncompativeis,
   resolverAtivacaoModoPlates,
+  resolverTrocaParaDimensionamentoManual,
 } from '../lib/orcamento-formulario.mjs'
 
 function abrirBanco() {
@@ -58,6 +62,85 @@ const parametrosPreco = {
   taxaVenda: 0.05, fatorB2CPersonalizado: 2, fatorB2BPiloto: 1.8,
   fatorB2BRecorrente: 1.5, pedidoMinimoB2B: 80,
 }
+
+const referenciasKit = [
+  { nome: 'Potes', quantidade_pecas: 14, capacidade_comercial: 14, repeticoes: 99,
+    tempo_execucao_minutos: 1087,
+    filamentos: [{ filamento_id: 1, gramas_por_execucao: 334.31 }] },
+  { nome: 'Tampas', quantidade_pecas: 14, capacidade_comercial: 14, repeticoes: 99,
+    tempo_execucao_minutos: 635,
+    filamentos: [{ filamento_id: 1, gramas_por_execucao: 192.41 }] },
+]
+
+test('dimensiona o caso real sem confundir peças físicas com kits comerciais', () => {
+  const esperados = new Map([
+    [1, { execucoes: 2, segundos: Math.round((1087 + 635) * 60 / 14), gramas: (334.31 + 192.41) / 14 }],
+    [14, { execucoes: 2, segundos: (1087 + 635) * 60, gramas: 334.31 + 192.41 }],
+    [20, { execucoes: 4, segundos: (1087 + 635) * 60 + Math.round(1087 * 60 * 6 / 14) + Math.round(635 * 60 * 6 / 14), gramas: (334.31 + 192.41) * (1 + 6 / 14) }],
+    [28, { execucoes: 4, segundos: (1087 + 635) * 60 * 2, gramas: (334.31 + 192.41) * 2 }],
+    [30, { execucoes: 6, segundos: (1087 + 635) * 60 * 2 + Math.round(1087 * 60 * 2 / 14) + Math.round(635 * 60 * 2 / 14), gramas: (334.31 + 192.41) * (2 + 2 / 14) }],
+    [42, { execucoes: 6, segundos: (1087 + 635) * 60 * 3, gramas: (334.31 + 192.41) * 3 }],
+  ])
+  for (const [quantidade, esperado] of esperados) {
+    const resultado = validarEDimensionarPlatesAutomaticamente(referenciasKit, quantidade)
+    assert.equal(resultado.totalExecucoes, esperado.execucoes, `${quantidade} kits`)
+    assert.equal(resultado.tempoTotalSegundos, esperado.segundos, `${quantidade} kits`)
+    assert.ok(Math.abs(resultado.materiais[0].peso_gasto_gramas - esperado.gramas) < 1e-9)
+    assert.equal(resultado.execucoes.some((item) => item.parcial !== null), quantidade % 14 !== 0)
+  }
+})
+
+test('agrega vários filamentos e o mesmo filamento entre referências', () => {
+  const resultado = validarEDimensionarPlatesAutomaticamente([
+    { ...referenciasKit[0], filamentos: [
+      { filamento_id: 1, gramas_por_execucao: 300 },
+      { filamento_id: 2, gramas_por_execucao: 34.31 },
+    ] },
+    referenciasKit[1],
+  ], 20)
+  assert.ok(Math.abs(resultado.materiais.find((item) => item.filamento_id === 1).peso_gasto_gramas - 703.4428571428572) < 1e-9)
+  assert.ok(Math.abs(resultado.materiais.find((item) => item.filamento_id === 2).peso_gasto_gramas - 49.01428571428571) < 1e-9)
+})
+
+test('parcial real substitui somente a estimativa atual e não altera a referência cheia', () => {
+  const entrada = [{
+    ...referenciasKit[0],
+    parcial_quantidade_comercial: 6,
+    parcial_tempo_segundos: 25_200,
+    filamentos: [{ filamento_id: 1, gramas_por_execucao: 334.31, gramas_parcial: 140 }],
+  }]
+  const resultado = validarEDimensionarPlatesAutomaticamente(entrada, 20)
+  assert.equal(resultado.execucoes[0].parcial.estimada, false)
+  assert.equal(resultado.execucoes[0].parcial.tempo_segundos, 25_200)
+  assert.equal(resultado.materiais[0].peso_gasto_gramas, 474.31)
+  assert.equal(resultado.plates[0].tempo_execucao_minutos, 1087)
+  assert.equal(resultado.plates[0].filamentos[0].gramas_por_execucao, 334.31)
+  assert.throws(() => validarEDimensionarPlatesAutomaticamente(entrada, 30), /INVALID_PARTIAL_OVERRIDE/)
+  assert.throws(() => validarEDimensionarPlatesAutomaticamente(entrada, 28), /INVALID_PARTIAL_OVERRIDE/)
+})
+
+test('recalcula sempre das referências sem acumular escala e não zera tempo positivo', () => {
+  const inicial = validarEDimensionarPlatesAutomaticamente(referenciasKit, 14)
+  validarEDimensionarPlatesAutomaticamente(referenciasKit, 20)
+  validarEDimensionarPlatesAutomaticamente(referenciasKit, 30)
+  const retorno = validarEDimensionarPlatesAutomaticamente(referenciasKit, 14)
+  assert.deepEqual(retorno.materiais, inicial.materiais)
+  assert.equal(retorno.tempoTotalSegundos, inicial.tempoTotalSegundos)
+  const minimo = validarEDimensionarPlatesAutomaticamente([{
+    nome: 'Microscópica', quantidade_pecas: 1, capacidade_comercial: 100_000,
+    tempo_execucao_minutos: 1, filamentos: [{ filamento_id: 1, gramas_por_execucao: 1 }],
+  }], 1)
+  assert.equal(minimo.tempoTotalSegundos, 1)
+})
+
+test('rejeita capacidades, quantidades, parciais e limites numéricos inválidos', () => {
+  assert.throws(() => validarEDimensionarPlatesAutomaticamente(referenciasKit, 0), /INVALID_COMMERCIAL_QUANTITY/)
+  assert.throws(() => validarEDimensionarPlatesAutomaticamente([{ ...referenciasKit[0], capacidade_comercial: 0 }], 14), /INVALID_PLATE_COMMERCIAL_CAPACITY/)
+  assert.throws(() => validarEDimensionarPlatesAutomaticamente([{ ...referenciasKit[0], capacidade_comercial: 1 }], 100_000), /PLATES_TOTAL_TOO_LARGE/)
+  assert.throws(() => validarEDimensionarPlatesAutomaticamente([{
+    ...referenciasKit[0], parcial_quantidade_comercial: 6, parcial_tempo_segundos: 10,
+  }], 20), /INVALID_PARTIAL_FILAMENT_WEIGHT/)
+})
 
 test('uma plate equivalente produz os mesmos totais e preço do modo tradicional', () => {
   const agregado = validarEAgruparPlates([{
@@ -195,6 +278,94 @@ test('alternâncias repetidas não duplicam materiais nem aplicam escalonamento 
   assert.equal(alterada.insumos[0].quantidade, 4)
 })
 
+test('insumos automáticos usam uma referência estável e parciais reais são invalidadas só quando necessário', () => {
+  const inicial = [{ id: 'insumo', insumoId: '1', quantidade: 1,
+    quantidadeReferencia: 1, quantidadeComercialReferencia: 14 }]
+  const vinte = aplicarAlteracaoQuantidade({
+    modoCalculo: 'Plates', quantidadeAtual: 14, novaQuantidade: 20,
+    tempoHoras: 1, materiais: [], insumos: inicial,
+  })
+  const trinta = aplicarAlteracaoQuantidade({
+    modoCalculo: 'Plates', quantidadeAtual: 20, novaQuantidade: 30,
+    tempoHoras: 1, materiais: [], insumos: vinte.insumos,
+  })
+  const retorno = aplicarAlteracaoQuantidade({
+    modoCalculo: 'Plates', quantidadeAtual: 30, novaQuantidade: 14,
+    tempoHoras: 1, materiais: [], insumos: trinta.insumos,
+  })
+  assert.equal(retorno.insumos[0].quantidade, 1)
+
+  const plate = [{ capacidadeComercial: 14, parcialQuantidadeComercial: 6, tempoParcialSegundos: 100,
+    filamentos: [{ gramasParcial: 12 }] }]
+  assert.equal(invalidarParciaisIncompativeis(plate, 34).invalidou, false)
+  const invalidada = invalidarParciaisIncompativeis(plate, 30)
+  assert.equal(invalidada.invalidou, true)
+  assert.equal(invalidada.plates[0].parcialQuantidadeComercial, null)
+  assert.equal(invalidada.plates[0].tempoParcialSegundos, '')
+  assert.equal(invalidada.plates[0].filamentos[0].gramasParcial, '')
+})
+
+test('troca do automático para o manual exige decisão e reabre a revisão sem alterar referências', () => {
+  const referencias = structuredClone(referenciasKit)
+  const solicitada = resolverTrocaParaDimensionamentoManual({
+    dimensionamentoAtual: 'Automatico', quantidadeRevisada: 30,
+  })
+  assert.deepEqual(solicitada, {
+    alterar: false, solicitarConfirmacao: true, quantidadeRevisada: 30,
+  })
+  assert.deepEqual(referencias, referenciasKit)
+
+  const confirmada = resolverTrocaParaDimensionamentoManual({
+    dimensionamentoAtual: 'Automatico', quantidadeRevisada: 30, confirmar: true,
+  })
+  assert.deepEqual(confirmada, {
+    alterar: true, solicitarConfirmacao: false, quantidadeRevisada: null,
+  })
+  assert.deepEqual(referencias, referenciasKit)
+
+  const cliqueNoModoAtivo = resolverTrocaParaDimensionamentoManual({
+    dimensionamentoAtual: 'Manual', quantidadeRevisada: null,
+  })
+  assert.deepEqual(cliqueNoModoAtivo, {
+    alterar: false, solicitarConfirmacao: false, quantidadeRevisada: null,
+  })
+})
+
+test('editor da parcial real permanece identificável com tempo ou gramagem vazios e zerados', () => {
+  const plate = {
+    capacidadeComercial: 14,
+    parcialQuantidadeComercial: 6,
+    tempoParcialSegundos: 120,
+    filamentos: [{ gramasParcial: 40 }, { gramasParcial: 5 }],
+  }
+  assert.equal(estadoParcialRealFormulario(plate, 20).valida, true)
+
+  for (const tempoParcialSegundos of ['', 0]) {
+    const estado = estadoParcialRealFormulario({ ...plate, tempoParcialSegundos }, 20)
+    assert.equal(estado.editando, true)
+    assert.equal(estado.valida, false)
+    assert.match(estado.erros.join(' '), /tempo real/i)
+  }
+  for (const gramasParcial of ['', 0]) {
+    const estado = estadoParcialRealFormulario({
+      ...plate,
+      filamentos: [{ gramasParcial }, { gramasParcial: 5 }],
+    }, 20)
+    assert.equal(estado.editando, true)
+    assert.equal(estado.valida, false)
+    assert.match(estado.erros.join(' '), /gramagem real/i)
+  }
+
+  const abandonada = estadoParcialRealFormulario({
+    ...plate,
+    parcialQuantidadeComercial: null,
+    tempoParcialSegundos: '',
+    filamentos: plate.filamentos.map(() => ({ gramasParcial: '' })),
+  }, 20)
+  assert.equal(abandonada.editando, false)
+  assert.equal(abandonada.valida, true)
+})
+
 test('criação, edição, duplicação e reabertura preservam a composição', (t) => {
   const f = fixture()
   t.after(() => f.db.close())
@@ -225,6 +396,35 @@ test('criação, edição, duplicação e reabertura preservam a composição', 
       valor_total_cobrado, quantidade, modo_calculo FROM pedidos WHERE id = ?`).run(f.pedidoId).lastInsertRowid)
   substituirPlatesPedidoNoBanco(f.db, f.contexto, duplicadoId, obterPlatesPedidoNoBanco(f.db, f.contexto, f.pedidoId))
   assert.equal(obterPlatesPedidoNoBanco(f.db, f.contexto, duplicadoId)[0].nome, 'Potes revisados')
+})
+
+test('persistência automática preserva referências e valores reais da parcial ao reabrir e duplicar', (t) => {
+  const f = fixture()
+  t.after(() => f.db.close())
+  const entrada = validarEDimensionarPlatesAutomaticamente([{
+    nome: 'Potes', quantidade_pecas: 14, capacidade_comercial: 14,
+    tempo_execucao_minutos: 1087, parcial_quantidade_comercial: 6,
+    parcial_tempo_segundos: 25_200,
+    filamentos: [{ filamento_id: f.filamentoPreto, gramas_por_execucao: 334.31, gramas_parcial: 140 }],
+  }], 20).plates
+  f.db.prepare(`UPDATE pedidos SET quantidade = 20, plates_dimensionamento = 'Automatico' WHERE id = ?`).run(f.pedidoId)
+  substituirPlatesPedidoNoBanco(f.db, f.contexto, f.pedidoId, entrada)
+  const reaberta = obterPlatesPedidoNoBanco(f.db, f.contexto, f.pedidoId)
+  const semIds = (plates) => plates.map((plate) => {
+    const copia = { ...plate }
+    delete copia.id
+    return copia
+  })
+  assert.deepEqual(semIds(reaberta), entrada)
+
+  const duplicadoId = Number(f.db.prepare(`INSERT INTO pedidos
+    (tenant_id, usuario_id, cliente_id, nome_da_peca, tempo_impressao_horas,
+     valor_total_cobrado, quantidade, modo_calculo, plates_dimensionamento)
+    SELECT tenant_id, usuario_id, cliente_id, nome_da_peca, tempo_impressao_horas,
+      valor_total_cobrado, quantidade, modo_calculo, plates_dimensionamento FROM pedidos WHERE id = ?`)
+    .run(f.pedidoId).lastInsertRowid)
+  substituirPlatesPedidoNoBanco(f.db, f.contexto, duplicadoId, reaberta)
+  assert.deepEqual(semIds(obterPlatesPedidoNoBanco(f.db, f.contexto, duplicadoId)), entrada)
 })
 
 test('totais fornecidos pelo cliente não participam da agregação e dados inválidos são rejeitados', () => {
@@ -281,6 +481,8 @@ test('falha no salvamento reverte pedido, plates e materiais; pedidos antigos co
   const legadoId = Number(f.db.prepare(`INSERT INTO pedidos
     (tenant_id, usuario_id, cliente_id, nome_da_peca, tempo_impressao_horas, valor_total_cobrado)
     SELECT tenant_id, usuario_id, cliente_id, 'Pedido legado', 2, 20 FROM pedidos WHERE id = ?`).run(f.pedidoId).lastInsertRowid)
-  assert.deepEqual(f.db.prepare('SELECT modo_calculo FROM pedidos WHERE id = ?').get(legadoId), { modo_calculo: 'Tradicional' })
+  assert.deepEqual(f.db.prepare('SELECT modo_calculo, plates_dimensionamento FROM pedidos WHERE id = ?').get(legadoId), {
+    modo_calculo: 'Tradicional', plates_dimensionamento: 'Manual',
+  })
   assert.deepEqual(obterPlatesPedidoNoBanco(f.db, f.contexto, legadoId), [])
 })

@@ -23,6 +23,7 @@ import { PortalPedido } from './PortalPedido'
 import { AnaliseDesviosPedido } from './AnaliseDesviosPedido'
 import { ArquivosProducaoPedido } from './ArquivosProducaoPedido'
 import { ChecklistPedido } from './ChecklistPedido'
+import { DIMENSIONAMENTO_PLATES_AUTOMATICO, validarEDimensionarPlatesAutomaticamente } from '@/lib/orcamento-plates.mjs'
 import { MercadoPagoCobranca } from './MercadoPagoCobranca'
 
 function fmtBRL(valor: number) {
@@ -48,6 +49,9 @@ export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPag
   const [falhas, setFalhas] = useState(String(pedido.falhas_impressao))
   const [materiais, setMateriais] = useState(pedido.materiais.map((item) => ({ id: item.id, consumoReal: item.consumo_real_gramas?.toString() ?? '', filamentoIdReal: item.filamento_id })))
   const [insumos, setInsumos] = useState(pedido.insumos.map((item) => ({ id: item.id, consumoReal: item.consumo_real?.toString() ?? '' })))
+  const dimensionamentoAutomatico = pedido.modo_calculo === 'Plates' && pedido.plates_dimensionamento === DIMENSIONAMENTO_PLATES_AUTOMATICO
+    ? validarEDimensionarPlatesAutomaticamente(pedido.plates, pedido.quantidade)
+    : null
 
   function mudarOrcamento(status: string) {
     startTransition(async () => {
@@ -198,11 +202,12 @@ export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPag
 
           {pedido.modo_calculo === 'Plates' && <section className="rounded-2xl border border-[#d8f45a]/15 bg-[#15171b] p-6">
             <h2 className="font-semibold">Composição técnica por plates</h2>
-            <p className="mt-1 text-xs text-white/35">{pedido.quantidade} unidades comerciais · {pedido.plates.reduce((total, plate) => total + plate.repeticoes, 0)} execuções físicas · {pedido.tempo_impressao_horas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h no total</p>
+            <p className="mt-1 text-xs text-white/35">{pedido.quantidade} unidades comerciais · {dimensionamentoAutomatico?.totalExecucoes ?? pedido.plates.reduce((total, plate) => total + plate.repeticoes, 0)} execuções físicas · {pedido.tempo_impressao_horas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h no total · {dimensionamentoAutomatico ? 'dimensionamento automático' : 'composição manual'}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {pedido.plates.map((plate) => <article key={plate.id} className="rounded-xl bg-white/[0.03] p-4 text-sm">
-                <div className="flex items-start justify-between gap-3"><strong>{plate.nome}</strong><span className="rounded-full bg-[#d8f45a]/10 px-2 py-1 text-[10px] text-[#d8f45a]">{plate.repeticoes}×</span></div>
-                <p className="mt-2 text-xs text-white/45">{plate.quantidade_pecas} peças/plate · {Math.floor(plate.tempo_execucao_minutos / 60)}h {plate.tempo_execucao_minutos % 60}min por execução</p>
+              {pedido.plates.map((plate, index) => <article key={plate.id} className="rounded-xl bg-white/[0.03] p-4 text-sm">
+                <div className="flex items-start justify-between gap-3"><strong>{plate.nome}</strong><span className="rounded-full bg-[#d8f45a]/10 px-2 py-1 text-[10px] text-[#d8f45a]">{dimensionamentoAutomatico ? `${dimensionamentoAutomatico.execucoes[index].totalExecucoes}×` : `${plate.repeticoes}×`}</span></div>
+                <p className="mt-2 text-xs text-white/45">{plate.quantidade_pecas} peças físicas/plate · {Math.floor(plate.tempo_execucao_minutos / 60)}h {plate.tempo_execucao_minutos % 60}min por execução{plate.capacidade_comercial ? ` · atende ${plate.capacidade_comercial} unidades comerciais` : ''}</p>
+                {dimensionamentoAutomatico?.execucoes[index].parcial && <p className={`mt-2 text-xs ${dimensionamentoAutomatico.execucoes[index].parcial.estimada ? 'text-amber-200/75' : 'text-emerald-300/75'}`}>{dimensionamentoAutomatico.execucoes[index].parcial.estimada ? 'Plate parcial estimada proporcionalmente' : 'Plate parcial com valores reais'} · {dimensionamentoAutomatico.execucoes[index].quantidadeParcial} unidade(s)</p>}
                 <div className="mt-3 space-y-1 border-t border-white/[0.07] pt-3 text-xs text-white/40">{plate.filamentos.map((material) => {
                   const agregado = pedido.materiais.find((item) => item.filamento_id === material.filamento_id)
                   return <p key={material.filamento_id} className="flex justify-between gap-3"><span>{agregado?.nome ?? `Filamento #${material.filamento_id}`}</span><span>{material.gramas_por_execucao.toLocaleString('pt-BR')} g/execução</span></p>
