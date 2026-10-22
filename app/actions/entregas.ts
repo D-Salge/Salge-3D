@@ -3,7 +3,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { registrarEntregaParcialNoBanco } from '@/lib/registro-entrega.mjs'
-import { devolverSaidaProdutosAcabadosNoBanco } from '@/lib/producao-estoque.mjs'
+import { devolverSaidaProdutosAcabadosNoBanco, reconciliarPedidoEstoqueAposEstornoNoBanco } from '@/lib/producao-estoque.mjs'
 import { exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
@@ -155,6 +155,7 @@ export async function estornarEntregaPedido(entregaId: number): Promise<{ succes
       })
       db.prepare(`UPDATE entregas_pedido SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         WHERE id = ? AND tenant_id = ?`).run(entregaId, sessao.tenantId)
+      reconciliarPedidoEstoqueAposEstornoNoBanco(db, sessao, entrega.pedido_id)
       if (entrega.recebimento_id) {
         db.prepare(`
           UPDATE recebimentos SET estornado_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),

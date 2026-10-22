@@ -139,14 +139,16 @@ export async function concluirOrdemProducaoEstoque(data: {
     revalidar()
     return { success: true, message: resultado.resultado === 'UNCHANGED'
       ? 'Essa conclusão já havia sido processada.'
-      : `Produção concluída. Custo unitário real: ${resultado.custoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.` }
+      : resultado.loteId === null
+        ? `Perda total registrada. Custo real consumido: ${resultado.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`
+        : `Produção concluída. Custo unitário real: ${resultado.custoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.` }
   } catch (error) {
     const codigo = error instanceof Error ? error.message : ''
     if (codigo === 'UNAUTHORIZED') return { success: false, message: 'Sua sessão expirou. Entre novamente.' }
     if (codigo === 'FORBIDDEN') return { success: false, message: 'Seu perfil não permite concluir produções.' }
     if (codigo === 'NOT_FOUND') return { success: false, message: 'Ordem não encontrada.' }
     if (codigo === 'INVALID_INPUT') return { success: false, message: 'As quantidades fabricada, aprovada e reprovada estão inconsistentes.' }
-    if (codigo === 'INVALID_TRANSITION') return { success: false, message: 'Leve a ordem à conferência antes de concluir.' }
+    if (codigo === 'INVALID_TRANSITION') return { success: false, message: 'Leve a ordem à conferência; perdas totais podem ser registradas após o início.' }
     if (codigo === 'ALREADY_COMPLETED') return { success: false, message: 'A ordem já foi concluída por outra operação.' }
     if (codigo === 'MATERIAL_NOT_FOUND') return { success: false, message: 'Os consumos devem usar os materiais previstos da ordem.' }
     if (codigo.startsWith('INSUFFICIENT_STOCK:')) return { success: false, message: `Estoque insuficiente de ${codigo.slice('INSUFFICIENT_STOCK:'.length)}. Nenhum efeito foi gravado.` }
@@ -168,6 +170,9 @@ export async function getEstoqueProdutosAcabados(): Promise<{ produtos: EstoqueP
       l.custo_unitario, pc.codigo AS produto_codigo, pc.nome AS produto_nome, pv.versao,
       COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
         WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) AS saldo_fisico,
+      COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.custo_total_centavos WHEN 'Devolução' THEN m.custo_total_centavos
+        WHEN 'Ajuste entrada' THEN m.custo_total_centavos WHEN 'Saída' THEN -m.custo_total_centavos
+        WHEN 'Perda' THEN -m.custo_total_centavos WHEN 'Ajuste saída' THEN -m.custo_total_centavos ELSE 0 END), 0) AS saldo_custo_centavos,
       COALESCE((SELECT SUM(r.quantidade_reservada - r.quantidade_saida) FROM reservas_produtos_acabados r
         WHERE r.lote_id = l.id AND r.tenant_id = l.tenant_id AND r.liberada_em IS NULL), 0) AS reservado
     FROM lotes_produtos_acabados l
@@ -177,7 +182,7 @@ export async function getEstoqueProdutosAcabados(): Promise<{ produtos: EstoqueP
     WHERE l.tenant_id = ? GROUP BY l.id ORDER BY pc.nome, l.fabricado_em, l.id`).all(sessao.tenantId) as Array<{
       id: number; produto_id: number; produto_versao_id: number; codigo: string; fabricado_em: string
       custo_unitario: number; produto_codigo: string; produto_nome: string; versao: number
-      saldo_fisico: number; reservado: number
+      saldo_fisico: number; saldo_custo_centavos: number; reservado: number
     }>
   const agrupados = new Map<string, EstoqueProdutoAcabado>()
   for (const lote of lotes) {
@@ -191,9 +196,10 @@ export async function getEstoqueProdutosAcabados(): Promise<{ produtos: EstoqueP
     produto.saldo_fisico += lote.saldo_fisico
     produto.reservado += lote.reservado
     produto.disponivel += disponivel
-    produto.valor_estoque += lote.saldo_fisico * lote.custo_unitario
+    const custoUnitarioAtual = lote.saldo_fisico > 0 ? lote.saldo_custo_centavos / 100 / lote.saldo_fisico : 0
+    produto.valor_estoque += lote.saldo_custo_centavos / 100
     produto.lotes.push({ id: lote.id, codigo: lote.codigo, fabricado_em: lote.fabricado_em,
-      custo_unitario: lote.custo_unitario, saldo_fisico: lote.saldo_fisico, reservado: lote.reservado, disponivel })
+      custo_unitario: custoUnitarioAtual, saldo_fisico: lote.saldo_fisico, reservado: lote.reservado, disponivel })
     produto.custo_medio = produto.saldo_fisico > 0 ? produto.valor_estoque / produto.saldo_fisico : 0
     agrupados.set(chave, produto)
   }
@@ -213,17 +219,24 @@ export async function getProdutosAcabadosParaVenda(pedidoIgnoradoId?: number): P
   const ignorarPedido = Number.isSafeInteger(pedidoIgnoradoId) && Number(pedidoIgnoradoId) > 0
     ? Number(pedidoIgnoradoId) : -1
   return db.prepare(`WITH saldos AS (
-      SELECT l.produto_id, l.produto_versao_id, l.custo_unitario,
+      SELECT l.produto_id, l.produto_versao_id,
         COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
           WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) -
         COALESCE((SELECT SUM(r.quantidade_reservada - r.quantidade_saida) FROM reservas_produtos_acabados r
           WHERE r.lote_id = l.id AND r.tenant_id = l.tenant_id AND r.liberada_em IS NULL
-            AND r.pedido_id <> ?), 0) AS disponivel
-      FROM lotes_produtos_acabados l LEFT JOIN movimentos_produtos_acabados m ON m.lote_id = l.id
+            AND r.pedido_id <> ?), 0) AS disponivel,
+        COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.custo_total_centavos WHEN 'Devolução' THEN m.custo_total_centavos
+          WHEN 'Ajuste entrada' THEN m.custo_total_centavos WHEN 'Saída' THEN -m.custo_total_centavos
+          WHEN 'Perda' THEN -m.custo_total_centavos WHEN 'Ajuste saída' THEN -m.custo_total_centavos ELSE 0 END), 0) AS saldo_custo_centavos,
+        COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
+          WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) AS saldo_fisico
+      FROM lotes_produtos_acabados l LEFT JOIN movimentos_produtos_acabados m
+        ON m.lote_id = l.id AND m.tenant_id = l.tenant_id
       WHERE l.tenant_id = ? GROUP BY l.id
     ) SELECT pc.id AS produto_id, pv.id AS produto_versao_id, pc.nome, pv.versao,
       SUM(s.disponivel) AS disponivel,
-      CASE WHEN SUM(s.disponivel) > 0 THEN SUM(s.disponivel * s.custo_unitario) / SUM(s.disponivel) ELSE 0 END AS custo_unitario_referencia,
+      CASE WHEN SUM(s.disponivel) > 0 THEN SUM(CASE WHEN s.saldo_fisico > 0
+        THEN s.disponivel * s.saldo_custo_centavos / 100.0 / s.saldo_fisico ELSE 0 END) / SUM(s.disponivel) ELSE 0 END AS custo_unitario_referencia,
       pv.preco_base_unitario
     FROM saldos s JOIN produtos_catalogo pc ON pc.id = s.produto_id AND pc.tenant_id = ?
     JOIN produto_versoes pv ON pv.id = s.produto_versao_id

@@ -54,16 +54,22 @@ function buscarReferenciaProdutoAcabado(
   pedidoIgnoradoId = -1,
 ): { produtoId: number; produtoVersaoId: number; nome: string; custoTotal: number; precoBase: number } | null {
   const lotes = db.prepare(`WITH saldos AS (
-      SELECT l.id, l.produto_id, l.produto_versao_id, l.custo_unitario,
+      SELECT l.id, l.produto_id, l.produto_versao_id,
         l.fabricado_em,
         COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
           WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) -
         COALESCE((SELECT SUM(r.quantidade_reservada - r.quantidade_saida) FROM reservas_produtos_acabados r
-          WHERE r.lote_id = l.id AND r.tenant_id = l.tenant_id AND r.liberada_em IS NULL AND r.pedido_id <> ?), 0) AS disponivel
-      FROM lotes_produtos_acabados l LEFT JOIN movimentos_produtos_acabados m ON m.lote_id = l.id
+          WHERE r.lote_id = l.id AND r.tenant_id = l.tenant_id AND r.liberada_em IS NULL AND r.pedido_id <> ?), 0) AS disponivel,
+        COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
+          WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) AS saldo_fisico,
+        COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.custo_total_centavos WHEN 'Devolução' THEN m.custo_total_centavos
+          WHEN 'Ajuste entrada' THEN m.custo_total_centavos WHEN 'Saída' THEN -m.custo_total_centavos
+          WHEN 'Perda' THEN -m.custo_total_centavos WHEN 'Ajuste saída' THEN -m.custo_total_centavos ELSE 0 END), 0) AS saldo_custo_centavos
+      FROM lotes_produtos_acabados l LEFT JOIN movimentos_produtos_acabados m
+        ON m.lote_id = l.id AND m.tenant_id = l.tenant_id
       WHERE l.tenant_id = ? AND l.produto_versao_id = ? GROUP BY l.id
     ) SELECT pc.id AS produto_id, pv.id AS produto_versao_id, pc.nome, pv.preco_base_unitario,
-      s.disponivel, s.custo_unitario
+      s.disponivel, CASE WHEN s.saldo_fisico > 0 THEN s.saldo_custo_centavos / 100.0 / s.saldo_fisico ELSE 0 END AS custo_unitario
     FROM saldos s JOIN produtos_catalogo pc ON pc.id = s.produto_id AND pc.tenant_id = ?
     JOIN produto_versoes pv ON pv.id = s.produto_versao_id AND pv.produto_id = pc.id
     WHERE s.disponivel > 0
