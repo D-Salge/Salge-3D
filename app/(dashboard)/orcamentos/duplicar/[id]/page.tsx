@@ -7,6 +7,7 @@ import { getConfiguracoes } from '@/app/actions/configuracoes'
 import { getPedidoParaDuplicar, getReferenciasPrecos } from '@/app/actions/pedidos'
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
 import { getImpressoras } from '@/app/actions/operacao'
+import { getProdutosAcabadosParaVenda } from '@/app/actions/producao-estoque'
 
 export const metadata: Metadata = { title: 'Duplicar pedido - Salge 3D' }
 
@@ -15,7 +16,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const pedidoId = Number(id)
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) notFound()
 
-  const [pedido, clientes, filamentos, insumos, config, impressoras, referenciasPrecos] = await Promise.all([
+  const [pedido, clientes, filamentos, insumos, config, impressoras, referenciasPrecos, produtosAcabados] = await Promise.all([
     getPedidoParaDuplicar(pedidoId),
     getClientesLista(),
     getFilamentosLista(),
@@ -23,6 +24,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     getConfiguracoes(),
     getImpressoras(),
     getReferenciasPrecos(),
+    getProdutosAcabadosParaVenda(),
   ])
   if (!pedido) notFound()
 
@@ -50,6 +52,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         fatorB2BRecorrente={config.fator_b2b_recorrente}
         pedidoMinimoB2B={config.pedido_minimo_b2b}
         referenciasPrecos={referenciasPrecos}
+        produtosAcabados={produtosAcabados}
         pedidoInicial={pedido}
       />
     </div>

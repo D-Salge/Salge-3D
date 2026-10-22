@@ -12,6 +12,7 @@ import { exigirPerfil } from '@/lib/session'
 import { finalizarPedidoNoBanco, mensagemErroFechamento } from '@/lib/fechamento-pedido.mjs'
 import { iniciarProducaoPedidoNoBanco, mensagemErroInicioProducao } from '@/lib/inicio-producao.mjs'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { liberarOuDevolverPedidoEstoqueNoBanco, reservarProdutosAcabadosParaPedidoNoBanco } from '@/lib/producao-estoque.mjs'
 import {
   aplicarPisoHistorico,
   arredondarMoeda,
@@ -46,6 +47,50 @@ function buscarProdutoCatalogo(tenantId: number, nome: string): { produtoId: num
   return produto ? { produtoId: produto.id, produtoVersaoId: produto.versao_id } : null
 }
 
+function buscarReferenciaProdutoAcabado(
+  tenantId: number,
+  produtoVersaoId: number,
+  quantidade: number,
+  pedidoIgnoradoId = -1,
+): { produtoId: number; produtoVersaoId: number; nome: string; custoTotal: number; precoBase: number } | null {
+  const lotes = db.prepare(`WITH saldos AS (
+      SELECT l.id, l.produto_id, l.produto_versao_id, l.custo_unitario,
+        l.fabricado_em,
+        COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
+          WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) -
+        COALESCE((SELECT SUM(r.quantidade_reservada - r.quantidade_saida) FROM reservas_produtos_acabados r
+          WHERE r.lote_id = l.id AND r.tenant_id = l.tenant_id AND r.liberada_em IS NULL AND r.pedido_id <> ?), 0) AS disponivel
+      FROM lotes_produtos_acabados l LEFT JOIN movimentos_produtos_acabados m ON m.lote_id = l.id
+      WHERE l.tenant_id = ? AND l.produto_versao_id = ? GROUP BY l.id
+    ) SELECT pc.id AS produto_id, pv.id AS produto_versao_id, pc.nome, pv.preco_base_unitario,
+      s.disponivel, s.custo_unitario
+    FROM saldos s JOIN produtos_catalogo pc ON pc.id = s.produto_id AND pc.tenant_id = ?
+    JOIN produto_versoes pv ON pv.id = s.produto_versao_id AND pv.produto_id = pc.id
+    WHERE s.disponivel > 0
+    ORDER BY s.fabricado_em, s.id`).all(pedidoIgnoradoId, tenantId, produtoVersaoId, tenantId) as {
+      produto_id: number; produto_versao_id: number; nome: string; preco_base_unitario: number
+      disponivel: number; custo_unitario: number
+    }[]
+  const referencia = lotes[0]
+  if (!referencia) return null
+  let restante = quantidade
+  let custoTotal = 0
+  for (const lote of lotes) {
+    const usar = Math.min(restante, Math.floor(lote.disponivel))
+    custoTotal += usar * lote.custo_unitario
+    restante -= usar
+    if (restante === 0) break
+  }
+  if (restante > 0) return null
+  return {
+    produtoId: referencia.produto_id,
+    produtoVersaoId: referencia.produto_versao_id,
+    nome: referencia.nome,
+    custoTotal: arredondarMoeda(custoTotal),
+    precoBase: referencia.preco_base_unitario,
+  }
+}
+
 function expirarOrcamentosVencidos() {
   const vencidos = db.prepare(`
     SELECT id FROM pedidos
@@ -62,8 +107,14 @@ function expirarOrcamentosVencidos() {
       INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
       VALUES (?, ?, 1, 'Status do orçamento', 'Validade encerrada automaticamente')
     `)
+    const liberarReserva = db.prepare(`UPDATE reservas_produtos_acabados
+      SET liberada_em = COALESCE(liberada_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      WHERE pedido_id = ? AND tenant_id = ?`)
     for (const item of vencidos) {
-      if (atualizar.run(item.id, TENANT_ID).changes === 1) historico.run(TENANT_ID, item.id)
+      if (atualizar.run(item.id, TENANT_ID).changes === 1) {
+        liberarReserva.run(item.id, TENANT_ID)
+        historico.run(TENANT_ID, item.id)
+      }
     }
   })()
 }
@@ -158,6 +209,8 @@ export interface PedidoParaDuplicar {
   margem_perdas: number
   modo_calculo: 'Tradicional' | 'Plates'
   plates_dimensionamento: 'Manual' | 'Automatico'
+  atendimento_tipo: 'Encomenda' | 'Estoque'
+  produto_versao_id: number | null
   materiais: MaterialInput[]
   insumos: InsumoInput[]
   plates: PlateInput[]
@@ -269,12 +322,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     SELECT
       COALESCE(SUM(valor_total_cobrado - (
         custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
-        taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real
+        taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real +
+        CASE WHEN atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(custo_produto_acabado_real, 0), custo_produto_acabado_estimado) ELSE 0 END
       )), 0) AS lucro_liquido,
       COALESCE(AVG(CASE WHEN valor_total_cobrado > 0 THEN
         ((valor_total_cobrado - (
           custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
-          taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real
+          taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real +
+          CASE WHEN atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(custo_produto_acabado_real, 0), custo_produto_acabado_estimado) ELSE 0 END
         )) / valor_total_cobrado) * 100 END), 0) AS margem_media
     FROM pedidos
     WHERE tenant_id = ? AND status = 'Finalizado'
@@ -392,12 +447,14 @@ export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
          p.fim_previsto,
          p.valor_total_cobrado - (
            p.custo_filamento + p.custo_insumos + p.custo_energia +
-           p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
+           p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real +
+           CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END
          ) AS lucro_liquido,
          CASE WHEN p.valor_total_cobrado > 0 THEN
            ((p.valor_total_cobrado - (
              p.custo_filamento + p.custo_insumos + p.custo_energia +
-             p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
+             p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real +
+             CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END
            )) / p.valor_total_cobrado) * 100 ELSE 0 END AS margem_percentual,
          COALESCE(
            (SELECT SUM(r.valor) FROM recebimentos r
@@ -424,6 +481,7 @@ export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoPar
   const pedido = db.prepare(`
     SELECT id AS origem_id, numero_orcamento AS origem_numero, cliente_id,
       orcamento_status, nome_da_peca, modo_calculo, plates_dimensionamento,
+      atendimento_tipo, produto_versao_id,
       quantidade, tempo_impressao_horas, custo_embalagem, desconto,
       frete_cobrado, frete_pago, parcelas, condicao_pagamento,
       sinal_percentual,
@@ -551,6 +609,8 @@ export interface CriarPedidoInput {
   plates_dimensionamento?: 'Manual' | 'Automatico'
   plates?: PlateInput[]
   plates_quantidade_revisada?: number
+  atendimento_tipo?: 'Encomenda' | 'Estoque'
+  produto_versao_estoque_id?: number
 }
 
 // --- Mutation: criar pedido ---
@@ -589,6 +649,8 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       plates_dimensionamento = DIMENSIONAMENTO_PLATES_MANUAL,
       plates = [],
       plates_quantidade_revisada,
+      atendimento_tipo = 'Encomenda',
+      produto_versao_estoque_id,
     } = data
 
     if (![MODO_CALCULO_TRADICIONAL, MODO_CALCULO_PLATES].includes(modo_calculo)) {
@@ -616,13 +678,31 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       }
     }
 
+    if (!['Encomenda', 'Estoque'].includes(atendimento_tipo)) {
+      return { success: false, message: 'Tipo de atendimento inválido.' }
+    }
+    const atendimentoEstoque = atendimento_tipo === 'Estoque'
+    let produtoEstoque: { produtoId: number; produtoVersaoId: number; nome: string; custoTotal: number; precoBase: number } | null = null
+    if (atendimentoEstoque) {
+      if (!Number.isSafeInteger(produto_versao_estoque_id) || Number(produto_versao_estoque_id) <= 0) {
+        return { success: false, message: 'Selecione um produto acabado disponível.' }
+      }
+      produtoEstoque = buscarReferenciaProdutoAcabado(tenantId, Number(produto_versao_estoque_id), quantidade)
+      if (!produtoEstoque) {
+        return { success: false, message: `Estoque acabado insuficiente para ${quantidade} unidade(s).` }
+      }
+      tempoImpressaoValidado = 0
+      materiaisInformados = []
+      platesValidadas = []
+    }
+
     if (typeof nome_da_peca !== 'string' || !nome_da_peca.trim())
       return { success: false, message: 'Informe o nome da peça.' }
     if (nome_da_peca.trim().length > 160)
       return { success: false, message: 'O nome da peça deve ter até 160 caracteres.' }
     if (!Number.isSafeInteger(cliente_id) || cliente_id <= 0)
       return { success: false, message: 'Selecione um cliente válido.' }
-    if (!Number.isFinite(tempoImpressaoValidado) || tempoImpressaoValidado <= 0 || tempoImpressaoValidado > 10_000)
+    if (!Number.isFinite(tempoImpressaoValidado) || tempoImpressaoValidado < 0 || (!atendimentoEstoque && tempoImpressaoValidado <= 0) || tempoImpressaoValidado > 10_000)
       return { success: false, message: 'Tempo de impressão inválido.' }
     if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100_000)
       return { success: false, message: 'Quantidade de peças inválida.' }
@@ -632,10 +712,11 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       return { success: false, message: 'Impressora inválida.' }
     if (preco_unitario !== undefined && (!Number.isFinite(preco_unitario) || preco_unitario <= 0 || preco_unitario > 1_000_000))
       return { success: false, message: 'Preço de venda unitário inválido.' }
-    if (!Array.isArray(materiaisInformados) || materiaisInformados.length === 0 || materiaisInformados.length > 100)
+    if (!Array.isArray(materiaisInformados) || (!atendimentoEstoque && materiaisInformados.length === 0) || materiaisInformados.length > 100)
       return { success: false, message: 'Adicione materiais válidos ao orçamento.' }
     if (!Array.isArray(insumos) || insumos.length > 20)
       return { success: false, message: 'Lista de insumos inválida.' }
+    const insumosInformados = atendimentoEstoque ? [] : insumos
 
     for (const valor of [
       custo_embalagem, desconto, frete_cobrado, frete_pago,
@@ -695,7 +776,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
     }))
 
     const quantidadesPorInsumo = new Map<number, number>()
-    for (const insumo of insumos) {
+    for (const insumo of insumosInformados) {
       if (
         !Number.isSafeInteger(insumo.insumo_id) ||
         insumo.insumo_id <= 0 ||
@@ -770,16 +851,16 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       return { success: false, message: 'Impressora não encontrada.' }
     }
 
-    const custoInsumosBruto = insumosValidos.reduce((total, item) => {
+    const custoInsumosBruto = atendimentoEstoque ? produtoEstoque!.custoTotal : insumosValidos.reduce((total, item) => {
       return total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario
     }, 0)
     const calculo = calcularPrecoPlanilha({
       tipoPedido: tipo_pedido,
       quantidade,
       tempoImpressaoHoras: tempoImpressaoValidado,
-      potenciaW: impressora?.potencia_w ?? configuracao.potencia_impressora_w,
+      potenciaW: atendimentoEstoque ? 0 : impressora?.potencia_w ?? configuracao.potencia_impressora_w,
       tarifaEnergiaKwh: configuracao.tarifa_energia_kwh,
-      custoHoraMaquina: impressora && impressora.custo_hora > 0
+      custoHoraMaquina: atendimentoEstoque ? 0 : impressora && impressora.custo_hora > 0
         ? impressora.custo_hora
         : configuracao.custo_hora_maquina,
       materiais: materialsValidos.map((m) => {
@@ -803,7 +884,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       fatorB2BRecorrente: configuracao.fator_b2b_recorrente,
       pedidoMinimoB2B: configuracao.pedido_minimo_b2b,
     })
-    const custoInsumos = arredondarMoeda(custoInsumosBruto)
+    const custoInsumos = atendimentoEstoque ? 0 : arredondarMoeda(custoInsumosBruto)
     const embalagem = arredondarMoeda(custo_embalagem)
     const descontoValidado = arredondarMoeda(desconto)
     const freteCobrado = arredondarMoeda(frete_cobrado)
@@ -829,7 +910,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
       calculo.reservaPerdas + calculo.materiaisAvulsos + calculo.maoObraAtiva + calculo.setupProjeto,
     )
     const taxasComissoes = arredondarMoeda(valorTotal * configuracao.taxa_venda_padrao)
-    const produtoCatalogo = buscarProdutoCatalogo(tenantId, nome_da_peca)
+    const produtoCatalogo = produtoEstoque
+      ? { produtoId: produtoEstoque.produtoId, produtoVersaoId: produtoEstoque.produtoVersaoId }
+      : buscarProdutoCatalogo(tenantId, nome_da_peca)
 
     const inserir = db.transaction(() => {
       // 1. Insere o pedido
@@ -844,9 +927,9 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
             valor_total_cobrado, data_entrega, validade_orcamento, vencimento_em,
             parcelas, sinal_percentual, condicao_pagamento, quantidade, preco_unitario, tipo_venda, taxas_comissoes, impressora_id,
             materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas, modo_calculo,
-            plates_dimensionamento,
+            plates_dimensionamento, atendimento_tipo, custo_produto_acabado_estimado,
             orcamento_status, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', 'Fila')`
         )
         .run(
           tenantId,
@@ -855,7 +938,7 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           produtoCatalogo?.produtoId ?? null,
           produtoCatalogo?.produtoVersaoId ?? null,
           nome_da_peca.trim(),
-          tempoImpressaoValidado,
+          atendimentoEstoque ? 0.000001 : tempoImpressaoValidado,
           calculo.filamentoSemPerdas,
           custoInsumos,
           calculo.energia,
@@ -883,6 +966,8 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
           margem_perdas,
           modo_calculo,
           plates_dimensionamento,
+          atendimento_tipo,
+          produtoEstoque?.custoTotal ?? 0,
         )
 
       const pedidoId = pedidoResult.lastInsertRowid as number
@@ -924,6 +1009,8 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
 
       substituirPlatesPedidoNoBanco(db, sessao, pedidoId, platesValidadas)
 
+      if (atendimentoEstoque) reservarProdutosAcabadosParaPedidoNoBanco(db, sessao, Number(pedidoId))
+
       registrarAuditoria(db, {
         tenantId, usuarioId,
         entidade: 'Pedido', entidadeId: Number(pedidoId), acao: origemNumero ? 'DUPLICAR' : 'CRIAR',
@@ -949,6 +1036,8 @@ export async function criarPedido(data: CriarPedidoInput): Promise<ActionResult>
   } catch (err) {
     if (err instanceof Error && err.message === 'UNAUTHORIZED') return { success: false, message: 'Faça login para criar orçamentos.' }
     if (err instanceof Error && err.message === 'FORBIDDEN') return { success: false, message: 'Seu perfil não pode criar orçamentos.' }
+    if (err instanceof Error && err.message.startsWith('INSUFFICIENT_FINISHED_STOCK'))
+      return { success: false, message: 'O estoque acabado mudou durante a reserva. Atualize e tente novamente.' }
     console.error('[criarPedido]', err)
     return { success: false, message: 'Erro interno ao salvar. Tente novamente.' }
   }
@@ -973,6 +1062,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
       modo_calculo = MODO_CALCULO_TRADICIONAL,
       plates_dimensionamento = DIMENSIONAMENTO_PLATES_MANUAL,
       plates = [], plates_quantidade_revisada,
+      atendimento_tipo = 'Encomenda', produto_versao_estoque_id,
     } = data
 
     if (![MODO_CALCULO_TRADICIONAL, MODO_CALCULO_PLATES].includes(modo_calculo))
@@ -997,24 +1087,42 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
       }
     }
 
+    if (!['Encomenda', 'Estoque'].includes(atendimento_tipo))
+      return { success: false, message: 'Tipo de atendimento inválido.' }
+    if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100_000)
+      return { success: false, message: 'Quantidade de peças inválida.' }
+    const atendimentoEstoque = atendimento_tipo === 'Estoque'
+    let produtoEstoque: { produtoId: number; produtoVersaoId: number; nome: string; custoTotal: number; precoBase: number } | null = null
+    if (atendimentoEstoque) {
+      if (!Number.isSafeInteger(produto_versao_estoque_id) || Number(produto_versao_estoque_id) <= 0)
+        return { success: false, message: 'Selecione um produto acabado disponível.' }
+      produtoEstoque = buscarReferenciaProdutoAcabado(
+        tenantId, Number(produto_versao_estoque_id), quantidade, pedidoId,
+      )
+      if (!produtoEstoque)
+        return { success: false, message: `Estoque acabado insuficiente para ${quantidade} unidade(s).` }
+      tempoImpressaoValidado = 0
+      materiaisInformados = []
+      platesValidadas = []
+    }
+
     if (typeof nome_da_peca !== 'string' || !nome_da_peca.trim() || nome_da_peca.trim().length > 160)
       return { success: false, message: 'Informe um nome de peça válido, com até 160 caracteres.' }
     if (!Number.isSafeInteger(cliente_id) || cliente_id <= 0)
       return { success: false, message: 'Selecione um cliente válido.' }
-    if (!Number.isFinite(tempoImpressaoValidado) || tempoImpressaoValidado <= 0 || tempoImpressaoValidado > 10_000)
+    if (!Number.isFinite(tempoImpressaoValidado) || tempoImpressaoValidado < 0 || (!atendimentoEstoque && tempoImpressaoValidado <= 0) || tempoImpressaoValidado > 10_000)
       return { success: false, message: 'Tempo de impressão inválido.' }
-    if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100_000)
-      return { success: false, message: 'Quantidade de peças inválida.' }
     if (!TIPOS_PEDIDO.includes(tipo_pedido))
       return { success: false, message: 'Tipo de pedido inválido.' }
     if (impressora_id !== null && (!Number.isSafeInteger(impressora_id) || impressora_id <= 0))
       return { success: false, message: 'Impressora inválida.' }
     if (preco_unitario !== undefined && (!Number.isFinite(preco_unitario) || preco_unitario <= 0 || preco_unitario > 1_000_000))
       return { success: false, message: 'Preço de venda unitário inválido.' }
-    if (!Array.isArray(materiaisInformados) || materiaisInformados.length === 0 || materiaisInformados.length > 100)
+    if (!Array.isArray(materiaisInformados) || (!atendimentoEstoque && materiaisInformados.length === 0) || materiaisInformados.length > 100)
       return { success: false, message: 'Adicione materiais válidos ao orçamento.' }
     if (!Array.isArray(insumos) || insumos.length > 20)
       return { success: false, message: 'Lista de insumos inválida.' }
+    const insumosInformados = atendimentoEstoque ? [] : insumos
     for (const valor of [
       custo_embalagem, desconto, frete_cobrado, frete_pago,
       materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto,
@@ -1044,7 +1152,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
     const materialsValidos = Array.from(pesosPorFilamento, ([filamento_id, peso_gasto_gramas]) => ({ filamento_id, peso_gasto_gramas }))
 
     const quantidadesPorInsumo = new Map<number, number>()
-    for (const insumo of insumos) {
+    for (const insumo of insumosInformados) {
       if (!Number.isSafeInteger(insumo.insumo_id) || insumo.insumo_id <= 0 ||
           !Number.isFinite(insumo.quantidade) || insumo.quantidade <= 0 || insumo.quantidade > 100_000) {
         return { success: false, message: 'Insumo ou quantidade inválida.' }
@@ -1083,12 +1191,15 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
       WHERE id = ? AND tenant_id = ? AND ativo = 1`).get(impressora_id, tenantId) as { id: number; potencia_w: number; custo_hora: number } | undefined
     if (impressora_id !== null && !impressora) return { success: false, message: 'Impressora não encontrada.' }
 
-    const custoInsumosBruto = insumosValidos.reduce((total, item) => total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario, 0)
+    const custoInsumosBruto = atendimentoEstoque ? produtoEstoque!.custoTotal : insumosValidos.reduce(
+      (total, item) => total + item.quantidade * insumosMap.get(item.insumo_id)!.custo_unitario, 0,
+    )
     const calculo = calcularPrecoPlanilha({
       tipoPedido: tipo_pedido, quantidade, tempoImpressaoHoras: tempoImpressaoValidado,
-      potenciaW: impressora?.potencia_w ?? configuracao.potencia_impressora_w,
+      potenciaW: atendimentoEstoque ? 0 : impressora?.potencia_w ?? configuracao.potencia_impressora_w,
       tarifaEnergiaKwh: configuracao.tarifa_energia_kwh,
-      custoHoraMaquina: impressora && impressora.custo_hora > 0 ? impressora.custo_hora : configuracao.custo_hora_maquina,
+      custoHoraMaquina: atendimentoEstoque ? 0 : impressora && impressora.custo_hora > 0
+        ? impressora.custo_hora : configuracao.custo_hora_maquina,
       materiais: materialsValidos.map((material) => {
         const filamento = filamentosMap.get(material.filamento_id)!
         return { pesoGramas: material.peso_gasto_gramas, custoPorGrama: filamento.preco_rolo / filamento.peso_rolo_gramas }
@@ -1115,18 +1226,26 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
     }
     const custosAdicionais = arredondarMoeda(calculo.reservaPerdas + calculo.materiaisAvulsos + calculo.maoObraAtiva + calculo.setupProjeto)
     const taxasComissoes = arredondarMoeda(valorTotal * configuracao.taxa_venda_padrao)
-    const produtoCatalogo = buscarProdutoCatalogo(tenantId, nome_da_peca)
+    const produtoCatalogo = produtoEstoque
+      ? { produtoId: produtoEstoque.produtoId, produtoVersaoId: produtoEstoque.produtoVersaoId }
+      : buscarProdutoCatalogo(tenantId, nome_da_peca)
 
     const atualizar = db.transaction(() => {
-      const atual = db.prepare(`SELECT numero_orcamento, orcamento_status, status,
+      const atual = db.prepare(`SELECT numero_orcamento, orcamento_status, status, atendimento_tipo,
         (SELECT COUNT(*) FROM recebimentos r WHERE r.pedido_id = pedidos.id AND r.estornado_em IS NULL) AS recebimentos
         FROM pedidos WHERE id = ? AND tenant_id = ?`).get(pedidoId, tenantId) as {
-          numero_orcamento: string | null; orcamento_status: string; status: string; recebimentos: number
+          numero_orcamento: string | null; orcamento_status: string; status: string; atendimento_tipo: string; recebimentos: number
         } | undefined
       if (!atual) throw new Error('NOT_FOUND')
       if (!['Rascunho', 'Enviado'].includes(atual.orcamento_status) || atual.status !== 'Fila' || atual.recebimentos > 0) {
         throw new Error('NOT_EDITABLE')
       }
+      const quantidadeSaida = (db.prepare(`SELECT COALESCE(SUM(quantidade_saida), 0) AS total
+        FROM reservas_produtos_acabados WHERE pedido_id = ? AND tenant_id = ?`).get(pedidoId, tenantId) as { total: number }).total
+      if (quantidadeSaida > 0) throw new Error('NOT_EDITABLE')
+      db.prepare(`UPDATE reservas_produtos_acabados
+        SET liberada_em = COALESCE(liberada_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        WHERE pedido_id = ? AND tenant_id = ?`).run(pedidoId, tenantId)
 
       db.prepare(`UPDATE pedidos SET
         cliente_id = ?, produto_id = ?, produto_versao_id = ?, nome_da_peca = ?, tempo_impressao_horas = ?, custo_filamento = ?,
@@ -1135,17 +1254,18 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
         data_entrega = ?, validade_orcamento = ?, vencimento_em = ?, parcelas = ?, sinal_percentual = ?, condicao_pagamento = ?,
         quantidade = ?, preco_unitario = ?, tipo_venda = ?, taxas_comissoes = ?, impressora_id = ?,
         materiais_avulsos_por_unidade = ?, horas_trabalho_ativo = ?, setup_projeto = ?, margem_perdas = ?, modo_calculo = ?,
-        plates_dimensionamento = ?
+        plates_dimensionamento = ?, atendimento_tipo = ?, custo_produto_acabado_estimado = ?,
+        custo_produto_acabado_real = 0
         WHERE id = ? AND tenant_id = ?`).run(
           cliente_id, produtoCatalogo?.produtoId ?? null, produtoCatalogo?.produtoVersaoId ?? null,
-          nome_da_peca.trim(), tempoImpressaoValidado, calculo.filamentoSemPerdas,
-          arredondarMoeda(custoInsumosBruto), calculo.energia, calculo.reservaMaquina, custosAdicionais,
+          nome_da_peca.trim(), atendimentoEstoque ? 0.000001 : tempoImpressaoValidado, calculo.filamentoSemPerdas,
+          atendimentoEstoque ? 0 : arredondarMoeda(custoInsumosBruto), calculo.energia, calculo.reservaMaquina, custosAdicionais,
           arredondarMoeda(custo_embalagem), arredondarMoeda(desconto), arredondarMoeda(frete_cobrado),
           arredondarMoeda(frete_pago), valorTotal, data_entrega ?? null, validade_orcamento ?? null,
           vencimento_em ?? null, parcelas, sinal_percentual, condicao_pagamento?.trim() || null, quantidade,
           precoUnitarioAplicado, tipo_pedido, taxasComissoes, impressora_id,
           materiais_avulsos_por_unidade, horas_trabalho_ativo, setup_projeto, margem_perdas, modo_calculo,
-          plates_dimensionamento,
+          plates_dimensionamento, atendimento_tipo, produtoEstoque?.custoTotal ?? 0,
           pedidoId, tenantId,
         )
 
@@ -1166,6 +1286,7 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
           arredondarMoeda(item.quantidade * insumo.custo_unitario))
       }
       substituirPlatesPedidoNoBanco(db, sessao, pedidoId, platesValidadas)
+      if (atendimentoEstoque) reservarProdutosAcabadosParaPedidoNoBanco(db, sessao, pedidoId)
       db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Orcamento editado', 'Dados comerciais e custos do orçamento atualizados')`).run(tenantId, pedidoId, usuarioId)
       registrarAuditoria(db, {
@@ -1187,6 +1308,8 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
     if (err instanceof Error && err.message === 'NOT_EDITABLE') {
       return { success: false, message: 'Somente orçamentos em rascunho ou enviados, sem pagamentos e sem produção iniciada, podem ser editados.' }
     }
+    if (err instanceof Error && err.message.startsWith('INSUFFICIENT_FINISHED_STOCK'))
+      return { success: false, message: 'O estoque acabado mudou durante a reserva. Atualize e tente novamente.' }
     console.error('[atualizarOrcamento]', err)
     return { success: false, message: 'Erro interno ao atualizar. Tente novamente.' }
   }
@@ -1248,12 +1371,14 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
          p.fim_previsto,
          p.valor_total_cobrado - (
            p.custo_filamento + p.custo_insumos + p.custo_energia +
-           p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
+           p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real +
+           CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END
          ) AS lucro_liquido,
          CASE WHEN p.valor_total_cobrado > 0 THEN
            ((p.valor_total_cobrado - (
              p.custo_filamento + p.custo_insumos + p.custo_energia +
-             p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
+             p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real +
+             CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END
            )) / p.valor_total_cobrado) * 100 ELSE 0 END AS margem_percentual,
          COALESCE(
            (SELECT SUM(r.valor) FROM recebimentos r
@@ -1308,10 +1433,10 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
 
     const atualizar = db.transaction(() => {
       const pedido = db
-        .prepare(`SELECT status, orcamento_status, quantidade, quantidade_produzida
+        .prepare(`SELECT status, orcamento_status, quantidade, quantidade_produzida, atendimento_tipo
           FROM pedidos WHERE id = ? AND tenant_id = ?`)
         .get(pedidoId, sessao.tenantId) as {
-          status: string; orcamento_status: string; quantidade: number; quantidade_produzida: number
+          status: string; orcamento_status: string; quantidade: number; quantidade_produzida: number; atendimento_tipo: string
         } | undefined
 
       if (!pedido) throw new Error('NOT_FOUND')
@@ -1367,6 +1492,10 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
             movimento.quantidade, row.saldo, saldoPosterior,
           )
         }
+      }
+
+      if (novoStatus === 'Cancelado' && pedido.atendimento_tipo === 'Estoque') {
+        liberarOuDevolverPedidoEstoqueNoBanco(db, sessao, pedidoId, `cancelamento-pedido-${pedidoId}`)
       }
 
       const res = db
@@ -1446,20 +1575,24 @@ export async function atualizarStatusPedido(pedidoId: number, novoStatus: string
 
 export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
   try {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    const tenantId = sessao.tenantId
+    const usuarioId = sessao.usuarioId
     if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
       return { success: false, message: 'Pedido inválido.' }
     }
 
     const excluir = db.transaction(() => {
       const pedido = db.prepare(`
-        SELECT id, numero_orcamento, nome_da_peca, status
+        SELECT id, numero_orcamento, nome_da_peca, status, atendimento_tipo
         FROM pedidos
         WHERE id = ? AND tenant_id = ?
-      `).get(pedidoId, TENANT_ID) as {
+      `).get(pedidoId, tenantId) as {
         id: number
         numero_orcamento: string | null
         nome_da_peca: string
         status: string
+        atendimento_tipo: string
       } | undefined
 
       if (!pedido) throw new Error('NOT_FOUND')
@@ -1480,7 +1613,7 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
             END
           ) AS quantidade
         FROM movimentos_estoque
-        WHERE pedido_id = ?
+        WHERE pedido_id = ? AND tenant_id = ?
         GROUP BY tipo_item, item_id, lote_filamento_id
         HAVING SUM(
           CASE
@@ -1489,7 +1622,7 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
             ELSE 0
           END
         ) > 0.0005
-      `).all(pedidoId) as {
+      `).all(pedidoId, tenantId) as {
         tipo_item: 'Filamento' | 'Insumo'
         item_id: number
         lote_filamento_id: number | null
@@ -1502,7 +1635,7 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
           const atual = db.prepare(`
             SELECT COALESCE(estoque_gramas, peso_rolo_gramas) AS saldo
             FROM filamentos WHERE id = ? AND tenant_id = ?
-          `).get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
+          `).get(movimento.item_id, tenantId) as { saldo: number } | undefined
           if (!atual) throw new Error('STOCK_CHANGED')
 
           if (movimento.lote_filamento_id) {
@@ -1513,7 +1646,7 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
             `).run(
               movimento.quantidade,
               movimento.lote_filamento_id,
-              TENANT_ID,
+              tenantId,
               movimento.item_id,
             )
             if (lote.changes !== 1) throw new Error('STOCK_CHANGED')
@@ -1524,15 +1657,16 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
             UPDATE filamentos
             SET estoque_gramas = ?
             WHERE id = ? AND tenant_id = ?
-          `).run(saldoPosterior, movimento.item_id, TENANT_ID)
+          `).run(saldoPosterior, movimento.item_id, tenantId)
 
           db.prepare(`
             INSERT INTO movimentos_estoque (
               tenant_id, usuario_id, tipo_item, item_id, lote_filamento_id,
               pedido_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, 'Filamento', ?, ?, NULL, 'Reversao', ?, ?, ?, ?)
+            ) VALUES (?, ?, 'Filamento', ?, ?, NULL, 'Reversao', ?, ?, ?, ?)
           `).run(
-            TENANT_ID,
+            tenantId,
+            usuarioId,
             movimento.item_id,
             movimento.lote_filamento_id,
             movimento.quantidade,
@@ -1544,22 +1678,23 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
           const atual = db.prepare(`
             SELECT estoque_atual AS saldo
             FROM insumos WHERE id = ? AND tenant_id = ?
-          `).get(movimento.item_id, TENANT_ID) as { saldo: number } | undefined
+          `).get(movimento.item_id, tenantId) as { saldo: number } | undefined
           if (!atual) throw new Error('STOCK_CHANGED')
 
           const saldoPosterior = atual.saldo + movimento.quantidade
           db.prepare(`
             UPDATE insumos SET estoque_atual = ?
             WHERE id = ? AND tenant_id = ?
-          `).run(saldoPosterior, movimento.item_id, TENANT_ID)
+          `).run(saldoPosterior, movimento.item_id, tenantId)
 
           db.prepare(`
             INSERT INTO movimentos_estoque (
               tenant_id, usuario_id, tipo_item, item_id, pedido_id,
               tipo, quantidade, saldo_anterior, saldo_posterior, motivo
-            ) VALUES (?, 1, 'Insumo', ?, NULL, 'Reversao', ?, ?, ?, ?)
+            ) VALUES (?, ?, 'Insumo', ?, NULL, 'Reversao', ?, ?, ?, ?)
           `).run(
-            TENANT_ID,
+            tenantId,
+            usuarioId,
             movimento.item_id,
             movimento.quantidade,
             atual.saldo,
@@ -1569,10 +1704,16 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
         }
       }
 
+      if (pedido.atendimento_tipo === 'Estoque') {
+        liberarOuDevolverPedidoEstoqueNoBanco(db, sessao, pedidoId, `excluir-pedido-${pedidoId}`)
+        db.prepare('DELETE FROM reservas_produtos_acabados WHERE pedido_id = ? AND tenant_id = ?')
+          .run(pedidoId, tenantId)
+      }
+
       // Modelos usam RESTRICT para proteger o pedido de origem; ao excluir o
       // pedido, o modelo correspondente também precisa ser removido.
       db.prepare('DELETE FROM modelos_orcamento WHERE pedido_id = ? AND tenant_id = ?')
-        .run(pedidoId, TENANT_ID)
+        .run(pedidoId, tenantId)
 
       // Mantém o livro de movimentos de estoque, mas sem apontar para um pedido
       // que deixará de existir.
@@ -1580,10 +1721,12 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
         .run(pedidoId)
 
       const resultado = db.prepare('DELETE FROM pedidos WHERE id = ? AND tenant_id = ?')
-        .run(pedidoId, TENANT_ID)
+        .run(pedidoId, tenantId)
       if (resultado.changes !== 1) throw new Error('NOT_FOUND')
 
       registrarAuditoria(db, {
+        tenantId,
+        usuarioId,
         entidade: 'Pedido',
         entidadeId: pedidoId,
         acao: 'EXCLUIR',
@@ -1597,7 +1740,7 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
     })
 
     try {
-      excluir()
+      excluir.immediate()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       if (message === 'NOT_FOUND') {
@@ -1620,6 +1763,8 @@ export async function excluirPedido(pedidoId: number): Promise<ActionResult> {
     revalidatePath(`/pedidos/${pedidoId}`)
     return { success: true, message: 'Pedido excluído permanentemente.' }
   } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') return { success: false, message: 'Faça login para excluir pedidos.' }
+    if (error instanceof Error && error.message === 'FORBIDDEN') return { success: false, message: 'Seu perfil não pode excluir pedidos.' }
     console.error('[excluirPedido]', error)
     return { success: false, message: 'Erro interno ao excluir o pedido.' }
   }

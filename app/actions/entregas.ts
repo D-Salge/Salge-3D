@@ -3,6 +3,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { registrarEntregaParcialNoBanco } from '@/lib/registro-entrega.mjs'
+import { devolverSaidaProdutosAcabadosNoBanco } from '@/lib/producao-estoque.mjs'
 import { exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
@@ -115,11 +116,15 @@ export async function registrarEntregaParcial(data: {
       throw error
     }
     revalidarPedido(data.pedidoId)
+    const pedido = db.prepare('SELECT status FROM pedidos WHERE id = ? AND tenant_id = ?')
+      .get(data.pedidoId, sessao.tenantId) as { status: string } | undefined
     return {
       success: true,
       message: operacao.resultado === 'UNCHANGED'
         ? 'Esta entrega já havia sido registrada.'
-        : 'Entrega parcial registrada sem finalizar o pedido.',
+        : pedido?.status === 'Finalizado'
+          ? 'Entrega registrada e pedido finalizado.'
+          : 'Entrega parcial registrada sem finalizar o pedido.',
       entregaId: operacao.entregaId,
     }
   } catch (error) {
@@ -143,6 +148,11 @@ export async function estornarEntregaPedido(entregaId: number): Promise<{ succes
       `).get(entregaId, sessao.tenantId) as { id: number; pedido_id: number; recebimento_id: number | null; quantidade: number } | undefined
       if (!entrega) throw new Error('NOT_FOUND')
       pedidoId = entrega.pedido_id
+      devolverSaidaProdutosAcabadosNoBanco(db, sessao, {
+        pedidoId: entrega.pedido_id,
+        entregaId,
+        operacaoId: `estorno-entrega-${entregaId}`,
+      })
       db.prepare(`UPDATE entregas_pedido SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         WHERE id = ? AND tenant_id = ?`).run(entregaId, sessao.tenantId)
       if (entrega.recebimento_id) {

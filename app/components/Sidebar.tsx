@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  BarChart3, Box, Boxes, CalendarDays, Database, DollarSign, Landmark,
-  Layers, LayoutDashboard, Menu, Package, Printer, ReceiptText, Settings2,
+  BarChart3, Box, Boxes, CalendarDays, Database, DollarSign, Factory, Landmark,
+  Layers, LayoutDashboard, Menu, Package, PackageCheck, Printer, ReceiptText, Settings2,
   ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, TrendingUp, Users, X,
 } from 'lucide-react'
 
@@ -21,6 +21,7 @@ type NavItemData = { href: string; icon: ReactNode; label: string; badge?: strin
 function estaAtivo(pathname: string, href: string) {
   if (href === '/') return pathname === '/'
   if (href === '/financeiro') return pathname === href || pathname === '/financeiro/conciliacao'
+  if (href === '/producao' || href === '/estoque') return pathname === href
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
@@ -71,6 +72,7 @@ function Navegacao({ pathname, perfil, pedidosEmProducao, onNavigate }: Pick<Sid
       { href: '/', icon: <LayoutDashboard size={15} />, label: 'Dashboard' },
       { href: '/orcamentos', icon: <ReceiptText size={15} />, label: 'Novo orçamento' },
       { href: '/producao', icon: <Layers size={15} />, label: 'Produção', badge: pedidosEmProducao ? String(pedidosEmProducao) : undefined },
+      { href: '/producao/estoque', icon: <Factory size={15} />, label: 'Produzir para estoque' },
       { href: '/produtos', icon: <BarChart3 size={15} />, label: 'Produtos e vendas' },
       { href: '/relatorios', icon: <TrendingUp size={15} />, label: 'Relatórios' },
       { href: '/agenda', icon: <CalendarDays size={15} />, label: 'Agenda' },
@@ -81,6 +83,7 @@ function Navegacao({ pathname, perfil, pedidosEmProducao, onNavigate }: Pick<Sid
       { href: '/filamentos', icon: <Database size={15} />, label: 'Filamentos' },
       { href: '/insumos', icon: <Package size={15} />, label: 'Insumos' },
       { href: '/estoque', icon: <Boxes size={15} />, label: 'Movimentações' },
+      { href: '/estoque/produtos-acabados', icon: <PackageCheck size={15} />, label: 'Produtos acabados' },
       { href: '/compras', icon: <ShoppingCart size={15} />, label: 'Compras' },
       { href: '/impressoras', icon: <Printer size={15} />, label: 'Impressoras' },
     ] },

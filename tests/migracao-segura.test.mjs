@@ -37,6 +37,18 @@ function criarBancoAntigo(caminho) {
   db.exec(schema)
   applyMigrations(db)
   db.exec(`
+    DROP TRIGGER trg_ordens_producao_estoque_atualizado_em;
+    DROP TABLE movimentos_produtos_acabados;
+    DROP TABLE reservas_produtos_acabados;
+    DROP TABLE lotes_produtos_acabados;
+    DROP TABLE ordem_producao_estoque_insumos;
+    DROP TABLE ordem_producao_estoque_filamentos;
+    DROP INDEX idx_movimentos_estoque_ordem_interna;
+    ALTER TABLE movimentos_estoque DROP COLUMN ordem_producao_estoque_id;
+    DROP TABLE ordens_producao_estoque;
+    ALTER TABLE pedidos DROP COLUMN custo_produto_acabado_real;
+    ALTER TABLE pedidos DROP COLUMN custo_produto_acabado_estimado;
+    ALTER TABLE pedidos DROP COLUMN atendimento_tipo;
     DROP TABLE extrato_conciliacoes;
     DROP INDEX idx_entregas_operacao;
     ALTER TABLE entregas_pedido DROP COLUMN operacao_id;

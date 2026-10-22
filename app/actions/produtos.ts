@@ -36,7 +36,8 @@ export async function getResumoProdutos(): Promise<ResumoProduto[]> {
       p.valor_total_cobrado, p.data_pedido,
       p.custo_filamento + p.custo_insumos + p.custo_energia +
       p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem +
-      p.frete_pago + p.taxas_comissoes + p.custo_extra_real AS custo_total
+      p.frete_pago + p.taxas_comissoes + p.custo_extra_real +
+      CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END AS custo_total
     FROM pedidos p
     WHERE p.tenant_id = ? AND p.orcamento_status = 'Aprovado'
       AND p.status != 'Cancelado'

@@ -11,13 +11,14 @@ import { getModelosOrcamento } from '@/app/actions/modelos-orcamento'
 import { ModelosOrcamento } from '@/app/components/ModelosOrcamento'
 import { getPendenciasWhatsApp } from '@/app/actions/whatsapp'
 import { PendenciasWhatsApp } from '@/app/components/PendenciasWhatsApp'
+import { getProdutosAcabadosParaVenda } from '@/app/actions/producao-estoque'
 
 export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
   const { cliente } = await searchParams
   const clienteInicialId = Number(cliente)
-  const [clientes, filamentos, insumos, config, pedidos, impressoras, modelos, referenciasPrecos, pendenciasWhatsApp] = await Promise.all([
+  const [clientes, filamentos, insumos, config, pedidos, impressoras, modelos, referenciasPrecos, pendenciasWhatsApp, produtosAcabados] = await Promise.all([
     getClientesLista(),
     getFilamentosLista(),
     getInsumosLista(),
@@ -27,6 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
     getModelosOrcamento(),
     getReferenciasPrecos(),
     getPendenciasWhatsApp(),
+    getProdutosAcabadosParaVenda(),
   ])
 
   return (
@@ -60,6 +62,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         fatorB2BRecorrente={config.fator_b2b_recorrente}
         pedidoMinimoB2B={config.pedido_minimo_b2b}
         referenciasPrecos={referenciasPrecos}
+        produtosAcabados={produtosAcabados}
         clienteInicialId={Number.isSafeInteger(clienteInicialId) && clienteInicialId > 0 ? clienteInicialId : null}
       />
 

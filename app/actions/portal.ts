@@ -176,8 +176,10 @@ export async function responderOrcamentoPortal(token: string, resposta: 'Aprovad
         WHERE id = ? AND tenant_id = ? AND pedido_id = ?
       `).run(resposta, link.id, link.tenant_id, pedidoId)
       db.prepare(`
-        UPDATE pedidos SET orcamento_status = ? WHERE id = ? AND tenant_id = ?
-      `).run(resposta, pedidoId, link.tenant_id)
+        UPDATE pedidos SET orcamento_status = ?,
+          status = CASE WHEN ? = 'Aprovado' AND atendimento_tipo = 'Estoque' THEN 'Acabamento' ELSE status END
+        WHERE id = ? AND tenant_id = ?
+      `).run(resposta, resposta, pedidoId, link.tenant_id)
       if (resposta === 'Aprovado') {
         const total = (db.prepare(`
           SELECT COUNT(*) AS total FROM parcelas_receber WHERE tenant_id = ? AND pedido_id = ?
@@ -191,6 +193,12 @@ export async function responderOrcamentoPortal(token: string, resposta: 'Aprovad
             inserir.run(link.tenant_id, pedidoId, index + 1, valor, adicionarMeses(link.primeiro_vencimento, index))
           })
         }
+      } else {
+        // A recusa pública libera somente o saldo reservado. Não há baixa de
+        // fabricação a desfazer e nenhum usuário interno é atribuído à ação.
+        db.prepare(`UPDATE reservas_produtos_acabados
+          SET liberada_em = COALESCE(liberada_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+          WHERE pedido_id = ? AND tenant_id = ?`).run(pedidoId, link.tenant_id)
       }
       // A resposta e o instante ficam registrados no próprio link. As tabelas de
       // auditoria interna exigem usuario_id e não devem atribuir a ação do cliente
