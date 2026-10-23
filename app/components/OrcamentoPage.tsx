@@ -17,6 +17,7 @@ import {
   TIPOS_PEDIDO,
 } from '@/lib/orcamento.mjs'
 import { calcularValorSinal } from '@/lib/sinal.mjs'
+import { gerarIdentificadorOperacao } from '@/lib/identificador-operacao'
 import {
   DIMENSIONAMENTO_PLATES_AUTOMATICO,
   DIMENSIONAMENTO_PLATES_MANUAL,
@@ -57,6 +58,16 @@ type InsumoFormulario = {
   quantidade: number | ''
   quantidadeReferencia: number | ''
   quantidadeComercialReferencia: number
+}
+
+type ProdutoAcabadoVenda = {
+  produto_id: number
+  produto_versao_id: number
+  nome: string
+  versao: number
+  disponivel: number
+  custo_unitario_referencia: number
+  preco_base_unitario: number
 }
 
 function plateParaEntrada(plate: PlateFormulario): PlateInput {
@@ -108,6 +119,7 @@ export function OrcamentoPage({
   fatorB2BPiloto,
   fatorB2BRecorrente,
   pedidoMinimoB2B,
+  produtosAcabados,
   referenciasPrecos,
   clienteInicialId,
   pedidoInicial,
@@ -127,6 +139,7 @@ export function OrcamentoPage({
   fatorB2BPiloto: number
   fatorB2BRecorrente: number
   pedidoMinimoB2B: number
+  produtosAcabados: ProdutoAcabadoVenda[]
   referenciasPrecos: ReferenciaPreco[]
   clienteInicialId?: number | null
   pedidoInicial?: PedidoParaDuplicar | null
@@ -137,6 +150,8 @@ export function OrcamentoPage({
   
   // Basic info
   const [nomeDaPeca, setNomeDaPeca] = useState(pedidoInicial?.nome_da_peca ?? '')
+  const [atendimentoTipo, setAtendimentoTipo] = useState<'Encomenda' | 'Estoque'>(pedidoInicial?.atendimento_tipo ?? 'Encomenda')
+  const [produtoVersaoEstoqueId, setProdutoVersaoEstoqueId] = useState<number | null>(pedidoInicial?.atendimento_tipo === 'Estoque' ? pedidoInicial.produto_versao_id : null)
   const [clienteId, setClienteId] = useState(
     clienteInicialId && clientes.some((cliente) => cliente.id === clienteInicialId)
       ? String(clienteInicialId)
@@ -214,17 +229,17 @@ export function OrcamentoPage({
 
   // ─── ADD ITEMS ──────────────────────────────────────────────────
   function addMaterial() {
-    setMateriais([...materiais, { id: crypto.randomUUID(), filamentoId: '', pesoGasto: '' }])
+    setMateriais([...materiais, { id: gerarIdentificadorOperacao('material'), filamentoId: '', pesoGasto: '' }])
   }
   function removeMaterial(id: string) {
     setMateriais(materiais.filter(m => m.id !== id))
   }
   function criarPlateBase(): PlateFormulario {
     return {
-      id: crypto.randomUUID(), nome: '', quantidadePecas: quantidade, repeticoes: 1,
+      id: gerarIdentificadorOperacao('plate'), nome: '', quantidadePecas: quantidade, repeticoes: 1,
       tempoMinutos: '', capacidadeComercial: quantidade, parcialQuantidadeComercial: null,
       tempoParcialSegundos: '',
-      filamentos: [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }],
+      filamentos: [{ id: gerarIdentificadorOperacao('plate-filamento'), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }],
     }
   }
   function ativarModoPlates() {
@@ -241,9 +256,9 @@ export function OrcamentoPage({
         nome: nomeDaPeca || 'Plate 1',
         tempoMinutos: tempoHoras === '' ? '' : Math.max(1, Math.round(Number(tempoHoras) * 60)),
         filamentos: materiais.length > 0 ? materiais.map((material) => ({
-          id: crypto.randomUUID(), filamentoId: material.filamentoId,
+          id: gerarIdentificadorOperacao('plate-filamento'), filamentoId: material.filamentoId,
           gramasPorExecucao: material.pesoGasto, gramasParcial: '',
-        })) : [{ id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }],
+        })) : [{ id: gerarIdentificadorOperacao('plate-filamento'), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }],
       }])
     }
     setQuantidadePlatesRevisada(transicao.quantidadeRevisada)
@@ -254,9 +269,9 @@ export function OrcamentoPage({
     if (!original) return
     const copia = {
       ...original,
-      id: crypto.randomUUID(),
+      id: gerarIdentificadorOperacao('plate'),
       nome: `${original.nome || 'Plate'} — cópia`,
-      filamentos: original.filamentos.map((item) => ({ ...item, id: crypto.randomUUID() })),
+      filamentos: original.filamentos.map((item) => ({ ...item, id: gerarIdentificadorOperacao('plate-filamento') })),
     }
     const indice = plates.findIndex((plate) => plate.id === id)
     setPlates([...plates.slice(0, indice + 1), copia, ...plates.slice(indice + 1)])
@@ -283,7 +298,7 @@ export function OrcamentoPage({
   }
   function addInsumo() {
     setInsumos([...insumos, {
-      id: crypto.randomUUID(), insumoId: '', quantidade: '', quantidadeReferencia: '',
+      id: gerarIdentificadorOperacao('insumo'), insumoId: '', quantidade: '', quantidadeReferencia: '',
       quantidadeComercialReferencia: quantidade,
     }])
   }
@@ -366,13 +381,15 @@ export function OrcamentoPage({
       }
     })
   }, [modoCalculo, dimensionamentoPlates, plates, quantidade])
-  const th = modoCalculo === MODO_CALCULO_PLATES
+  const produtoEstoqueSelecionado = produtosAcabados.find(item => item.produto_versao_id === produtoVersaoEstoqueId)
+  const atendimentoEstoque = atendimentoTipo === 'Estoque'
+  const th = atendimentoEstoque ? 0 : modoCalculo === MODO_CALCULO_PLATES
     ? (agregacaoPlates?.tempoTotalHoras ?? 0)
     : Number(tempoHoras) || 0
-  const materiaisCalculados = useMemo(() => modoCalculo === MODO_CALCULO_PLATES
+  const materiaisCalculados = useMemo(() => atendimentoEstoque ? [] : modoCalculo === MODO_CALCULO_PLATES
     ? (agregacaoPlates?.materiais ?? [])
     : materiais.map((material) => ({ filamento_id: Number(material.filamentoId), peso_gasto_gramas: Number(material.pesoGasto) })),
-  [modoCalculo, agregacaoPlates, materiais])
+  [atendimentoEstoque, modoCalculo, agregacaoPlates, materiais])
   function ativarModoTradicional() {
     if (modoCalculo === MODO_CALCULO_TRADICIONAL) return
     if (!agregacaoPlates) {
@@ -393,8 +410,8 @@ export function OrcamentoPage({
     setModoCalculo(MODO_CALCULO_TRADICIONAL)
   }
   const impressoraSelecionada = impressoras.find(item => item.id === Number(impressoraId))
-  const potenciaAplicada = impressoraSelecionada?.potencia_w ?? potenciaW
-  const custoHoraAplicado = impressoraSelecionada && impressoraSelecionada.custo_hora > 0
+  const potenciaAplicada = atendimentoEstoque ? 0 : impressoraSelecionada?.potencia_w ?? potenciaW
+  const custoHoraAplicado = atendimentoEstoque ? 0 : impressoraSelecionada && impressoraSelecionada.custo_hora > 0
     ? impressoraSelecionada.custo_hora
     : custoHoraMaquina
   const calculo = useMemo(() => calcularPrecoPlanilha({
@@ -412,7 +429,7 @@ export function OrcamentoPage({
         custoPorGrama: filamento ? filamento.preco_rolo / filamento.peso_rolo_gramas : 0,
       }
     }),
-    custoInsumos: insumos.reduce((acc, ins) => {
+    custoInsumos: atendimentoEstoque ? (produtoEstoqueSelecionado?.custo_unitario_referencia ?? 0) * quantidade : insumos.reduce((acc, ins) => {
       if (!ins.insumoId || !ins.quantidade) return acc
       const item = insumosList.find(i => i.id === Number(ins.insumoId))
       return item ? acc + Number(ins.quantidade) * item.custo_unitario : acc
@@ -431,6 +448,7 @@ export function OrcamentoPage({
     pedidoMinimoB2B,
   }), [
     tipoPedido, quantidade, th, potenciaAplicada, tarifaEnergia, custoHoraAplicado,
+    atendimentoEstoque, produtoEstoqueSelecionado,
     materiaisCalculados, filamentos, insumos, insumosList, materiaisAvulsosPorUnidade,
     horasTrabalhoAtivo, valorHoraTrabalho, custoEmbalagem, fretePago,
     setupProjeto, margemPerdas, taxaVenda, fatorB2CPersonalizado,
@@ -438,7 +456,7 @@ export function OrcamentoPage({
   ])
   const custoFilamento = calculo.filamentoSemPerdas
   const reservaMaquina = calculo.reservaMaquina
-  const custoInsumos = arredondarMoeda(insumos.reduce((acc, ins) => {
+  const custoInsumos = arredondarMoeda(atendimentoEstoque ? (produtoEstoqueSelecionado?.custo_unitario_referencia ?? 0) * quantidade : insumos.reduce((acc, ins) => {
     if (!ins.insumoId || !ins.quantidade) return acc
     const item = insumosList.find(i => i.id === Number(ins.insumoId))
     if (!item) return acc
@@ -483,19 +501,23 @@ export function OrcamentoPage({
     const erroParcialReal = dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO
       ? estadosParciaisReais.flatMap((estado) => estado.erros)[0]
       : null
-    if (modoCalculo === MODO_CALCULO_PLATES && erroParcialReal) {
+    if (!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && erroParcialReal) {
       setErrorMsg(erroParcialReal)
       return
     }
-    if (!nomeDaPeca || !clienteId || th <= 0) {
+    if (!nomeDaPeca || !clienteId || (!atendimentoEstoque && th <= 0)) {
       setErrorMsg('Preencha os dados básicos corretamente.')
       return
     }
-    if (modoCalculo === MODO_CALCULO_PLATES && !agregacaoPlates) {
+    if (atendimentoEstoque && (!produtoEstoqueSelecionado || quantidade > produtoEstoqueSelecionado.disponivel)) {
+      setErrorMsg('Selecione um produto acabado com saldo suficiente para a quantidade informada.')
+      return
+    }
+    if (!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && !agregacaoPlates) {
       setErrorMsg('Revise nomes, quantidades, repetições, tempos e filamentos das plates.')
       return
     }
-    if (modoCalculo === MODO_CALCULO_PLATES &&
+    if (!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES &&
         dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL &&
         quantidadePlatesRevisada !== quantidade) {
       setErrorMsg('Revise as plates depois de alterar a quantidade comercial.')
@@ -518,13 +540,13 @@ export function OrcamentoPage({
       return
     }
 
-    const payloadMateriais = (modoCalculo === MODO_CALCULO_PLATES ? materiaisCalculados.map((item) => ({
+    const payloadMateriais = atendimentoEstoque ? [] : (modoCalculo === MODO_CALCULO_PLATES ? materiaisCalculados.map((item) => ({
       filamentoId: String(item.filamento_id), pesoGasto: item.peso_gasto_gramas,
     })) : materiais)
       .filter(m => m.filamentoId && m.pesoGasto)
       .map(m => ({ filamento_id: Number(m.filamentoId), peso_gasto_gramas: Number(m.pesoGasto) }))
 
-    const payloadInsumos = insumos
+    const payloadInsumos = (atendimentoEstoque ? [] : insumos)
       .filter(i => i.insumoId && i.quantidade)
       .map(i => ({ insumo_id: Number(i.insumoId), quantidade: Number(i.quantidade) }))
 
@@ -558,6 +580,8 @@ export function OrcamentoPage({
         plates_dimensionamento: dimensionamentoPlates,
         plates: modoCalculo === MODO_CALCULO_PLATES ? plates.map(plateParaEntrada) : [],
         plates_quantidade_revisada: modoCalculo === MODO_CALCULO_PLATES ? quantidadePlatesRevisada ?? undefined : undefined,
+        atendimento_tipo: atendimentoTipo,
+        produto_versao_estoque_id: atendimentoEstoque ? produtoVersaoEstoqueId ?? undefined : undefined,
       }
       const res = pedidoEdicaoId
         ? await atualizarOrcamento(pedidoEdicaoId, payload)
@@ -600,6 +624,25 @@ export function OrcamentoPage({
         <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
           <h2 className="mb-5 text-sm font-semibold text-white">Dados do Pedido</h2>
           <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
+            <button type="button" onClick={() => setAtendimentoTipo('Encomenda')} aria-pressed={atendimentoTipo === 'Encomenda'} className={`rounded-lg px-3 py-2 text-xs font-medium ${atendimentoTipo === 'Encomenda' ? 'bg-white/10 text-white' : 'text-white/45'}`}>Produzir sob encomenda</button>
+            <button type="button" disabled={produtosAcabados.length === 0} onClick={() => {
+              const primeiro = produtosAcabados[0]
+              setAtendimentoTipo('Estoque')
+              setModoCalculo(MODO_CALCULO_TRADICIONAL)
+              if (primeiro && !produtoVersaoEstoqueId) {
+                setProdutoVersaoEstoqueId(primeiro.produto_versao_id)
+                setNomeDaPeca(primeiro.nome)
+                setPrecoUnitarioVenda(primeiro.preco_base_unitario || '')
+              }
+            }} aria-pressed={atendimentoTipo === 'Estoque'} className={`rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-35 ${atendimentoTipo === 'Estoque' ? 'bg-emerald-500/15 text-emerald-300' : 'text-white/45'}`}>Atender com estoque</button>
+          </div>
+          {atendimentoEstoque && <label className="mb-5 flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Produto acabado disponível</span><select required value={produtoVersaoEstoqueId ?? ''} onChange={event => {
+            const id = Number(event.target.value)
+            const item = produtosAcabados.find(produto => produto.produto_versao_id === id)
+            setProdutoVersaoEstoqueId(id)
+            if (item) { setNomeDaPeca(item.nome); setPrecoUnitarioVenda(item.preco_base_unitario || '') }
+          }} className="h-11 rounded-lg border border-emerald-400/25 bg-[#101114] px-3 text-sm"><option value="">Selecione...</option>{produtosAcabados.map(item => <option key={item.produto_versao_id} value={item.produto_versao_id}>{item.nome} · v{item.versao} · {item.disponivel} disponível(is)</option>)}</select><span className="text-[10px] text-white/35">A reserva é feita ao salvar. A fabricação já realizada não será consumida novamente.</span></label>}
+          {!atendimentoEstoque && <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
             <button type="button" onClick={ativarModoTradicional} aria-pressed={modoCalculo === MODO_CALCULO_TRADICIONAL}
               className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_TRADICIONAL ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
               {modoCalculo === MODO_CALCULO_PLATES ? 'Converter para tradicional' : 'Cálculo tradicional'}
@@ -608,7 +651,7 @@ export function OrcamentoPage({
               className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_PLATES ? 'bg-[#d8f45a]/15 text-[#d8f45a]' : 'text-white/45 hover:text-white/70'}`}>
               Cálculo por plates
             </button>
-          </div>
+          </div>}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="flex flex-col gap-2 sm:col-span-2">
               <span className="text-xs font-medium text-white/55">Nome da peça / Projeto</span>
@@ -628,7 +671,7 @@ export function OrcamentoPage({
               <input required type="number" step="1" min="1" max="100000" value={quantidade} onChange={e => alterarQuantidade(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
             </label>
-            {modoCalculo === MODO_CALCULO_TRADICIONAL && <label className="flex flex-col gap-2">
+            {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-white/55">Tempo de Impressão (Horas)</span>
               <input required type="number" step="0.1" min="0" value={tempoHoras} onChange={e => setTempoHoras(Number(e.target.value))}
                 className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
@@ -654,7 +697,7 @@ export function OrcamentoPage({
         </section>
 
         {/* 2. Filamentos */}
-        {modoCalculo === MODO_CALCULO_TRADICIONAL && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white">Materiais e Cores</h2>
           </div>
@@ -687,7 +730,7 @@ export function OrcamentoPage({
           </div>
         </section>}
 
-        {modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-4 shadow-2xl sm:p-6">
+        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-4 shadow-2xl sm:p-6">
           <div className="mb-5">
             <h2 className="text-sm font-semibold text-white">Composição por plates</h2>
             <p className="mt-1 text-xs leading-5 text-white/40">Peças físicas e unidades comerciais são dados separados. Escolha se as execuções serão informadas manualmente ou dimensionadas pela quantidade.</p>
@@ -749,13 +792,13 @@ export function OrcamentoPage({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="text-[11px] font-medium uppercase text-white/35">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value }, true)} placeholder="Ex.: Potes" className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Peças físicas na plate cheia</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value }, true)} placeholder="Ex.: Potes" className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Peças físicas na plate cheia</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
                   {dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO
-                    ? <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Kits comerciais atendidos</span><input type="number" min="1" step="1" value={plate.capacidadeComercial} onChange={(e) => atualizarPlate({ capacidadeComercial: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-[#d8f45a]/25 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]" /></label>
-                    : <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>}
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Horas / plate cheia</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="text-[11px] font-medium uppercase text-white/35">Minutos / plate cheia</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                    ? <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Kits comerciais atendidos</span><input type="number" min="1" step="1" value={plate.capacidadeComercial} onChange={(e) => atualizarPlate({ capacidadeComercial: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-[#d8f45a]/25 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]" /></label>
+                    : <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>}
+                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Horas / plate cheia</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Minutos / plate cheia</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
                 </div>
 
                 {execucaoAutomatica && <div className="mt-4 rounded-lg border border-[#d8f45a]/15 bg-[#d8f45a]/[0.04] p-3 text-xs text-white/55">
@@ -770,7 +813,7 @@ export function OrcamentoPage({
                     <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/30">g / plate cheia</span><input type="number" min="0.01" step="0.01" value={material.gramasPorExecucao} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasPorExecucao: e.target.value === '' ? '' : Number(e.target.value) } : item) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none" /></label>
                     <button type="button" onClick={() => atualizarPlate({ filamentos: plate.filamentos.filter((item) => item.id !== material.id) })} aria-label="Remover filamento da plate" className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-white/35 hover:text-red-400"><Trash2 size={14} /></button>
                   </div>)}
-                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: crypto.randomUUID(), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }] }, true)} className="flex items-center gap-2 text-xs text-[#d8f45a]/75 hover:text-[#d8f45a]"><Plus size={13} /> Outro filamento nesta plate</button>
+                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: gerarIdentificadorOperacao('plate-filamento'), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }] }, true)} className="flex items-center gap-2 text-xs text-[#d8f45a]/75 hover:text-[#d8f45a]"><Plus size={13} /> Outro filamento nesta plate</button>
                 </div>
 
                 {exibirParcialAutomatica && <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4">

@@ -66,7 +66,8 @@ export async function getRelatorioGerencial(): Promise<RelatorioGerencial> {
       COUNT(*) AS pedidos, COALESCE(SUM(valor_total_cobrado), 0) AS receita,
       COALESCE(SUM(
         custo_filamento + custo_insumos + custo_energia + valor_reserva_maquina +
-        taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real
+        taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real +
+        CASE WHEN atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(custo_produto_acabado_real, 0), custo_produto_acabado_estimado) ELSE 0 END
       ), 0) AS custosPedidos
     FROM pedidos
     WHERE tenant_id = ? AND orcamento_status = 'Aprovado' AND status = 'Finalizado'

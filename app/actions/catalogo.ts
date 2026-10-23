@@ -58,6 +58,8 @@ export interface ProdutoCatalogo {
   preco_medio_vendido: number
   tempo_real_medio_unidade: number
   pedidos_com_falha: number
+  estoque_acabado_disponivel: number
+  estoque_acabado_reservado: number
   itens: ItemFichaTecnica[]
   checklist: Array<{ id: number; etapa: 'Produção' | 'Qualidade'; texto: string; ordem: number }>
   versoes: ProdutoVersaoHistorico[]
@@ -113,6 +115,18 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
         NULLIF(SUM(CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' AND p.tempo_real_horas IS NOT NULL THEN p.quantidade ELSE 0 END), 0)
       , 2), 0) AS tempo_real_medio_unidade,
       COUNT(DISTINCT CASE WHEN p.orcamento_status = 'Aprovado' AND p.status != 'Cancelado' AND p.falhas_impressao > 0 THEN p.id END) AS pedidos_com_falha
+      , COALESCE((SELECT SUM(saldo.disponivel) FROM (
+          SELECT l.id,
+            COALESCE(SUM(CASE m.tipo WHEN 'Entrada' THEN m.quantidade WHEN 'Devolução' THEN m.quantidade WHEN 'Ajuste entrada' THEN m.quantidade
+              WHEN 'Saída' THEN -m.quantidade WHEN 'Perda' THEN -m.quantidade WHEN 'Ajuste saída' THEN -m.quantidade ELSE 0 END), 0) -
+            COALESCE((SELECT SUM(r.quantidade_reservada - r.quantidade_saida) FROM reservas_produtos_acabados r
+              WHERE r.lote_id = l.id AND r.tenant_id = l.tenant_id AND r.liberada_em IS NULL), 0) AS disponivel
+          FROM lotes_produtos_acabados l LEFT JOIN movimentos_produtos_acabados m ON m.lote_id = l.id
+          WHERE l.produto_id = pc.id AND l.tenant_id = pc.tenant_id GROUP BY l.id
+        ) saldo), 0) AS estoque_acabado_disponivel
+      , COALESCE((SELECT SUM(r.quantidade_reservada - r.quantidade_saida)
+          FROM reservas_produtos_acabados r JOIN lotes_produtos_acabados l ON l.id = r.lote_id
+          WHERE l.produto_id = pc.id AND r.tenant_id = pc.tenant_id AND r.liberada_em IS NULL), 0) AS estoque_acabado_reservado
     FROM produtos_catalogo pc
     LEFT JOIN produto_versoes pv ON pv.produto_id = pc.id AND pv.ativa = 1
     LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id AND imp.tenant_id = pc.tenant_id

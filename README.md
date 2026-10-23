@@ -8,7 +8,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Busca global por pedido, cliente, produto, filamento e insumo com `Ctrl+K`.
 - Orçamentos com validade, PDF, aprovação e conversão para produção.
 - Orçamentos com cálculo tradicional ou composição técnica por várias plates do fatiador.
-- Produção em Kanban, planejamento por impressora e registro de falhas.
+- Produção em Kanban, planejamento por impressora, produção antecipada e estoque de produtos acabados.
 - Prioridade e ordem manual da fila, com distribuição automática dos pedidos sem impressora.
 - Planejamento que respeita bloqueios de máquina e intervalos de preparação entre impressões.
 - Custos estimados e consumo real de filamentos e insumos.
@@ -28,6 +28,8 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.
 - Restauração validada de backup e trilha de auditoria.
 - Importação validada da planilha Salge 3D, com prévia, backup e reconciliação de saldos.
+
+O fluxo de fabricação antecipada, custo real, reservas e venda de produtos prontos está documentado em [docs/producao-estoque.md](docs/producao-estoque.md).
 - Controle fiscal do MEI com vendas, serviços, receitas externas, DAS, relatório mensal e DASN.
 - WhatsApp Cloud API opcional com templates aprovados, webhook assinado e estados de entrega/leitura.
 - Backup externo opcional para pasta sincronizada, com conferência SHA-256.

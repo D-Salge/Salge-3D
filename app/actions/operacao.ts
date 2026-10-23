@@ -153,6 +153,7 @@ export interface PedidoDetalhes {
   cliente_email: string | null
   status: string
   orcamento_status: string
+  atendimento_tipo: 'Encomenda' | 'Estoque'
   data_pedido: string
   data_entrega: string | null
   validade_orcamento: string | null
@@ -287,7 +288,8 @@ export async function getIndicadoresQualidadeImpressoras(): Promise<IndicadoresQ
       COALESCE(SUM(p.custo_extra_real), 0) AS custo_extra,
       COALESCE(SUM(
         p.custo_filamento + p.custo_insumos + p.custo_energia + p.valor_reserva_maquina +
-        p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real
+        p.taxa_operacional + p.custo_embalagem + p.frete_pago + p.taxas_comissoes + p.custo_extra_real +
+        CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END
       ), 0) AS custo_producao,
       COALESCE(SUM(p.valor_total_cobrado), 0) AS faturamento
     FROM impressoras imp
@@ -499,6 +501,9 @@ export async function atualizarStatusOrcamento(
   novoStatus: string,
 ): Promise<{ success: boolean; message: string }> {
   try {
+    const sessao = await exigirPerfil(['admin', 'operador'])
+    const tenantId = sessao.tenantId
+    const usuarioId = sessao.usuarioId
     const transicoes: Record<string, string[]> = {
       Rascunho: ['Enviado', 'Aprovado', 'Recusado'],
       Enviado: ['Aprovado', 'Recusado', 'Expirado'],
@@ -515,7 +520,7 @@ export async function atualizarStatusOrcamento(
         SELECT orcamento_status, valor_total_cobrado, parcelas,
           COALESCE(vencimento_em, substr(data_pedido, 1, 10)) AS primeiro_vencimento
         FROM pedidos WHERE id = ? AND tenant_id = ?
-      `).get(pedidoId, TENANT_ID) as {
+      `).get(pedidoId, tenantId) as {
         orcamento_status: string
         valor_total_cobrado: number
         parcelas: number
@@ -528,16 +533,17 @@ export async function atualizarStatusOrcamento(
       db.prepare(`
         UPDATE pedidos
         SET orcamento_status = ?,
+            status = CASE WHEN ? = 'Aprovado' AND atendimento_tipo = 'Estoque' THEN 'Acabamento' ELSE status END,
             validade_orcamento = CASE
               WHEN ? = 'Expirado' AND ? = 'Enviado' THEN date('now', '+7 days')
               ELSE validade_orcamento
             END
         WHERE id = ? AND tenant_id = ?
-      `).run(novoStatus, atual.orcamento_status, novoStatus, pedidoId, TENANT_ID)
+      `).run(novoStatus, novoStatus, atual.orcamento_status, novoStatus, pedidoId, tenantId)
       db.prepare(`
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Status do orçamento', ?)
-      `).run(TENANT_ID, pedidoId, USUARIO_ID, `${atual.orcamento_status} → ${novoStatus}`)
+      `).run(tenantId, pedidoId, usuarioId, `${atual.orcamento_status} → ${novoStatus}`)
 
       if (novoStatus === 'Aprovado') {
         const total = db.prepare(
@@ -550,7 +556,7 @@ export async function atualizarStatusOrcamento(
           `)
           dividirEmParcelas(atual.valor_total_cobrado, atual.parcelas).forEach((valor, index) => {
             inserir.run(
-              TENANT_ID,
+              tenantId,
               pedidoId,
               index + 1,
               valor,
@@ -559,21 +565,30 @@ export async function atualizarStatusOrcamento(
           })
         }
       }
+      if (novoStatus === 'Recusado') {
+        db.prepare(`UPDATE reservas_produtos_acabados
+          SET liberada_em = COALESCE(liberada_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+          WHERE pedido_id = ? AND tenant_id = ?`).run(pedidoId, tenantId)
+      }
 
       registrarAuditoria(db, {
+        tenantId,
+        usuarioId,
         entidade: 'Pedido',
         entidadeId: pedidoId,
         acao: 'STATUS_ORCAMENTO',
         descricao: `${atual.orcamento_status} → ${novoStatus}`,
       })
     })
-    atualizar()
+    atualizar.immediate()
     revalidatePath('/')
     revalidatePath('/orcamentos')
     revalidatePath('/producao')
     revalidatePath(`/pedidos/${pedidoId}`)
     return { success: true, message: `Orçamento marcado como ${novoStatus}.` }
   } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') return { success: false, message: 'Faça login para alterar o orçamento.' }
+    if (error instanceof Error && error.message === 'FORBIDDEN') return { success: false, message: 'Seu perfil não pode alterar o orçamento.' }
     if (error instanceof Error && error.message === 'NOT_FOUND') {
       return { success: false, message: 'Orçamento não encontrado.' }
     }
@@ -607,7 +622,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
       (
         p.custo_filamento + p.custo_insumos + p.custo_energia +
         p.valor_reserva_maquina + p.taxa_operacional + p.custo_embalagem +
-        p.frete_pago + p.taxas_comissoes
+        p.frete_pago + p.taxas_comissoes +
+        CASE WHEN p.atendimento_tipo = 'Estoque' THEN p.custo_produto_acabado_estimado ELSE 0 END
       ) AS custo_estimado,
       (
         COALESCE((SELECT SUM(COALESCE(pf.consumo_real_gramas, pf.peso_gasto_gramas)
@@ -628,7 +644,8 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
         ) THEN COALESCE((
           SELECT SUM(mc.taxa_valor) FROM mercado_pago_cobrancas mc
           WHERE mc.pedido_id = p.id AND mc.status IN ('Aprovado', 'Reembolsado')
-        ), 0) ELSE p.taxas_comissoes END + p.custo_extra_real
+        ), 0) ELSE p.taxas_comissoes END + p.custo_extra_real +
+        CASE WHEN p.atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(p.custo_produto_acabado_real, 0), p.custo_produto_acabado_estimado) ELSE 0 END
       ) AS custo_real
     FROM pedidos p
     JOIN clientes c ON c.id = p.cliente_id
