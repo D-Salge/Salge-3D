@@ -92,3 +92,17 @@ test('distribuição automática respeita impressora preferida e diâmetro do bi
   })
   assert.equal(plano.semImpressora[0].impressora_sugerida_id, 1)
 })
+
+test('ignora pedidos atendidos por estoque de produtos acabados na fila de impressão', () => {
+  const plano = planejarFilaProducao({
+    impressoras,
+    agora: '2026-09-26T00:00:00.000Z',
+    pedidos: [
+      { id: 1, impressora_id: 1, status: 'Fila', atendimento_tipo: 'Estoque', tempo_impressao_horas: 0.000001, data_entrega: '2026-09-27', data_pedido: '2026-09-25' },
+      { id: 2, impressora_id: null, status: 'Fila', atendimento_tipo: 'Estoque', tempo_impressao_horas: 0.000001, data_entrega: '2026-09-27', data_pedido: '2026-09-25' },
+      { id: 3, impressora_id: 1, status: 'Fila', atendimento_tipo: 'Encomenda', tempo_impressao_horas: 2, data_entrega: '2026-09-27', data_pedido: '2026-09-25' },
+    ],
+  })
+  assert.deepEqual(plano.impressoras[0].pedidos.map((pedido) => pedido.id), [3])
+  assert.equal(plano.semImpressora.length, 0)
+})

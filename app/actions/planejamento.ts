@@ -85,6 +85,7 @@ function calcularPlanejamento(): PlanejamentoProducao {
     LEFT JOIN produto_versoes pv ON pv.id = p.produto_versao_id
     WHERE p.tenant_id = ? AND p.orcamento_status = 'Aprovado'
       AND p.status IN ('Fila', 'Imprimindo')
+      AND COALESCE(p.atendimento_tipo, 'Encomenda') = 'Encomenda'
     ORDER BY p.data_pedido, p.id
   `).all(TENANT_ID)
   const impressorasComBloqueios = impressoras.map((impressora) => ({

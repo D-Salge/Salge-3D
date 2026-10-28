@@ -632,9 +632,9 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
           WHERE pf.pedido_id = p.id), 0) +
         COALESCE((SELECT SUM(COALESCE(pi.consumo_real, pi.quantidade) * pi.custo_unitario_snap)
           FROM pedido_insumos pi WHERE pi.pedido_id = p.id), 0) +
-        COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) *
+        (CASE WHEN p.atendimento_tipo = 'Estoque' THEN 0 ELSE COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) END) *
           COALESCE(imp.potencia_w, t.potencia_impressora_w) / 1000 * t.tarifa_energia_kwh +
-        COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) *
+        (CASE WHEN p.atendimento_tipo = 'Estoque' THEN 0 ELSE COALESCE(p.tempo_real_horas, p.tempo_impressao_horas) END) *
           CASE WHEN imp.custo_hora > 0 THEN imp.custo_hora ELSE t.custo_hora_maquina END +
         p.taxa_operacional + p.custo_embalagem + p.frete_pago +
         CASE WHEN EXISTS (
@@ -766,14 +766,15 @@ export async function getPedidoDetalhes(pedidoId: number): Promise<PedidoDetalhe
   const filamentoReal = materiais.reduce((total, item) => total + (item.consumo_real_gramas ?? item.peso_gasto_gramas), 0)
   const custoMateriaisPrevisto = [...materiais, ...insumos].reduce((total, item) => total + item.custo_calculado, 0)
   const custoMateriaisReal = [...materiais, ...insumos].reduce((total, item) => total + item.custo_real_calculado, 0)
-  const camposTotais = 1 + materiais.length + insumos.length
-  const camposReais = (pedido.tempo_real_horas !== null ? 1 : 0) +
+  const atendimentoEstoque = pedido.atendimento_tipo === 'Estoque'
+  const camposTotais = (atendimentoEstoque ? 0 : 1) + materiais.length + insumos.length
+  const camposReais = (!atendimentoEstoque && pedido.tempo_real_horas !== null ? 1 : 0) +
     materiais.filter((item) => item.consumo_real_gramas !== null).length +
     insumos.filter((item) => item.consumo_real !== null).length
   const desvios = calcularDesviosOperacao({
     custoPrevisto: pedido.custo_estimado, custoReal: pedido.custo_real,
-    horasPrevistas: pedido.tempo_impressao_horas,
-    horasReais: pedido.tempo_real_horas ?? pedido.tempo_impressao_horas,
+    horasPrevistas: atendimentoEstoque ? 0 : pedido.tempo_impressao_horas,
+    horasReais: atendimentoEstoque ? 0 : (pedido.tempo_real_horas ?? pedido.tempo_impressao_horas),
     filamentoPrevisto, filamentoReal, custoMateriaisPrevisto, custoMateriaisReal,
     camposReais, camposTotais,
   }) as PedidoDetalhes['desvios']

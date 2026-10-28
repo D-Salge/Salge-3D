@@ -11,6 +11,7 @@ import db from '@/lib/db'
 import { exigirPerfil } from '@/lib/session'
 import { finalizarPedidoNoBanco, mensagemErroFechamento } from '@/lib/fechamento-pedido.mjs'
 import { iniciarProducaoPedidoNoBanco, mensagemErroInicioProducao } from '@/lib/inicio-producao.mjs'
+import { calcularSugestaoReposicao, CONSULTA_ITENS_REPOSICAO } from '@/lib/estoque.mjs'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { liberarOuDevolverPedidoEstoqueNoBanco, reservarProdutosAcabadosParaPedidoNoBanco } from '@/lib/producao-estoque.mjs'
 import {
@@ -270,7 +271,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
          COALESCE(SUM(valor_total_cobrado), 0) AS faturamento_bruto,
          COALESCE(SUM(
            custo_filamento + custo_insumos + custo_energia +
-           valor_reserva_maquina + taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes
+           valor_reserva_maquina + taxa_operacional + custo_embalagem + frete_pago + taxas_comissoes + custo_extra_real +
+           CASE WHEN atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(custo_produto_acabado_real, 0), custo_produto_acabado_estimado) ELSE 0 END
          ), 0) AS custos_totais
        FROM pedidos
        WHERE tenant_id = ?
@@ -338,21 +340,21 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           CASE WHEN atendimento_tipo = 'Estoque' THEN COALESCE(NULLIF(custo_produto_acabado_real, 0), custo_produto_acabado_estimado) ELSE 0 END
         )) / valor_total_cobrado) * 100 END), 0) AS margem_media
     FROM pedidos
-    WHERE tenant_id = ? AND status = 'Finalizado'
+    WHERE tenant_id = ? AND status = 'Finalizado' AND orcamento_status = 'Aprovado'
       AND strftime('%Y-%m', COALESCE(data_conclusao, data_pedido)) = strftime('%Y-%m', 'now')
   `).get(TENANT_ID) as { lucro_liquido: number; margem_media: number }
 
   const alertasRow = db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM filamentos WHERE tenant_id = ? AND ativo = 1
-        AND COALESCE(estoque_gramas, peso_rolo_gramas) <= 150) +
+        AND estoque_minimo_gramas > 0 AND COALESCE(estoque_gramas, peso_rolo_gramas) <= estoque_minimo_gramas) +
       (SELECT COUNT(*) FROM insumos WHERE tenant_id = ? AND ativo = 1
         AND estoque_minimo > 0 AND estoque_atual <= estoque_minimo) AS estoque_baixo,
       (SELECT COUNT(*) FROM pedidos WHERE tenant_id = ?
         AND orcamento_status IN ('Rascunho', 'Enviado')) AS orcamentos_pendentes,
-      (SELECT COUNT(*) FROM pedidos WHERE tenant_id = ? AND status != 'Finalizado'
+      (SELECT COUNT(*) FROM pedidos WHERE tenant_id = ? AND orcamento_status = 'Aprovado' AND status != 'Finalizado'
         AND status != 'Cancelado' AND data_entrega IS NOT NULL
-        AND date(data_entrega) < date('now')) AS pedidos_atrasados
+        AND date(data_entrega) < date('now', 'localtime')) AS pedidos_atrasados
   `).get(TENANT_ID, TENANT_ID, TENANT_ID, TENANT_ID) as {
     estoque_baixo: number
     orcamentos_pendentes: number
@@ -373,7 +375,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     ticketMedio: financeiroMes.pedidos_finalizados > 0
       ? financeiroMes.faturamento_bruto / financeiroMes.pedidos_finalizados
       : 0,
-    estoqueBaixo: alertasRow.estoque_baixo,
+    estoqueBaixo: (db.prepare(CONSULTA_ITENS_REPOSICAO).all(TENANT_ID, TENANT_ID) as Array<Record<string, unknown>>)
+      .filter((item) => calcularSugestaoReposicao(item).quantidadeRepor > 0).length,
     orcamentosPendentes: alertasRow.orcamentos_pendentes,
     pedidosAtrasados: alertasRow.pedidos_atrasados,
   }

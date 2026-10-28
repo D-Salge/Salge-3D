@@ -17,13 +17,17 @@ export function ProducaoEstoquePage({ dados }: { dados: ProducaoEstoqueDados }) 
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [mensagem, setMensagem] = useState('')
-  const [produtoVersaoId, setProdutoVersaoId] = useState(dados.produtos[0]?.versao_id ?? 0)
+  const produtoInicial = dados.produtos[0]
+  const placaInicial = produtoInicial?.unidades_por_placa ?? 24
+  const [produtoVersaoId, setProdutoVersaoId] = useState(produtoInicial?.versao_id ?? 0)
   const produto = useMemo(() => dados.produtos.find(item => item.versao_id === produtoVersaoId), [dados.produtos, produtoVersaoId])
-  const [quantidade, setQuantidade] = useState(24)
-  const [quantidadePorPlate, setQuantidadePorPlate] = useState(24)
-  const [tempoExecucao, setTempoExecucao] = useState(0)
+  const [quantidade, setQuantidade] = useState(placaInicial)
+  const [quantidadePorPlate, setQuantidadePorPlate] = useState(placaInicial)
+  const [tempoExecucao, setTempoExecucao] = useState(
+    produtoInicial ? Number((produtoInicial.tempo_impressao_horas_unidade * placaInicial).toFixed(2)) : 0
+  )
   const [identificacao, setIdentificacao] = useState(`FAB-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}`)
-  const [impressoraId, setImpressoraId] = useState<number | null>(null)
+  const [impressoraId, setImpressoraId] = useState<number | null>(produtoInicial?.impressora_preferida_id ?? null)
   const [dataPrevista, setDataPrevista] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [arquivos, setArquivos] = useState('')
@@ -45,7 +49,7 @@ export function ProducaoEstoquePage({ dados }: { dados: ProducaoEstoqueDados }) 
     setProdutoVersaoId(valor)
     if (selecionado) {
       setQuantidadePorPlate(selecionado.unidades_por_placa ?? quantidade)
-      setTempoExecucao(selecionado.tempo_impressao_horas_unidade * (selecionado.unidades_por_placa ?? quantidade))
+      setTempoExecucao(Number((selecionado.tempo_impressao_horas_unidade * (selecionado.unidades_por_placa ?? quantidade)).toFixed(2)))
       setImpressoraId(selecionado.impressora_preferida_id)
     }
   }
