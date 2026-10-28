@@ -32,6 +32,7 @@ import {
   estadoParcialRealFormulario,
   invalidarParciaisIncompativeis,
   resolverAtivacaoModoPlates,
+  resolverRetornoModoTradicional,
   resolverTrocaParaDimensionamentoManual,
 } from '@/lib/orcamento-formulario.mjs'
 
@@ -391,21 +392,24 @@ export function OrcamentoPage({
     : materiais.map((material) => ({ filamento_id: Number(material.filamentoId), peso_gasto_gramas: Number(material.pesoGasto) })),
   [atendimentoEstoque, modoCalculo, agregacaoPlates, materiais])
   function ativarModoTradicional() {
-    if (modoCalculo === MODO_CALCULO_TRADICIONAL) return
-    if (!agregacaoPlates) {
-      setErrorMsg('Revise as plates antes de converter para o cálculo tradicional.')
-      return
+    let transicao = resolverRetornoModoTradicional({ modoAtual: modoCalculo, agregacao: agregacaoPlates, plates })
+    if (transicao.solicitarConfirmacao) {
+      const confirmar = window.confirm('As plates estão incompletas e não podem ser convertidas. Voltar ao cálculo tradicional com os valores anteriores? O rascunho das plates será preservado para continuar depois.')
+      transicao = resolverRetornoModoTradicional({ modoAtual: modoCalculo, agregacao: agregacaoPlates, plates, confirmar })
     }
-    const conversao = converterPlatesParaTradicional({
-      quantidade,
-      agregacao: agregacaoPlates,
-      assinaturaAnterior: assinaturaUltimaConversao,
-      tempoHoras,
-      materiais,
-    })
-    setTempoHoras(conversao.tempoHoras)
-    setMateriais(conversao.materiais)
-    setAssinaturaUltimaConversao(conversao.assinatura)
+    if (!transicao.alterarModo) return
+    if (transicao.converter) {
+      const conversao = converterPlatesParaTradicional({
+        quantidade,
+        agregacao: agregacaoPlates,
+        assinaturaAnterior: assinaturaUltimaConversao,
+        tempoHoras,
+        materiais,
+      })
+      setTempoHoras(conversao.tempoHoras)
+      setMateriais(conversao.materiais)
+      setAssinaturaUltimaConversao(conversao.assinatura)
+    }
     setErrorMsg('')
     setModoCalculo(MODO_CALCULO_TRADICIONAL)
   }
@@ -625,7 +629,7 @@ export function OrcamentoPage({
           <h2 className="mb-5 text-sm font-semibold text-white">Dados do Pedido</h2>
           <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
             <button type="button" onClick={() => setAtendimentoTipo('Encomenda')} aria-pressed={atendimentoTipo === 'Encomenda'} className={`rounded-lg px-3 py-2 text-xs font-medium ${atendimentoTipo === 'Encomenda' ? 'bg-white/10 text-white' : 'text-white/45'}`}>Produzir sob encomenda</button>
-            <button type="button" disabled={produtosAcabados.length === 0} onClick={() => {
+            <button type="button" onClick={() => {
               const primeiro = produtosAcabados[0]
               setAtendimentoTipo('Estoque')
               setModoCalculo(MODO_CALCULO_TRADICIONAL)
@@ -636,7 +640,11 @@ export function OrcamentoPage({
               }
             }} aria-pressed={atendimentoTipo === 'Estoque'} className={`rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-35 ${atendimentoTipo === 'Estoque' ? 'bg-emerald-500/15 text-emerald-300' : 'text-white/45'}`}>Atender com estoque</button>
           </div>
-          {atendimentoEstoque && <label className="mb-5 flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Produto acabado disponível</span><select required value={produtoVersaoEstoqueId ?? ''} onChange={event => {
+          {atendimentoEstoque && produtosAcabados.length === 0 && <div role="status" className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-xs leading-5 text-amber-100/80">
+            <p>Nenhum produto acabado com saldo disponível. Para vender por estoque, conclua um lote em <a href="/producao/estoque" className="font-medium underline underline-offset-2">Produzir para estoque</a>. Produtos cadastrados no catálogo ainda precisam ser fabricados e aprovados.</p>
+            <a href="/estoque/produtos-acabados" className="mt-2 inline-block font-medium underline underline-offset-2">Consultar estoque de produtos acabados</a>
+          </div>}
+          {atendimentoEstoque && produtosAcabados.length > 0 && <label className="mb-5 flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Produto acabado disponível</span><select required value={produtoVersaoEstoqueId ?? ''} onChange={event => {
             const id = Number(event.target.value)
             const item = produtosAcabados.find(produto => produto.produto_versao_id === id)
             setProdutoVersaoEstoqueId(id)
