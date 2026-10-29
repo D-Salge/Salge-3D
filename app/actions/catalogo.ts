@@ -2,6 +2,7 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
+import { gerarCodigoProduto, verificarNomeProduto, mensagemConflitoProduto } from '@/lib/catalogo-cadastro.mjs'
 import { normalizarNomeProduto } from '@/lib/catalogo.mjs'
 import { revalidatePath } from 'next/cache'
 
@@ -221,6 +222,7 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
     let produtoId = id
     let versao = 1
     const salvar = db.transaction(() => {
+      verificarNomeProduto(db, TENANT_ID, nomeChave, id)
       if (data.impressoraPreferidaId !== null && !db.prepare(`SELECT 1 FROM impressoras
         WHERE id = ? AND tenant_id = ? AND ativo = 1`).get(data.impressoraPreferidaId, TENANT_ID)) {
         throw new Error('IMPRESSORA_INVALIDA')
@@ -232,12 +234,11 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
         }
       }
       if (id === null) {
-        const proximo = (db.prepare('SELECT COALESCE(MAX(id), 0) + 1 AS valor FROM produtos_catalogo WHERE tenant_id = ?')
-          .get(TENANT_ID) as { valor: number }).valor
+        const codigo = gerarCodigoProduto(db, TENANT_ID)
         const result = db.prepare(`INSERT INTO produtos_catalogo
           (tenant_id, usuario_id, codigo, nome, nome_chave, categoria, descricao)
           VALUES (?, ?, ?, ?, ?, ?, ?)`)
-          .run(TENANT_ID, USUARIO_ID, `PRD-${String(proximo).padStart(6, '0')}`, nome, nomeChave,
+          .run(TENANT_ID, USUARIO_ID, codigo, nome, nomeChave,
             data.categoria.trim() || null, data.descricao.trim() || null)
         produtoId = Number(result.lastInsertRowid)
       } else {
@@ -275,9 +276,8 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
     if (error instanceof Error && error.message === 'NOT_FOUND') return { success: false, message: 'Produto não encontrado.' }
     if (error instanceof Error && error.message === 'ITEM_INVALIDO') return { success: false, message: 'Um material da ficha não está mais disponível.' }
     if (error instanceof Error && error.message === 'IMPRESSORA_INVALIDA') return { success: false, message: 'A impressora preferida não está disponível.' }
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return { success: false, message: 'Já existe um produto com esse nome.' }
-    }
+    const conflito = mensagemConflitoProduto(error)
+    if (conflito) return { success: false, message: conflito }
     console.error('[salvarProdutoCatalogo]', error)
     return { success: false, message: 'Erro interno ao salvar a ficha técnica.' }
   }
