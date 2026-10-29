@@ -514,6 +514,12 @@ test('visualizador e tenant diferente não criam, concluem ou reservam', t => {
   assert.throws(() => criarOrdemProducaoEstoqueNoBanco(f.db, { ...contexto, perfil: 'visualizador' }, dados), /FORBIDDEN/)
   assert.throws(() => criarOrdemProducaoEstoqueNoBanco(f.db, { ...contexto, tenantId: 2 }, dados), /PRODUCT_NOT_FOUND/)
   assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM ordens_producao_estoque').get().n, 0)
+  assert.throws(() => criarOrdemProducaoEstoqueNoBanco(f.db, contexto, {
+    produtoId: f.produtoId, produtoVersaoId: f.versaoId, quantidadePlanejada: 25,
+    impressoraId: 1, dataPrevista: '2026-11-01', identificacaoLote: 'FAB-EXECUCOES-INVALIDAS',
+    quantidadePorPlate: 24, execucoesPlanejadas: 1, tempoEstimadoExecucaoHoras: 12,
+    filamentos: [], insumos: [], observacoes: '', arquivosReferencia: '',
+  }), /INVALID_INPUT/)
 })
 
 test('migração é aditiva e cria o livro acabado sem alterar pedidos históricos', t => {

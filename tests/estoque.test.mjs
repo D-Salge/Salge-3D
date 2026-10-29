@@ -30,7 +30,7 @@ test('resume quantidade e investimento da lista de compras', () => {
   })
 })
 
-test('consulta reserva somente pedidos aprovados ainda abertos', () => {
+test('consulta reserva somente pedidos por encomenda abertos e ordens internas de produção para estoque ativas', () => {
   const db = new Database(':memory:')
   try {
     db.exec(`
@@ -39,23 +39,39 @@ test('consulta reserva somente pedidos aprovados ainda abertos', () => {
         preco_rolo REAL, fornecedor TEXT, ativo INTEGER);
       CREATE TABLE insumos (id INTEGER PRIMARY KEY, tenant_id INTEGER, nome TEXT, estoque_atual REAL,
         estoque_minimo REAL, unidade TEXT, custo_unitario REAL, ativo INTEGER);
-      CREATE TABLE pedidos (id INTEGER PRIMARY KEY, tenant_id INTEGER, orcamento_status TEXT, status TEXT);
+      CREATE TABLE pedidos (id INTEGER PRIMARY KEY, tenant_id INTEGER, orcamento_status TEXT, status TEXT, atendimento_tipo TEXT DEFAULT 'Encomenda');
       CREATE TABLE pedido_filamentos (pedido_id INTEGER, filamento_id INTEGER,
         peso_gasto_gramas REAL, consumo_real_gramas REAL);
       CREATE TABLE pedido_insumos (pedido_id INTEGER, insumo_id INTEGER, quantidade REAL, consumo_real REAL);
+      CREATE TABLE ordens_producao_estoque (id INTEGER PRIMARY KEY, tenant_id INTEGER, status TEXT);
+      CREATE TABLE ordem_producao_estoque_filamentos (ordem_id INTEGER, filamento_id INTEGER,
+        gramas_previstas REAL, gramas_reais REAL);
+      CREATE TABLE ordem_producao_estoque_insumos (ordem_id INTEGER, insumo_id INTEGER,
+        quantidade_prevista REAL, quantidade_real REAL);
       INSERT INTO filamentos VALUES (1, 1, 'PLA', 'Branco', 500, 1000, 150, 90, 'Fornecedor', 1);
       INSERT INTO insumos VALUES (1, 1, 'Ímã 3x1', 20, 10, 'unid', 0.5, 1);
-      INSERT INTO pedidos VALUES (1, 1, 'Aprovado', 'Fila');
-      INSERT INTO pedidos VALUES (2, 1, 'Aprovado', 'Finalizado');
-      INSERT INTO pedidos VALUES (3, 1, 'Rascunho', 'Fila');
+      INSERT INTO pedidos VALUES (1, 1, 'Aprovado', 'Fila', 'Encomenda');
+      INSERT INTO pedidos VALUES (2, 1, 'Aprovado', 'Finalizado', 'Encomenda');
+      INSERT INTO pedidos VALUES (3, 1, 'Rascunho', 'Fila', 'Encomenda');
+      INSERT INTO pedidos VALUES (4, 1, 'Aprovado', 'Acabamento', 'Estoque');
       INSERT INTO pedido_filamentos VALUES (1, 1, 200, 180);
       INSERT INTO pedido_filamentos VALUES (2, 1, 300, 300);
       INSERT INTO pedido_filamentos VALUES (3, 1, 400, NULL);
+      INSERT INTO pedido_filamentos VALUES (4, 1, 150, NULL);
       INSERT INTO pedido_insumos VALUES (1, 1, 4, NULL);
+      INSERT INTO pedido_insumos VALUES (4, 1, 10, NULL);
+      INSERT INTO ordens_producao_estoque VALUES (1, 1, 'Planejada');
+      INSERT INTO ordens_producao_estoque VALUES (2, 1, 'Em produção');
+      INSERT INTO ordens_producao_estoque VALUES (3, 1, 'Concluída');
+      INSERT INTO ordem_producao_estoque_filamentos VALUES (1, 1, 120, NULL);
+      INSERT INTO ordem_producao_estoque_filamentos VALUES (2, 1, 100, 95);
+      INSERT INTO ordem_producao_estoque_filamentos VALUES (3, 1, 500, 500);
+      INSERT INTO ordem_producao_estoque_insumos VALUES (1, 1, 6, NULL);
+      INSERT INTO ordem_producao_estoque_insumos VALUES (3, 1, 20, 20);
     `)
     const itens = db.prepare(CONSULTA_ITENS_REPOSICAO).all(1, 1)
-    assert.equal(itens.find((item) => item.tipo_item === 'Filamento').comprometido, 180)
-    assert.equal(itens.find((item) => item.tipo_item === 'Insumo').comprometido, 4)
+    assert.equal(itens.find((item) => item.tipo_item === 'Filamento').comprometido, 395)
+    assert.equal(itens.find((item) => item.tipo_item === 'Insumo').comprometido, 10)
   } finally {
     db.close()
   }

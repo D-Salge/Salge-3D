@@ -74,6 +74,7 @@ export async function getLotesProducao(): Promise<{ lotes: LoteProducao[]; pedid
     LEFT JOIN impressoras imp ON imp.id = pv.impressora_preferida_id AND imp.tenant_id = p.tenant_id AND imp.ativo = 1
     WHERE p.tenant_id = ? AND p.orcamento_status = 'Aprovado'
       AND p.status IN ('Fila', 'Imprimindo', 'Acabamento')
+      AND COALESCE(p.atendimento_tipo, 'Encomenda') = 'Encomenda'
     ORDER BY p.data_entrega IS NULL, p.data_entrega, p.id
   `).all(TENANT_ID) as PedidoParaLote[]
   return { lotes, pedidos }
@@ -86,7 +87,7 @@ export async function criarLotesAutomaticos(pedidoId: number): Promise<{ success
     let capacidade = 0
     const criar = db.transaction(() => {
       const pedido = db.prepare(`SELECT p.id, p.quantidade, p.quantidade_produzida, p.status,
-          p.orcamento_status, pv.unidades_por_placa, pv.impressora_preferida_id,
+          p.orcamento_status, p.atendimento_tipo, pv.unidades_por_placa, pv.impressora_preferida_id,
           pv.placa_referencia
         FROM pedidos p
         LEFT JOIN produto_versoes pv ON pv.id = COALESCE(p.produto_versao_id, (
@@ -96,11 +97,11 @@ export async function criarLotesAutomaticos(pedidoId: number): Promise<{ success
         ))
         WHERE p.id = ? AND p.tenant_id = ?`
       ).get(pedidoId, TENANT_ID) as {
-        id: number; quantidade: number; quantidade_produzida: number; status: string; orcamento_status: string
+        id: number; quantidade: number; quantidade_produzida: number; status: string; orcamento_status: string; atendimento_tipo: string
         unidades_por_placa: number | null; impressora_preferida_id: number | null; placa_referencia: string | null
       } | undefined
       if (!pedido) throw new Error('NOT_FOUND')
-      if (pedido.orcamento_status !== 'Aprovado' || ['Finalizado', 'Cancelado'].includes(pedido.status)) throw new Error('INVALID_STATUS')
+      if (pedido.orcamento_status !== 'Aprovado' || pedido.atendimento_tipo === 'Estoque' || ['Finalizado', 'Cancelado'].includes(pedido.status)) throw new Error('INVALID_STATUS')
       if (!pedido.unidades_por_placa) throw new Error('NO_PROFILE')
       if (!Number.isSafeInteger(pedido.quantidade)) throw new Error('NON_INTEGER')
       capacidade = pedido.unidades_por_placa
@@ -176,13 +177,13 @@ export async function criarLoteProducao(data: {
     }
     const criar = db.transaction(() => {
       const pedido = db.prepare(`
-        SELECT id, quantidade, quantidade_produzida, status, orcamento_status
+        SELECT id, quantidade, quantidade_produzida, status, orcamento_status, atendimento_tipo
         FROM pedidos WHERE id = ? AND tenant_id = ?
       `).get(data.pedidoId, TENANT_ID) as {
-        id: number; quantidade: number; quantidade_produzida: number; status: string; orcamento_status: string
+        id: number; quantidade: number; quantidade_produzida: number; status: string; orcamento_status: string; atendimento_tipo: string
       } | undefined
       if (!pedido) throw new Error('NOT_FOUND')
-      if (pedido.orcamento_status !== 'Aprovado' || ['Finalizado', 'Cancelado'].includes(pedido.status)) throw new Error('INVALID_STATUS')
+      if (pedido.orcamento_status !== 'Aprovado' || pedido.atendimento_tipo === 'Estoque' || ['Finalizado', 'Cancelado'].includes(pedido.status)) throw new Error('INVALID_STATUS')
       const resumo = db.prepare(`
         SELECT COUNT(*) AS total, COALESCE(SUM(quantidade_planejada), 0) AS planejada
         FROM lotes_producao WHERE pedido_id = ? AND tenant_id = ? AND status != 'Cancelado'

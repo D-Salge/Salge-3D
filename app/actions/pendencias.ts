@@ -38,6 +38,7 @@ export async function getCentralPendencias(): Promise<PendenciaCentral[]> {
     FROM pedidos
     WHERE tenant_id = ? AND orcamento_status = 'Aprovado'
       AND status IN ('Fila', 'Imprimindo') AND impressora_id IS NULL
+      AND COALESCE(atendimento_tipo, 'Encomenda') = 'Encomenda'
     ORDER BY date(COALESCE(data_entrega, data_pedido)), id
   `).all(TENANT_ID) as Array<{ id: number; numero_orcamento: string | null; nome_da_peca: string; data_entrega: string | null }>
   const orcamentos = db.prepare(`

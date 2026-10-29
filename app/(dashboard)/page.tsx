@@ -225,7 +225,7 @@ export default async function VisaoGeralPage() {
           icon={<Wrench size={17} />}
           label="Custos totais"
           value={fmtBRL(stats.custosTotais)}
-          sub="Material + máquina dos finalizados"
+          sub="Operação + estoque dos finalizados"
         />
         <MetricCard
           icon={<TrendingUp size={17} />}
@@ -289,7 +289,7 @@ export default async function VisaoGeralPage() {
             <p className="text-xs text-white/25">
               Margem aparente:{' '}
               <span className="text-white/50 font-medium">
-                {stats.faturamentoBruto > 0 && stats.custosTotais > 0
+                {stats.faturamentoBruto > 0
                   ? `${Math.round(((stats.faturamentoBruto - stats.custosTotais) / stats.faturamentoBruto) * 100)}%`
                   : '—'}
               </span>
