@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache'
 import type { EntregaPedido } from '@/app/actions/entregas'
 import { calcularDesviosOperacao } from '@/lib/desvios-operacao.mjs'
 import { obterPlatesPedidoNoBanco } from '@/lib/orcamento-plates.mjs'
+import { reservarProdutosAcabadosParaPedidoNoBanco } from '@/lib/producao-estoque.mjs'
 
 const TENANT_ID = 1
 const USUARIO_ID = 1
@@ -517,11 +518,13 @@ export async function atualizarStatusOrcamento(
 
     const atualizar = db.transaction(() => {
       const atual = db.prepare(`
-        SELECT orcamento_status, valor_total_cobrado, parcelas,
+        SELECT orcamento_status, atendimento_tipo, status, valor_total_cobrado, parcelas,
           COALESCE(vencimento_em, substr(data_pedido, 1, 10)) AS primeiro_vencimento
         FROM pedidos WHERE id = ? AND tenant_id = ?
       `).get(pedidoId, tenantId) as {
         orcamento_status: string
+        atendimento_tipo: string
+        status: string
         valor_total_cobrado: number
         parcelas: number
         primeiro_vencimento: string
@@ -529,6 +532,15 @@ export async function atualizarStatusOrcamento(
       if (!atual) throw new Error('NOT_FOUND')
       if (atual.orcamento_status === novoStatus) return
       if (!transicoes[atual.orcamento_status]?.includes(novoStatus)) throw new Error('INVALID_TRANSITION')
+
+      if (['Enviado', 'Aprovado'].includes(novoStatus)) {
+        if (atual.status === 'Cancelado') throw new Error('INVALID_TRANSITION')
+        // A expiração libera as peças. Reenvio e aprovação precisam reservar
+        // novamente dentro da mesma transação, antes de gerar parcelas/status.
+        if (atual.atendimento_tipo === 'Estoque') {
+          reservarProdutosAcabadosParaPedidoNoBanco(db, sessao, pedidoId)
+        }
+      }
 
       db.prepare(`
         UPDATE pedidos
@@ -547,8 +559,8 @@ export async function atualizarStatusOrcamento(
 
       if (novoStatus === 'Aprovado') {
         const total = db.prepare(
-          'SELECT COUNT(*) AS total FROM parcelas_receber WHERE pedido_id = ?',
-        ).get(pedidoId) as { total: number }
+          'SELECT COUNT(*) AS total FROM parcelas_receber WHERE pedido_id = ? AND tenant_id = ?',
+        ).get(pedidoId, tenantId) as { total: number }
         if (total.total === 0) {
           const inserir = db.prepare(`
             INSERT INTO parcelas_receber (tenant_id, pedido_id, numero, valor, vencimento_em)
@@ -565,7 +577,7 @@ export async function atualizarStatusOrcamento(
           })
         }
       }
-      if (novoStatus === 'Recusado') {
+      if (['Recusado', 'Expirado'].includes(novoStatus)) {
         db.prepare(`UPDATE reservas_produtos_acabados
           SET liberada_em = COALESCE(liberada_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
           WHERE pedido_id = ? AND tenant_id = ?`).run(pedidoId, tenantId)
@@ -584,6 +596,7 @@ export async function atualizarStatusOrcamento(
     revalidatePath('/')
     revalidatePath('/orcamentos')
     revalidatePath('/producao')
+    revalidatePath('/estoque/produtos-acabados')
     revalidatePath(`/pedidos/${pedidoId}`)
     return { success: true, message: `Orçamento marcado como ${novoStatus}.` }
   } catch (error) {
@@ -594,6 +607,12 @@ export async function atualizarStatusOrcamento(
     }
     if (error instanceof Error && error.message === 'INVALID_TRANSITION') {
       return { success: false, message: 'Essa mudança de status não é permitida.' }
+    }
+    if (error instanceof Error && error.message.startsWith('INSUFFICIENT_FINISHED_STOCK')) {
+      return { success: false, message: 'Estoque acabado insuficiente para reenviar ou aprovar este orçamento. Revise a quantidade ou produza mais unidades.' }
+    }
+    if (error instanceof Error && error.message === 'RESERVATION_CONFLICT') {
+      return { success: false, message: 'A reserva de estoque mudou. Revise o orçamento antes de tentar novamente.' }
     }
     console.error('[atualizarStatusOrcamento]', error)
     return { success: false, message: 'Erro interno ao atualizar orçamento.' }
