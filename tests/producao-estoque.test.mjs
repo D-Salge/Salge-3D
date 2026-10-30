@@ -3,6 +3,10 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+import vm from 'node:vm'
+import ts from 'typescript'
 import Database from 'better-sqlite3'
 import { applyMigrations } from '../lib/migrations.mjs'
 import { finalizarPedidoNoBanco } from '../lib/fechamento-pedido.mjs'
@@ -21,6 +25,46 @@ import {
 } from '../lib/producao-estoque.mjs'
 
 const contexto = { tenantId: 1, usuarioId: 1, perfil: 'admin' }
+
+// Executa a Server Action real com SQLite real; somente sessão e cache do Next
+// são substituídos. As regras de reserva, financeiro e auditoria são as de produção.
+const require = createRequire(import.meta.url)
+function carregarTs(caminho, dependencias = {}) {
+  const codigo = ts.transpileModule(readFileSync(new URL(caminho, import.meta.url), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText
+  const ambiente = vm.createContext({ exports: {}, Error, console, require: nome => {
+    if (Object.hasOwn(dependencias, nome)) return dependencias[nome]
+    if (nome.startsWith('@/')) return require(fileURLToPath(new URL(`../${nome.slice(2)}`, import.meta.url)))
+    return require(nome)
+  } })
+  new vm.Script(codigo).runInContext(ambiente)
+  return ambiente.exports
+}
+const auditoria = carregarTs('../lib/auditoria.ts')
+function actionOrcamento(db, sessao = contexto) {
+  return carregarTs('../app/actions/operacao.ts', {
+    '@/lib/db': { default: db },
+    '@/lib/session': { exigirPerfil: async perfis => {
+      if (!sessao) throw new Error('UNAUTHORIZED')
+      if (!perfis.includes(sessao.perfil)) throw new Error('FORBIDDEN')
+      return sessao
+    } },
+    '@/lib/auditoria': auditoria,
+    'next/cache': { revalidatePath() {} },
+  }).atualizarStatusOrcamento
+}
+
+function snapshotOrcamento(db, pedidoId) {
+  return {
+    pedido: db.prepare('SELECT * FROM pedidos WHERE id = ?').get(pedidoId),
+    reservas: db.prepare('SELECT * FROM reservas_produtos_acabados ORDER BY id').all(),
+    parcelas: db.prepare('SELECT * FROM parcelas_receber ORDER BY id').all(),
+    historico: db.prepare('SELECT * FROM historico_pedidos ORDER BY id').all(),
+    auditoria: db.prepare('SELECT * FROM auditoria ORDER BY id').all(),
+    movimentos: db.prepare('SELECT * FROM movimentos_produtos_acabados ORDER BY id').all(),
+  }
+}
 
 function ambiente(t, caminho = ':memory:', registrarLimpeza = true) {
   const db = new Database(caminho)
@@ -670,3 +714,99 @@ test('estornos concorrentes são serializados e não duplicam devolução, custo
   assert.equal(f.db.prepare('SELECT custo_produto_acabado_real FROM pedidos WHERE id = ?').get(pedido).custo_produto_acabado_real, 0)
 })
 
+
+for (const destino of ['Aprovado', 'Enviado']) {
+  test(`orçamento expirado → ${destino} refaz a reserva e repetição não duplica efeitos`, async t => {
+    const f = ambiente(t)
+    const ordem = f.criarOrdem(); f.concluir(ordem.ordemId)
+    const pedido = f.criarPedidoEstoque(2)
+    reservarProdutosAcabadosParaPedidoNoBanco(f.db, contexto, pedido)
+    f.db.prepare("UPDATE reservas_produtos_acabados SET liberada_em = '2026-01-01' WHERE pedido_id = ?").run(pedido)
+    f.db.prepare("UPDATE pedidos SET orcamento_status = 'Expirado', status = 'Fila', validade_orcamento = '2000-01-01' WHERE id = ?").run(pedido)
+    const saldoAntes = consultarSaldoProdutoAcabadoNoBanco(f.db, 1, f.produtoId, f.versaoId)
+    const atualizar = actionOrcamento(f.db)
+    assert.equal((await atualizar(pedido, destino)).success, true)
+    const saldoDepois = consultarSaldoProdutoAcabadoNoBanco(f.db, 1, f.produtoId, f.versaoId)
+    assert.equal(saldoDepois.fisico, saldoAntes.fisico)
+    assert.equal(saldoDepois.reservado, 2)
+    assert.equal(saldoDepois.disponivel, 22)
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM reservas_produtos_acabados WHERE pedido_id = ?').get(pedido).n, 1)
+    assert.equal(f.db.prepare('SELECT status FROM pedidos WHERE id = ?').get(pedido).status, destino === 'Aprovado' ? 'Acabamento' : 'Fila')
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM parcelas_receber WHERE pedido_id = ?').get(pedido).n, destino === 'Aprovado' ? 1 : 0)
+    const antes = snapshotOrcamento(f.db, pedido)
+    assert.equal((await atualizar(pedido, destino)).success, true)
+    assert.deepEqual(snapshotOrcamento(f.db, pedido), antes)
+  })
+
+  test(`orçamento expirado → ${destino} sem saldo reverte reserva parcial, custos, histórico e financeiro`, async t => {
+    const f = ambiente(t)
+    const ordem = f.criarOrdem(); f.concluir(ordem.ordemId)
+    const pedido = f.criarPedidoEstoque(2)
+    reservarProdutosAcabadosParaPedidoNoBanco(f.db, contexto, pedido)
+    f.db.prepare("UPDATE reservas_produtos_acabados SET liberada_em = '2026-01-01' WHERE pedido_id = ?").run(pedido)
+    f.db.prepare("UPDATE pedidos SET orcamento_status = 'Expirado', status = 'Fila', validade_orcamento = '2000-01-01' WHERE id = ?").run(pedido)
+    const concorrente = f.criarPedidoEstoque(23)
+    reservarProdutosAcabadosParaPedidoNoBanco(f.db, contexto, concorrente)
+    const antes = snapshotOrcamento(f.db, pedido)
+    const resultado = await actionOrcamento(f.db)(pedido, destino)
+    assert.equal(resultado.success, false)
+    assert.match(resultado.message, /estoque acabado insuficiente/i)
+    assert.deepEqual(snapshotOrcamento(f.db, pedido), antes)
+  })
+}
+
+test('expirar manualmente libera reserva e reenvio seguido de aprovação mantém uma única reserva', async t => {
+  const f = ambiente(t)
+  const ordem = f.criarOrdem(); f.concluir(ordem.ordemId)
+  const pedido = f.criarPedidoEstoque(2)
+  reservarProdutosAcabadosParaPedidoNoBanco(f.db, contexto, pedido)
+  f.db.prepare("UPDATE pedidos SET orcamento_status = 'Enviado', status = 'Fila' WHERE id = ?").run(pedido)
+  const atualizar = actionOrcamento(f.db)
+  assert.equal((await atualizar(pedido, 'Expirado')).success, true)
+  assert.equal(consultarSaldoProdutoAcabadoNoBanco(f.db, 1, f.produtoId, f.versaoId).reservado, 0)
+  assert.equal((await atualizar(pedido, 'Enviado')).success, true)
+  assert.equal((await atualizar(pedido, 'Aprovado')).success, true)
+  assert.equal(consultarSaldoProdutoAcabadoNoBanco(f.db, 1, f.produtoId, f.versaoId).reservado, 2)
+  assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM reservas_produtos_acabados WHERE pedido_id = ?').get(pedido).n, 1)
+  assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM parcelas_receber WHERE pedido_id = ?').get(pedido).n, 1)
+})
+
+test('reaprovação mantém autorização, isolamento e bloqueio de pedido cancelado', async t => {
+  const f = ambiente(t)
+  const pedido = f.criarPedidoEstoque(2)
+  f.db.prepare("UPDATE pedidos SET orcamento_status = 'Expirado' WHERE id = ?").run(pedido)
+  const antes = snapshotOrcamento(f.db, pedido)
+  for (const sessao of [null, { ...contexto, perfil: 'visualizador' }, { ...contexto, tenantId: 2 }]) {
+    assert.equal((await actionOrcamento(f.db, sessao)(pedido, 'Aprovado')).success, false)
+    assert.deepEqual(snapshotOrcamento(f.db, pedido), antes)
+  }
+  f.db.prepare("UPDATE pedidos SET status = 'Cancelado' WHERE id = ?").run(pedido)
+  const cancelado = snapshotOrcamento(f.db, pedido)
+  assert.equal((await actionOrcamento(f.db)(pedido, 'Aprovado')).success, false)
+  assert.deepEqual(snapshotOrcamento(f.db, pedido), cancelado)
+})
+
+test('aprovação sob encomenda mantém parcelas sem exigir produtos acabados', async t => {
+  const f = ambiente(t)
+  const pedido = f.criarPedidoEstoque(2)
+  f.db.prepare(`UPDATE pedidos SET atendimento_tipo = 'Encomenda', status = 'Fila',
+    orcamento_status = 'Expirado', parcelas = 2 WHERE id = ?`).run(pedido)
+  assert.equal((await actionOrcamento(f.db)(pedido, 'Aprovado')).success, true)
+  assert.deepEqual(f.db.prepare('SELECT status, orcamento_status FROM pedidos WHERE id = ?').get(pedido),
+    { status: 'Fila', orcamento_status: 'Aprovado' })
+  assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM reservas_produtos_acabados').get().n, 0)
+  assert.deepEqual(f.db.prepare('SELECT numero, valor FROM parcelas_receber WHERE pedido_id = ? ORDER BY numero').all(pedido),
+    [{ numero: 1, valor: 25 }, { numero: 2, valor: 25 }])
+})
+
+test('falha financeira após reservar reverte também reserva, custo, status e auditoria', async t => {
+  const f = ambiente(t)
+  const ordem = f.criarOrdem(); f.concluir(ordem.ordemId)
+  const pedido = f.criarPedidoEstoque(2)
+  f.db.prepare("UPDATE pedidos SET orcamento_status = 'Expirado', status = 'Fila' WHERE id = ?").run(pedido)
+  f.db.exec(`CREATE TRIGGER falha_parcela BEFORE INSERT ON parcelas_receber
+    BEGIN SELECT RAISE(ABORT, 'FALHA_FINANCEIRA_SIMULADA'); END`)
+  const antes = snapshotOrcamento(f.db, pedido)
+  assert.equal((await actionOrcamento(f.db)(pedido, 'Aprovado')).success, false)
+  assert.deepEqual(snapshotOrcamento(f.db, pedido), antes)
+})

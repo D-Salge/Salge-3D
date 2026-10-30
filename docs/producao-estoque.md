@@ -11,6 +11,8 @@
 
 A ordem interna não cria cliente, receita, parcela ou recebimento. Uma venda atendida com estoque não baixa novamente os materiais da fabricação.
 
+Recusar ou expirar um orçamento libera sua reserva. Ao reenviar ou aprovar internamente um orçamento expirado, o ERP verifica o saldo atual e refaz a reserva por FIFO. Se outras vendas já comprometeram as peças, a operação é bloqueada com orientação para revisar a quantidade ou produzir mais unidades; o orçamento e o financeiro permanecem inalterados. Repetir a aprovação não duplica reservas nem parcelas.
+
 ## Custos e rastreabilidade
 
 O custo real total do lote soma materiais efetivamente consumidos, energia, reserva de máquina, trabalho e custos adicionais informados. Quando existem lotes de material, são usados os custos históricos efetivos da baixa FIFO. O custo unitário acabado é:
