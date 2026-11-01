@@ -106,6 +106,45 @@ Durante a homologação com o número de teste da Meta, mantenha `WHATSAPP_TEST_
 
 O SQLite atende vários usuários conectados à mesma instância do Salge 3D, mas a hospedagem deve manter **uma única instância do servidor** e um **disco persistente**. Antes de escalar horizontalmente, migre o banco para PostgreSQL.
 
+### Mercado Pago com o ERP somente no PC
+
+Para gerar links sem publicar o ERP, crie uma aplicação **Checkout Pro (Preferences API)**
+no [Mercado Pago Developers](https://www.mercadopago.com.br/developers/panel/app).
+Configure somente na sua máquina, em `.env.local`:
+
+```dotenv
+APP_URL=http://localhost:3002
+AUTH_COOKIE_SECURE=false
+MERCADO_PAGO_LOCAL_MODE=true
+MERCADO_PAGO_TEST_MODE=false
+MERCADO_PAGO_ACCESS_TOKEN=COLE_AQUI_SEU_ACCESS_TOKEN_DE_PRODUCAO
+```
+
+O token de produção deve pertencer à conta que receberá os pagamentos. Não o
+envie por chat, não o coloque no código nem no GitHub. Para homologar com as
+credenciais/contas de teste correspondentes, use `MERCADO_PAGO_TEST_MODE=true`;
+modo local e modo de teste são independentes. Credenciais e conta precisam estar
+habilitadas pelo Mercado Pago; a configuração não valida isso sozinha.
+
+Reinicie o servidor após alterar o arquivo. Em um pedido aprovado com saldo
+pendente, gere a cobrança, copie o link e envie ao cliente. O link abre o checkout
+do Mercado Pago no dispositivo do cliente; ele não precisa acessar seu PC.
+Depois do pagamento, clique em **Sincronizar** no pedido: o ERP consulta a API e
+usa as regras existentes para registrar recebimento, taxas e receita fiscal.
+O status só muda após a consulta, não pela informação enviada pelo cliente.
+
+No modo local não é necessário `MERCADO_PAGO_WEBHOOK_SECRET` nem URL pública;
+não são enviados `notification_url`, `back_urls` ou `auto_return`, e nenhum link
+de portal é criado ou prorrogado pela cobrança. O webhook fica desativado e não há
+confirmação automática. A sincronização exige ERP aberto e conexão com a internet.
+O Cofrinho continua sendo acompanhado por extrato e conciliação, sem consulta
+automática de saldo por esta configuração.
+
+Ao hospedar, use `MERCADO_PAGO_LOCAL_MODE=false`, configure `APP_URL` com o domínio
+HTTPS real, `AUTH_COOKIE_SECURE=true` e o segredo do webhook. Cadastre o evento
+**Pagamentos** na URL `https://SEU_DOMINIO/api/webhooks/mercado-pago`. O fluxo
+automático e o retorno ao portal continuam disponíveis nesse modo.
+
 ## Fiscal e MEI
 
 Abra **Financeiro → Fiscal e MEI**. Os recebimentos registrados no ERP entram automaticamente no relatório; receitas do mesmo CNPJ que ocorrerem fora do ERP, como trabalho PJ, devem ser lançadas em **Receita fora do ERP**. A tela separa vendas de serviços, acompanha o limite anual configurável e exporta CSV.

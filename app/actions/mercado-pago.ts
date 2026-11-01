@@ -74,32 +74,35 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
       }
     }
 
-    const validadeMinimaPortal = new Date(Date.now() + 30 * 86_400_000).toISOString()
-    const portalExistente = db.prepare(`
-      SELECT id, token, expira_em FROM portal_links
-      WHERE tenant_id = ? AND pedido_id = ? AND revogado_em IS NULL
-        AND datetime(expira_em) > datetime('now')
-      ORDER BY id DESC LIMIT 1
-    `).get(sessao.tenantId, pedido.id) as { id: number; token: string; expira_em: string } | undefined
-    let portalToken = portalExistente?.token
-    if (portalExistente) {
-      db.prepare(`UPDATE portal_links SET expira_em = ?
-        WHERE id = ? AND datetime(expira_em) < datetime(?)`
-      ).run(validadeMinimaPortal, portalExistente.id, validadeMinimaPortal)
-    } else {
-      portalToken = randomBytes(24).toString('hex')
-      const portal = db.prepare(`INSERT INTO portal_links (
-        tenant_id, usuario_id, pedido_id, token, expira_em
-      ) VALUES (?, ?, ?, ?, ?)`
-      ).run(sessao.tenantId, sessao.usuarioId, pedido.id, portalToken, validadeMinimaPortal)
-      registrarAuditoria(db, {
-        tenantId: sessao.tenantId,
-        usuarioId: sessao.usuarioId,
-        entidade: 'PortalCliente',
-        entidadeId: Number(portal.lastInsertRowid),
-        acao: 'CRIAR_LINK',
-        descricao: `Link seguro criado para o retorno do pagamento do pedido #${pedido.id}`,
-      })
+    let portalToken: string | undefined
+    if (!config.localMode) {
+      const validadeMinimaPortal = new Date(Date.now() + 30 * 86_400_000).toISOString()
+      const portalExistente = db.prepare(`
+        SELECT id, token, expira_em FROM portal_links
+        WHERE tenant_id = ? AND pedido_id = ? AND revogado_em IS NULL
+          AND datetime(expira_em) > datetime('now')
+        ORDER BY id DESC LIMIT 1
+      `).get(sessao.tenantId, pedido.id) as { id: number; token: string; expira_em: string } | undefined
+      portalToken = portalExistente?.token
+      if (portalExistente) {
+        db.prepare(`UPDATE portal_links SET expira_em = ?
+          WHERE id = ? AND datetime(expira_em) < datetime(?)`
+        ).run(validadeMinimaPortal, portalExistente.id, validadeMinimaPortal)
+      } else {
+        portalToken = randomBytes(24).toString('hex')
+        const portal = db.prepare(`INSERT INTO portal_links (
+          tenant_id, usuario_id, pedido_id, token, expira_em
+        ) VALUES (?, ?, ?, ?, ?)`
+        ).run(sessao.tenantId, sessao.usuarioId, pedido.id, portalToken, validadeMinimaPortal)
+        registrarAuditoria(db, {
+          tenantId: sessao.tenantId,
+          usuarioId: sessao.usuarioId,
+          entidade: 'PortalCliente',
+          entidadeId: Number(portal.lastInsertRowid),
+          acao: 'CRIAR_LINK',
+          descricao: `Link seguro criado para o retorno do pagamento do pedido #${pedido.id}`,
+        })
+      }
     }
 
     const externalReference = `salge-${sessao.tenantId}-${pedido.id}-${randomUUID()}`
@@ -110,9 +113,10 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
         externalReference,
         appUrl: config.appUrl,
         portalToken,
+        incluirRetorno: !config.localMode,
         // O Mercado Pago não envia webhooks automáticos para pagamentos criados
         // com credenciais de teste. No sandbox a consulta manual usa a referência.
-        incluirWebhook: !config.testMode,
+        incluirWebhook: !config.testMode && !config.localMode,
       }),
       config.accessToken,
       idempotencyKey,
@@ -131,6 +135,8 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
       url, preferencia.sandbox_init_point || null, valorCobranca,
     )
     registrarAuditoria(db, {
+      tenantId: sessao.tenantId,
+      usuarioId: sessao.usuarioId,
       entidade: 'CobrancaMercadoPago', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
       descricao: `Cobrança de R$ ${valorCobranca.toFixed(2)} para ${pedido.numero_orcamento || `#${pedido.id}`}`,
     })
