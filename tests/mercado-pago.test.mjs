@@ -15,6 +15,35 @@ test('diagnóstico exige token, segredo de webhook e URL HTTPS', () => {
   assert.deepEqual(config.ausentes, ['MERCADO_PAGO_WEBHOOK_SECRET', 'APP_URL (HTTPS)'])
 })
 
+test('modo local explícito exige somente token e independe de teste/produção', () => {
+  for (const modoTeste of ['true', 'false']) {
+    const config = configuracaoMercadoPago({
+      MERCADO_PAGO_LOCAL_MODE: 'true', MERCADO_PAGO_TEST_MODE: modoTeste,
+      MERCADO_PAGO_ACCESS_TOKEN: 'token-local', APP_URL: 'http://localhost:3002',
+    })
+    assert.equal(config.configurado, true)
+    assert.equal(config.localMode, true)
+    assert.equal(config.testMode, modoTeste === 'true')
+    assert.deepEqual(config.ausentes, [])
+  }
+  assert.deepEqual(configuracaoMercadoPago({ MERCADO_PAGO_LOCAL_MODE: 'true' }).ausentes, ['MERCADO_PAGO_ACCESS_TOKEN'])
+  assert.equal(configuracaoMercadoPago({ MERCADO_PAGO_ACCESS_TOKEN: 'token', MERCADO_PAGO_LOCAL_MODE: 'false' }).configurado, false)
+})
+
+test('preferência local não envia URLs do PC, webhook nem redirecionamento', () => {
+  for (const appUrl of ['', 'http://localhost:3002']) {
+    const payload = montarPreferenciaMercadoPago({
+      pedido: { id: 42, nome_da_peca: 'Chaveiro', saldo_pendente: 40 },
+      externalReference: 'salge-1-42-local', appUrl,
+      incluirWebhook: false, incluirRetorno: false, portalToken: 'a'.repeat(48),
+    })
+    for (const chave of ['notification_url', 'back_urls', 'auto_return']) assert.equal(chave in payload, false)
+    assert.equal(payload.items[0].unit_price, 40)
+    assert.equal(payload.external_reference, 'salge-1-42-local')
+    assert.doesNotMatch(JSON.stringify(payload), /localhost|portal=/)
+  }
+})
+
 test('monta preferência com saldo, referência, retornos e webhook', () => {
   const payload = montarPreferenciaMercadoPago({
     pedido: { id: 42, numero_orcamento: 'ORC-42', nome_da_peca: 'Ímãs', saldo_pendente: 140, cliente_email: 'cliente@example.com' },

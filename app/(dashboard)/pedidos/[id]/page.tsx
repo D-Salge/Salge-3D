@@ -12,10 +12,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) notFound()
   const [pedido, impressoras, filamentos] = await Promise.all([getPedidoDetalhes(pedidoId), getImpressoras(), getFilamentosParaConsumo()])
   if (!pedido) notFound()
+  const mercadoPago = configuracaoMercadoPago()
   return <PedidoDetalhesPage
     pedido={pedido}
     impressoras={impressoras}
     filamentos={filamentos}
-    mercadoPagoTeste={configuracaoMercadoPago().testMode}
+    mercadoPagoTeste={mercadoPago.testMode}
+    mercadoPagoLocal={mercadoPago.localMode}
   />
 }

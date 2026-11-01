@@ -32,6 +32,7 @@ export function MercadoPagoCobranca({
   parcelas,
   cobranca,
   modoTeste,
+  modoLocal = false,
   sinalPercentual = 0,
   sinalPendente = 0,
 }: {
@@ -40,6 +41,7 @@ export function MercadoPagoCobranca({
   parcelas: Parcela[]
   cobranca: Cobranca
   modoTeste: boolean
+  modoLocal?: boolean
   sinalPercentual?: number
   sinalPendente?: number
 }) {
@@ -109,7 +111,8 @@ export function MercadoPagoCobranca({
       <p className="text-white/35">Líquido<strong className="mt-1 block text-emerald-300">{moeda(cobranca.valor_liquido)}</strong></p>
     </div>}
     {modoTeste && <p className="mt-3 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] p-2.5 text-[10px] leading-4 text-amber-100/65">Modo de teste: depois de pagar pelo link, clique em “Sincronizar”. O sandbox do Mercado Pago não envia a confirmação automática.</p>}
-    {!modoTeste && cobranca?.status === 'Pendente' && <p className="mt-3 text-[10px] leading-4 text-white/35">A confirmação é automática. Use “Sincronizar” apenas se o pagamento já foi feito e o status estiver atrasado.</p>}
+    {modoLocal && <p className="mt-3 rounded-lg border border-blue-400/15 bg-blue-400/[0.05] p-2.5 text-[10px] leading-4 text-blue-100/65">Uso local: o cliente paga pelo link do Mercado Pago. Depois, clique em “Sincronizar” para consultar e registrar o pagamento no ERP. A confirmação não é automática.</p>}
+    {!modoTeste && !modoLocal && cobranca?.status === 'Pendente' && <p className="mt-3 text-[10px] leading-4 text-white/35">A confirmação é automática. Use “Sincronizar” apenas se o pagamento já foi feito e o status estiver atrasado.</p>}
     {saldo > 0.009 && <div className="mt-3 space-y-3">
       <label className="block text-[10px] text-white/40">Valor desta cobrança
         <div className={`mt-1 flex h-10 items-center rounded-lg border bg-[#101114] px-3 ${valorValido ? 'border-white/10' : 'border-red-400/40'}`}>

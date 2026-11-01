@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   const config = configuracaoMercadoPago()
   if (!config.configurado) return NextResponse.json({ error: 'integration_not_configured' }, { status: 503 })
+  if (config.localMode) return NextResponse.json({ error: 'manual_sync_mode' }, { status: 503 })
   const dataId = request.nextUrl.searchParams.get('data.id') || request.nextUrl.searchParams.get('id')
   const tipoQuery = request.nextUrl.searchParams.get('type') || request.nextUrl.searchParams.get('topic')
   const assinatura = request.headers.get('x-signature')
