@@ -62,7 +62,7 @@ export function AtendimentoPage({ dados, pedidoInicial }: { dados: AtendimentoDa
     }), () => { setModalExpedicao(false); setExpedicao({ ...expedicao, codigoRastreio: '', urlRastreio: '', observacoes: '', custo: 0 }) })
   }
 
-  return <div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+  return <div className="studio-page mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-3 text-xs text-muted-foreground">Operação / Pós-venda</p><h1 className="text-3xl font-semibold">Qualidade e expedição</h1><p className="mt-2 text-sm text-muted-foreground">Garantias, reimpressões, devoluções e rastreamento dos pedidos.</p></div><div className="flex gap-2"><button disabled={!dados.pedidos.length} onClick={() => setModalOcorrencia(true)} className="inline-flex items-center gap-2 rounded-lg bg-subtle px-4 py-2.5 text-xs text-secondary-foreground disabled:opacity-40"><ShieldAlert size={14} /> Nova ocorrência</button><button disabled={!dados.pedidos.length} onClick={() => setModalExpedicao(true)} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground disabled:opacity-40"><Truck size={14} /> Nova expedição</button></div></div>
 
     {mensagem && <p className="mb-5 rounded-xl border border-border bg-subtle px-4 py-3 text-xs text-secondary-foreground">{mensagem}</p>}

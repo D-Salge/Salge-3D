@@ -38,7 +38,7 @@ export function ProdutosPage({ produtos, catalogo }: { produtos: ResumoProduto[]
   const campeao = [...produtos].sort((a, b) => b.unidades - a.unidades)[0]
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+    <div className="studio-page mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8">
         <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground"><span>Dashboard</span><span>/</span><span className="text-secondary-foreground">Produtos</span></div>
         <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-[34px]">Produtos e vendas</h1>

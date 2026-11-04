@@ -14,7 +14,7 @@ function fmtBRL(valor: number) {
 export default async function EstoquePage() {
   const resumo = await getResumoEstoque()
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+    <div className="studio-page mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="mb-3 text-xs text-muted-foreground">Estoque / Movimentações</p>

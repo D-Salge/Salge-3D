@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: 'Auditoria · Salge 3D' }
 export default async function AuditoriaPage() {
   await exigirPerfil(['admin'])
   const eventos = await getEventosAuditoria()
-  return <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+  return <div className="studio-page mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
     <div className="mb-8">
       <p className="mb-3 text-xs text-muted-foreground">Sistema / Auditoria</p>
       <h1 className="text-3xl font-semibold tracking-tight">Trilha de auditoria</h1>
