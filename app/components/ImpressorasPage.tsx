@@ -49,9 +49,9 @@ function horas(valor: number) {
 }
 
 function classeManutencao(status: Impressora['manutencao_status']) {
-  if (status === 'Vencida') return 'border-red-500/25 bg-red-500/10 text-red-300'
-  if (status === 'Proxima') return 'border-amber-500/25 bg-amber-500/10 text-amber-300'
-  return 'border-[#d8f45a]/20 bg-[#d8f45a]/10 text-[#d8f45a]'
+  if (status === 'Vencida') return 'border-red-500/25 bg-red-500/10 text-destructive'
+  if (status === 'Proxima') return 'border-amber-500/25 bg-amber-500/10 text-warning'
+  return 'border-accent/20 bg-accent/10 text-accent'
 }
 
 export function ImpressorasPage({
@@ -155,69 +155,69 @@ export function ImpressorasPage({
     <>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-3 text-xs text-white/35">Produção / Equipamentos</p>
+          <p className="mb-3 text-xs text-muted-foreground">Produção / Equipamentos</p>
           <h1 className="text-3xl font-semibold">Impressoras</h1>
-          <p className="mt-2 text-sm text-white/40">Capacidade, manutenção preventiva e qualidade por máquina.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Capacidade, manutenção preventiva e qualidade por máquina.</p>
         </div>
-        <button onClick={() => abrir()} className="flex items-center gap-2 rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d]"><Plus size={14} /> Nova impressora</button>
+        <button onClick={() => abrir()} className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground"><Plus size={14} /> Nova impressora</button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         {impressoras.map((impressora) => {
           const percentualBarra = Math.min(impressora.percentual_manutencao, 100)
           return (
-            <article key={impressora.id} className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
+            <article key={impressora.id} className="rounded-2xl border border-border bg-card p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#d8f45a]/10 text-[#d8f45a]"><Printer size={19} /></div>
-                  <div className="min-w-0"><h2 className="truncate font-semibold">{impressora.nome}</h2><p className="truncate text-xs text-white/40">{impressora.modelo || 'Modelo não informado'}{impressora.bico_atual ? ` · bico ${impressora.bico_atual}` : ''}</p></div>
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent"><Printer size={19} /></div>
+                  <div className="min-w-0"><h2 className="truncate font-semibold">{impressora.nome}</h2><p className="truncate text-xs text-muted-foreground">{impressora.modelo || 'Modelo não informado'}{impressora.bico_atual ? ` · bico ${impressora.bico_atual}` : ''}</p></div>
                 </div>
-                <span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[10px] text-white/55">{impressora.status}</span>
+                <span className="shrink-0 rounded-full bg-subtle px-2 py-1 text-[10px] text-secondary-foreground">{impressora.status}</span>
               </div>
 
               <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-xl bg-white/[0.03] p-3"><p className="text-[10px] uppercase text-white/30">Fila ativa</p><p className="mt-1 text-xl font-semibold">{impressora.pedidos_ativos ?? 0}</p></div>
-                <div className="rounded-xl bg-white/[0.03] p-3"><p className="text-[10px] uppercase text-white/30">Horas planejadas</p><p className="mt-1 text-xl font-semibold">{horas(impressora.horas_planejadas ?? 0)}h</p></div>
-                <div className="rounded-xl bg-white/[0.03] p-3"><p className="text-[10px] uppercase text-white/30">Horímetro</p><p className="mt-1 font-mono">{horas(impressora.horas_totais)}h</p></div>
-                <div className="rounded-xl bg-white/[0.03] p-3"><p className="text-[10px] uppercase text-white/30">Custo/hora</p><p className="mt-1 font-mono">{moeda(impressora.custo_hora)}</p></div>
+                <div className="rounded-xl bg-subtle p-3"><p className="text-[10px] uppercase text-muted-foreground">Fila ativa</p><p className="mt-1 text-xl font-semibold">{impressora.pedidos_ativos ?? 0}</p></div>
+                <div className="rounded-xl bg-subtle p-3"><p className="text-[10px] uppercase text-muted-foreground">Horas planejadas</p><p className="mt-1 text-xl font-semibold">{horas(impressora.horas_planejadas ?? 0)}h</p></div>
+                <div className="rounded-xl bg-subtle p-3"><p className="text-[10px] uppercase text-muted-foreground">Horímetro</p><p className="mt-1 font-mono">{horas(impressora.horas_totais)}h</p></div>
+                <div className="rounded-xl bg-subtle p-3"><p className="text-[10px] uppercase text-muted-foreground">Custo/hora</p><p className="mt-1 font-mono">{moeda(impressora.custo_hora)}</p></div>
               </div>
 
-              <div className="mt-4 rounded-xl border border-white/[0.06] bg-[#101114] p-4">
+              <div className="mt-4 rounded-xl border border-border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-xs text-white/55"><Gauge size={14} /> Próxima revisão</div>
+                  <div className="flex items-center gap-2 text-xs text-secondary-foreground"><Gauge size={14} /> Próxima revisão</div>
                   <span className={`rounded-full border px-2 py-1 text-[10px] ${classeManutencao(impressora.manutencao_status)}`}>{impressora.manutencao_status}</span>
                 </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full ${impressora.manutencao_status === 'Vencida' ? 'bg-red-400' : impressora.manutencao_status === 'Proxima' ? 'bg-amber-400' : 'bg-[#d8f45a]'}`} style={{ width: `${percentualBarra}%` }} /></div>
-                <div className="mt-2 flex justify-between text-[10px] text-white/35">
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-subtle"><div className={`h-full rounded-full ${impressora.manutencao_status === 'Vencida' ? 'bg-red-400' : impressora.manutencao_status === 'Proxima' ? 'bg-amber-400' : 'bg-accent'}`} style={{ width: `${percentualBarra}%` }} /></div>
+                <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
                   <span>{horas(impressora.horas_desde_manutencao)}h desde a revisão</span>
                   <span>{impressora.manutencao_status === 'Vencida' ? `${horas(impressora.horas_desde_manutencao - impressora.intervalo_manutencao_horas)}h atrasada` : `faltam ${horas(impressora.horas_restantes_manutencao)}h`}</span>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap justify-end gap-2">
-                <button onClick={() => abrirManutencao(impressora)} className="flex items-center gap-2 rounded-lg border border-[#d8f45a]/20 bg-[#d8f45a]/10 px-3 py-2 text-xs text-[#d8f45a] hover:bg-[#d8f45a]/15"><Wrench size={14} /> Registrar manutenção</button>
-                <button aria-label={`Editar ${impressora.nome}`} onClick={() => abrir(impressora)} className="rounded-lg p-2 text-white/45 hover:bg-white/[0.06] hover:text-white"><Pencil size={15} /></button>
-                <button aria-label={`Arquivar ${impressora.nome}`} onClick={() => arquivar(impressora.id)} className="rounded-lg p-2 text-red-400/60 hover:bg-red-500/10"><Trash2 size={15} /></button>
+                <button onClick={() => abrirManutencao(impressora)} className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/10 px-3 py-2 text-xs text-accent hover:bg-accent/15"><Wrench size={14} /> Registrar manutenção</button>
+                <button aria-label={`Editar ${impressora.nome}`} onClick={() => abrir(impressora)} className="rounded-lg p-2 text-muted-foreground hover:bg-subtle hover:text-foreground"><Pencil size={15} /></button>
+                <button aria-label={`Arquivar ${impressora.nome}`} onClick={() => arquivar(impressora.id)} className="rounded-lg p-2 text-destructive hover:bg-red-500/10"><Trash2 size={15} /></button>
               </div>
             </article>
           )
         })}
       </div>
 
-      <section className="mt-8 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
-        <div className="mb-5 flex items-center gap-3"><Activity className="text-[#d8f45a]" size={18} /><div><h2 className="font-semibold">Qualidade e custo por impressora</h2><p className="mt-1 text-xs text-white/35">Pedidos finalizados; melhora conforme você informa tempo real, falhas e custo extra.</p></div></div>
+      <section className="mt-8 rounded-2xl border border-border bg-card p-6">
+        <div className="mb-5 flex items-center gap-3"><Activity className="text-accent" size={18} /><div><h2 className="font-semibold">Qualidade e custo por impressora</h2><p className="mt-1 text-xs text-muted-foreground">Pedidos finalizados; melhora conforme você informa tempo real, falhas e custo extra.</p></div></div>
         <div className="grid gap-4 md:grid-cols-2">
           {impressoras.map((impressora) => {
             const item = indicadoresPorImpressora.get(impressora.id)
             if (!item) return null
             return (
-              <div key={impressora.id} className="rounded-xl border border-white/[0.06] bg-[#101114] p-4">
-                <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">{impressora.nome}</h3><span className="text-[10px] text-white/30">{item.pedidosFinalizados} finalizados</span></div>
+              <div key={impressora.id} className="rounded-xl border border-border bg-background p-4">
+                <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">{impressora.nome}</h3><span className="text-[10px] text-muted-foreground">{item.pedidosFinalizados} finalizados</span></div>
                 <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 text-xs">
-                  <div><p className="text-white/35">Pedidos com falha</p><p className={`mt-1 font-mono text-base ${item.taxaPedidosComFalha > 10 ? 'text-amber-300' : 'text-white/75'}`}>{item.taxaPedidosComFalha.toLocaleString('pt-BR')}%</p><p className="text-[10px] text-white/25">{item.totalFalhas} falhas registradas</p></div>
-                  <div><p className="text-white/35">Tempo real × previsto</p><p className={`mt-1 font-mono text-base ${item.desvioHoras > 0 ? 'text-amber-300' : 'text-white/75'}`}>{item.desvioHoras > 0 ? '+' : ''}{horas(item.desvioHoras)}h</p><p className="text-[10px] text-white/25">{horas(item.horasReais)}h produzidas</p></div>
-                  <div><p className="text-white/35">Custo extra</p><p className="mt-1 font-mono text-base text-white/75">{moeda(item.custoExtra)}</p></div>
-                  <div><p className="text-white/35">Resultado estimado</p><p className={`mt-1 font-mono text-base ${item.lucroEstimado < 0 ? 'text-red-300' : 'text-[#d8f45a]'}`}>{moeda(item.lucroEstimado)}</p><p className="text-[10px] text-white/25">{moeda(item.faturamento)} faturados</p></div>
+                  <div><p className="text-muted-foreground">Pedidos com falha</p><p className={`mt-1 font-mono text-base ${item.taxaPedidosComFalha > 10 ? 'text-warning' : 'text-secondary-foreground'}`}>{item.taxaPedidosComFalha.toLocaleString('pt-BR')}%</p><p className="text-[10px] text-muted-foreground">{item.totalFalhas} falhas registradas</p></div>
+                  <div><p className="text-muted-foreground">Tempo real × previsto</p><p className={`mt-1 font-mono text-base ${item.desvioHoras > 0 ? 'text-warning' : 'text-secondary-foreground'}`}>{item.desvioHoras > 0 ? '+' : ''}{horas(item.desvioHoras)}h</p><p className="text-[10px] text-muted-foreground">{horas(item.horasReais)}h produzidas</p></div>
+                  <div><p className="text-muted-foreground">Custo extra</p><p className="mt-1 font-mono text-base text-secondary-foreground">{moeda(item.custoExtra)}</p></div>
+                  <div><p className="text-muted-foreground">Resultado estimado</p><p className={`mt-1 font-mono text-base ${item.lucroEstimado < 0 ? 'text-destructive' : 'text-accent'}`}>{moeda(item.lucroEstimado)}</p><p className="text-[10px] text-muted-foreground">{moeda(item.faturamento)} faturados</p></div>
                 </div>
               </div>
             )
@@ -225,14 +225,14 @@ export function ImpressorasPage({
         </div>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
-        <div className="mb-4 flex items-center gap-3"><Wrench className="text-[#d8f45a]" size={18} /><div><h2 className="font-semibold">Histórico de manutenção</h2><p className="mt-1 text-xs text-white/35">Últimos 20 registros de todas as impressoras.</p></div></div>
-        {manutencoes.length === 0 ? <p className="rounded-xl bg-white/[0.03] p-4 text-sm text-white/35">Nenhuma manutenção registrada ainda.</p> : (
-          <div className="divide-y divide-white/[0.06]">
+      <section className="mt-6 rounded-2xl border border-border bg-card p-6">
+        <div className="mb-4 flex items-center gap-3"><Wrench className="text-accent" size={18} /><div><h2 className="font-semibold">Histórico de manutenção</h2><p className="mt-1 text-xs text-muted-foreground">Últimos 20 registros de todas as impressoras.</p></div></div>
+        {manutencoes.length === 0 ? <p className="rounded-xl bg-subtle p-4 text-sm text-muted-foreground">Nenhuma manutenção registrada ainda.</p> : (
+          <div className="divide-y divide-border">
             {manutencoes.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs">
-                <div><p className="font-medium text-white/75">{item.impressora_nome} · {item.tipo}</p><p className="mt-1 text-white/30">{new Date(`${item.realizada_em}T12:00:00`).toLocaleDateString('pt-BR')} · horímetro {horas(item.horas_no_momento)}h{item.descricao ? ` · ${item.descricao}` : ''}</p></div>
-                <div className="text-right"><p className="font-mono text-white/65">{moeda(item.custo)}</p>{item.despesa_id && <p className="mt-1 text-[10px] text-[#d8f45a]">Lançada no financeiro</p>}</div>
+                <div><p className="font-medium text-secondary-foreground">{item.impressora_nome} · {item.tipo}</p><p className="mt-1 text-muted-foreground">{new Date(`${item.realizada_em}T12:00:00`).toLocaleDateString('pt-BR')} · horímetro {horas(item.horas_no_momento)}h{item.descricao ? ` · ${item.descricao}` : ''}</p></div>
+                <div className="text-right"><p className="font-mono text-secondary-foreground">{moeda(item.custo)}</p>{item.despesa_id && <p className="mt-1 text-[10px] text-accent">Lançada no financeiro</p>}</div>
               </div>
             ))}
           </div>
@@ -241,24 +241,24 @@ export function ImpressorasPage({
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
-          <form onSubmit={salvar} className="my-6 w-full max-w-lg rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
+          <form onSubmit={salvar} className="my-6 w-full max-w-lg rounded-2xl border border-border bg-card p-6">
             <div className="mb-6 flex items-center justify-between"><h2 className="font-semibold">{form.id ? 'Editar impressora' : 'Nova impressora'}</h2><button type="button" onClick={() => setModal(false)}><X size={18} /></button></div>
             <div className="space-y-4">
-              <label className="block text-xs text-white/55">Nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
-              <label className="block text-xs text-white/55">Modelo<input value={form.modelo ?? ''} onChange={(e) => setForm({ ...form, modelo: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
+              <label className="block text-xs text-secondary-foreground">Nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
+              <label className="block text-xs text-secondary-foreground">Modelo<input value={form.modelo ?? ''} onChange={(e) => setForm({ ...form, modelo: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               <div className="grid grid-cols-2 gap-4">
-                <label className="text-xs text-white/55">Potência (W)<input type="number" min="0" value={form.potencia_w} onChange={(e) => setForm({ ...form, potencia_w: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
-                <label className="text-xs text-white/55">Custo/hora<input type="number" step="0.01" min="0" value={form.custo_hora} onChange={(e) => setForm({ ...form, custo_hora: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
+                <label className="text-xs text-secondary-foreground">Potência (W)<input type="number" min="0" value={form.potencia_w} onChange={(e) => setForm({ ...form, potencia_w: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
+                <label className="text-xs text-secondary-foreground">Custo/hora<input type="number" step="0.01" min="0" value={form.custo_hora} onChange={(e) => setForm({ ...form, custo_hora: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <label className="text-xs text-white/55">Bico atual<input placeholder="Ex.: 0.2 mm" maxLength={40} value={form.bico_atual ?? ''} onChange={(e) => setForm({ ...form, bico_atual: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
-                <label className="text-xs text-white/55">Revisão a cada (h)<input required type="number" step="1" min="1" value={form.intervalo_manutencao_horas} onChange={(e) => setForm({ ...form, intervalo_manutencao_horas: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
+                <label className="text-xs text-secondary-foreground">Bico atual<input placeholder="Ex.: 0.2 mm" maxLength={40} value={form.bico_atual ?? ''} onChange={(e) => setForm({ ...form, bico_atual: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
+                <label className="text-xs text-secondary-foreground">Revisão a cada (h)<input required type="number" step="1" min="1" value={form.intervalo_manutencao_horas} onChange={(e) => setForm({ ...form, intervalo_manutencao_horas: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               </div>
-              <label className="block text-xs text-white/55">Horímetro inicial (h)<input type="number" step="0.1" min="0" value={form.horas_base} onChange={(e) => setForm({ ...form, horas_base: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /><span className="mt-1 block text-[10px] text-white/25">Use para informar as horas acumuladas antes de começar a registrar pedidos no ERP.</span></label>
-              <label className="block text-xs text-white/55">Intervalo entre impressões (min)<input required type="number" step="1" min="0" max="1440" value={form.intervalo_entre_trabalhos_minutos} onChange={(e) => setForm({ ...form, intervalo_entre_trabalhos_minutos: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /><span className="mt-1 block text-[10px] text-white/25">Tempo para retirar a placa, limpar e preparar a próxima impressão.</span></label>
-              <label className="block text-xs text-white/55">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Impressora['status'] })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm">{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
-              {erro && <p className="text-xs text-red-400">{erro}</p>}
-              <button disabled={isPending} className="w-full rounded-lg bg-[#d8f45a] py-3 text-sm font-semibold text-[#15180d] disabled:opacity-50">{isPending ? 'Salvando...' : 'Salvar'}</button>
+              <label className="block text-xs text-secondary-foreground">Horímetro inicial (h)<input type="number" step="0.1" min="0" value={form.horas_base} onChange={(e) => setForm({ ...form, horas_base: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /><span className="mt-1 block text-[10px] text-muted-foreground">Use para informar as horas acumuladas antes de começar a registrar pedidos no ERP.</span></label>
+              <label className="block text-xs text-secondary-foreground">Intervalo entre impressões (min)<input required type="number" step="1" min="0" max="1440" value={form.intervalo_entre_trabalhos_minutos} onChange={(e) => setForm({ ...form, intervalo_entre_trabalhos_minutos: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /><span className="mt-1 block text-[10px] text-muted-foreground">Tempo para retirar a placa, limpar e preparar a próxima impressão.</span></label>
+              <label className="block text-xs text-secondary-foreground">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Impressora['status'] })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm">{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
+              {erro && <p className="text-xs text-destructive">{erro}</p>}
+              <button disabled={isPending} className="w-full rounded-lg bg-accent py-3 text-sm font-semibold text-accent-foreground disabled:opacity-50">{isPending ? 'Salvando...' : 'Salvar'}</button>
             </div>
           </form>
         </div>
@@ -266,22 +266,22 @@ export function ImpressorasPage({
 
       {modalManutencao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
-          <form onSubmit={salvarManutencao} className="my-6 w-full max-w-lg rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
-            <div className="mb-6 flex items-center justify-between"><div><h2 className="font-semibold">Registrar manutenção</h2><p className="mt-1 text-xs text-white/35">{impressoras.find((item) => item.id === manutencao.impressoraId)?.nome}</p></div><button type="button" onClick={() => setModalManutencao(false)}><X size={18} /></button></div>
+          <form onSubmit={salvarManutencao} className="my-6 w-full max-w-lg rounded-2xl border border-border bg-card p-6">
+            <div className="mb-6 flex items-center justify-between"><div><h2 className="font-semibold">Registrar manutenção</h2><p className="mt-1 text-xs text-muted-foreground">{impressoras.find((item) => item.id === manutencao.impressoraId)?.nome}</p></div><button type="button" onClick={() => setModalManutencao(false)}><X size={18} /></button></div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <label className="text-xs text-white/55">Tipo<select value={manutencao.tipo} onChange={(e) => setManutencao({ ...manutencao, tipo: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm">{tiposManutencao.map((tipo) => <option key={tipo}>{tipo}</option>)}</select></label>
-                <label className="text-xs text-white/55">Data<input required type="date" max={hojeLocal()} value={manutencao.realizadaEm} onChange={(e) => setManutencao({ ...manutencao, realizadaEm: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
+                <label className="text-xs text-secondary-foreground">Tipo<select value={manutencao.tipo} onChange={(e) => setManutencao({ ...manutencao, tipo: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm">{tiposManutencao.map((tipo) => <option key={tipo}>{tipo}</option>)}</select></label>
+                <label className="text-xs text-secondary-foreground">Data<input required type="date" max={hojeLocal()} value={manutencao.realizadaEm} onChange={(e) => setManutencao({ ...manutencao, realizadaEm: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               </div>
-              <label className="block text-xs text-white/55">Descrição<textarea maxLength={500} rows={3} placeholder="Ex.: limpeza dos eixos e troca do bico 0.2 mm" value={manutencao.descricao} onChange={(e) => setManutencao({ ...manutencao, descricao: e.target.value })} className="mt-2 w-full rounded-lg border border-white/10 bg-[#101114] p-3 text-sm" /></label>
+              <label className="block text-xs text-secondary-foreground">Descrição<textarea maxLength={500} rows={3} placeholder="Ex.: limpeza dos eixos e troca do bico 0.2 mm" value={manutencao.descricao} onChange={(e) => setManutencao({ ...manutencao, descricao: e.target.value })} className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm" /></label>
               <div className="grid grid-cols-2 gap-4">
-                <label className="text-xs text-white/55">Custo<input type="number" step="0.01" min="0" value={manutencao.custo} onChange={(e) => setManutencao({ ...manutencao, custo: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm" /></label>
-                <label className="text-xs text-white/55">Pagamento<select disabled={!manutencao.lancarFinanceiro || manutencao.custo <= 0} value={manutencao.formaPagamento} onChange={(e) => setManutencao({ ...manutencao, formaPagamento: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm disabled:opacity-40"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Outro</option></select></label>
+                <label className="text-xs text-secondary-foreground">Custo<input type="number" step="0.01" min="0" value={manutencao.custo} onChange={(e) => setManutencao({ ...manutencao, custo: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
+                <label className="text-xs text-secondary-foreground">Pagamento<select disabled={!manutencao.lancarFinanceiro || manutencao.custo <= 0} value={manutencao.formaPagamento} onChange={(e) => setManutencao({ ...manutencao, formaPagamento: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-40"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Outro</option></select></label>
               </div>
-              <label className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-xs text-white/55"><input type="checkbox" checked={manutencao.lancarFinanceiro} onChange={(e) => setManutencao({ ...manutencao, lancarFinanceiro: e.target.checked })} className="mt-0.5 accent-[#d8f45a]" /><span>Lançar automaticamente como despesa paga na categoria Manutenção.</span></label>
-              <div className="flex gap-2 rounded-xl border border-amber-500/15 bg-amber-500/[0.06] p-3 text-xs text-amber-100/70"><AlertTriangle className="mt-0.5 shrink-0" size={14} /><p>O horímetro será registrado pelas horas dos pedidos finalizados até esta data. Ajuste o horímetro inicial na impressora caso existam horas anteriores ao ERP.</p></div>
-              {erro && <p className="text-xs text-red-400">{erro}</p>}
-              <button disabled={isPending} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#d8f45a] py-3 text-sm font-semibold text-[#15180d] disabled:opacity-50"><CircleDollarSign size={16} />{isPending ? 'Registrando...' : 'Registrar manutenção'}</button>
+              <label className="flex items-start gap-3 rounded-xl border border-border bg-subtle p-3 text-xs text-secondary-foreground"><input type="checkbox" checked={manutencao.lancarFinanceiro} onChange={(e) => setManutencao({ ...manutencao, lancarFinanceiro: e.target.checked })} className="mt-0.5 accent-[#d8f45a]" /><span>Lançar automaticamente como despesa paga na categoria Manutenção.</span></label>
+              <div className="flex gap-2 rounded-xl border border-amber-500/15 bg-amber-500/[0.06] p-3 text-xs text-warning"><AlertTriangle className="mt-0.5 shrink-0" size={14} /><p>O horímetro será registrado pelas horas dos pedidos finalizados até esta data. Ajuste o horímetro inicial na impressora caso existam horas anteriores ao ERP.</p></div>
+              {erro && <p className="text-xs text-destructive">{erro}</p>}
+              <button disabled={isPending} className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-3 text-sm font-semibold text-accent-foreground disabled:opacity-50"><CircleDollarSign size={16} />{isPending ? 'Registrando...' : 'Registrar manutenção'}</button>
             </div>
           </form>
         </div>

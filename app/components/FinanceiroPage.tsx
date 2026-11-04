@@ -87,71 +87,71 @@ export function FinanceiroPage({
     <>
       <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
-            <span>Sistema</span><span>/</span><span className="text-white/65">Financeiro</span>
+          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Sistema</span><span>/</span><span className="text-secondary-foreground">Financeiro</span>
           </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">Financeiro</h1>
+          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-[34px]">Financeiro</h1>
         </div>
-        <Link href="/financeiro/conciliacao" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 text-xs font-medium text-blue-300 transition hover:bg-blue-500/15 sm:w-auto"><Landmark size={15} /> Conciliar banco</Link>
+        <Link href="/financeiro/conciliacao" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-4 text-xs font-medium text-info transition hover:bg-blue-500/15 sm:w-auto"><Landmark size={15} /> Conciliar banco</Link>
       </div>
 
       <ContasFinanceiras contas={contas} transferencias={transferencias} />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {/* Recebido */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/10 text-success">
               <TrendingUp size={18} />
             </div>
-            <span className="text-xs font-medium text-white/55">Recebido (mês)</span>
+            <span className="text-xs font-medium text-secondary-foreground">Recebido (mês)</span>
           </div>
-          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(resumoRecebimentos.totalRecebidoMes)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-foreground 2xl:text-2xl">{fmtBRL(resumoRecebimentos.totalRecebidoMes)}</p>
         </div>
 
         {/* Despesas */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-red-500/10 text-destructive">
               <TrendingDown size={18} />
             </div>
-            <span className="text-xs font-medium text-white/55">Despesas (mês)</span>
+            <span className="text-xs font-medium text-secondary-foreground">Despesas (mês)</span>
           </div>
-          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(resumoDespesas.totalDespesasMes)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-foreground 2xl:text-2xl">{fmtBRL(resumoDespesas.totalDespesasMes)}</p>
         </div>
 
         {/* Saldo Operacional */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/10 text-info">
               <Wallet size={18} />
             </div>
-            <span className="text-xs font-medium text-white/55">Saldo em caixa</span>
+            <span className="text-xs font-medium text-secondary-foreground">Saldo em caixa</span>
           </div>
-          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(saldoCaixa)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-foreground 2xl:text-2xl">{fmtBRL(saldoCaixa)}</p>
         </div>
 
         {/* Inadimplência */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-warning">
               <DollarSign size={18} />
             </div>
-            <span className="text-xs font-medium text-white/55">Em atraso</span>
+            <span className="text-xs font-medium text-secondary-foreground">Em atraso</span>
           </div>
-          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-amber-400 2xl:text-2xl">{fmtBRL(resumoRecebimentos.totalVencido)}</p>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-warning 2xl:text-2xl">{fmtBRL(resumoRecebimentos.totalVencido)}</p>
         </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
-          <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-[#d8f45a]/10 text-[#d8f45a]"><TrendingUp size={18} /></div><span className="text-xs font-medium text-white/55">Saldo projetado</span></div>
-          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-[#d8f45a] 2xl:text-2xl">{fmtBRL(saldoProjetado)}</p>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-accent/10 text-accent"><TrendingUp size={18} /></div><span className="text-xs font-medium text-secondary-foreground">Saldo projetado</span></div>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-accent 2xl:text-2xl">{fmtBRL(saldoProjetado)}</p>
         </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-5 shadow-2xl">
-          <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400"><DollarSign size={18} /></div><span className="text-xs font-medium text-white/55">Receita por competência</span></div>
-          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-white 2xl:text-2xl">{fmtBRL(resumoRecebimentos.receitaCompetenciaMes)}</p>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="mb-4 flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-violet-500/10 text-accent"><DollarSign size={18} /></div><span className="text-xs font-medium text-secondary-foreground">Receita por competência</span></div>
+          <p className="whitespace-nowrap text-xl font-bold tracking-tight text-foreground 2xl:text-2xl">{fmtBRL(resumoRecebimentos.receitaCompetenciaMes)}</p>
         </div>
       </div>
 
-      {mensagem && <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/70">{mensagem}</div>}
+      {mensagem && <div className="mb-5 rounded-xl border border-border bg-subtle p-3 text-sm text-secondary-foreground">{mensagem}</div>}
 
       <DespesasRecorrentes itens={despesasRecorrentes} />
 
@@ -159,29 +159,29 @@ export function FinanceiroPage({
 
       <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-2">
         {/* Pagamentos Pendentes */}
-        <div className="flex min-h-0 flex-col rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
-            <div><h2 className="text-sm font-semibold text-white">Pagamentos pendentes</h2><p className="mt-1 text-xs text-white/35">Valores que ainda precisam ser recebidos.</p></div>
-            <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-300">{pendentes.length}</span>
+        <div className="flex min-h-0 flex-col rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+            <div><h2 className="text-sm font-semibold text-foreground">Pagamentos pendentes</h2><p className="mt-1 text-xs text-muted-foreground">Valores que ainda precisam ser recebidos.</p></div>
+            <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-warning">{pendentes.length}</span>
           </div>
           <div className="erp-table-scroll erp-table-fit flex-1">
             <table className="w-full table-fixed text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/35"><th className="px-3 py-3">Pedido</th><th className="w-[98px] px-2 py-3">Saldo</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="px-3 py-3">Pedido</th><th className="w-[98px] px-2 py-3">Saldo</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
+              <tbody className="divide-y divide-border">
                 {pendentes.length === 0 && (
-                  <tr><td colSpan={3} className="py-8 text-center text-xs text-white/40">Nenhum pagamento pendente!</td></tr>
+                  <tr><td colSpan={3} className="py-8 text-center text-xs text-muted-foreground">Nenhum pagamento pendente!</td></tr>
                 )}
                 {pendentes.map(p => (
-                  <tr key={p.parcela_id} className="group hover:bg-white/[0.02]">
+                  <tr key={p.parcela_id} className="group hover:bg-subtle">
                     <td className="px-3 py-3">
-                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-white" title={p.nome_da_peca}>{p.nome_da_peca}</p>
-                      <p className="mt-0.5 truncate text-xs leading-4 text-white/45" title={`${p.cliente_nome} · parcela ${p.numero_parcela}/${p.total_parcelas} · ${p.situacao}${p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}`}>{p.cliente_nome} · parcela {p.numero_parcela}/{p.total_parcelas} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
+                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-foreground" title={p.nome_da_peca}>{p.nome_da_peca}</p>
+                      <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground" title={`${p.cliente_nome} · parcela ${p.numero_parcela}/${p.total_parcelas} · ${p.situacao}${p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}`}>{p.cliente_nome} · parcela {p.numero_parcela}/{p.total_parcelas} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
                     </td>
-                    <td className="px-2 py-3 font-mono text-xs text-[#d8f45a] whitespace-nowrap">{fmtBRL(p.saldo_pendente)}</td>
+                    <td className="px-2 py-3 font-mono text-xs text-accent whitespace-nowrap">{fmtBRL(p.saldo_pendente)}</td>
                     <td className="px-3 py-3 text-right">
                       <button 
                         onClick={() => setRecModal(p.pedido_id)}
-                        className="w-full rounded bg-emerald-500/10 px-2 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20"
+                        className="w-full rounded bg-emerald-500/10 px-2 py-1.5 text-xs font-medium text-success hover:bg-emerald-500/20"
                       >
                         Receber
                       </button>
@@ -194,42 +194,42 @@ export function FinanceiroPage({
         </div>
 
         {/* Despesas */}
-        <div className="flex min-h-0 flex-col rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
-            <div><h2 className="text-sm font-semibold text-white">Despesas e contas a pagar</h2><p className="mt-1 text-xs text-white/35">{despesasVisiveis.length} de {despesas.length} lançamento(s)</p></div>
-            <button onClick={() => setDespesaModal('new')} className="rounded bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.1]">
+        <div className="flex min-h-0 flex-col rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+            <div><h2 className="text-sm font-semibold text-foreground">Despesas e contas a pagar</h2><p className="mt-1 text-xs text-muted-foreground">{despesasVisiveis.length} de {despesas.length} lançamento(s)</p></div>
+            <button onClick={() => setDespesaModal('new')} className="rounded bg-subtle px-3 py-1.5 text-xs font-medium text-foreground hover:bg-subtle">
               Nova Despesa
             </button>
           </div>
-          <div className="grid gap-2 border-b border-white/[0.06] p-3 sm:grid-cols-[minmax(0,1fr)_130px_140px]">
-            <label className="relative"><Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/25" /><input aria-label="Buscar despesa" value={buscaDespesa} onChange={(event) => setBuscaDespesa(event.target.value)} placeholder="Buscar despesa" className="h-9 w-full rounded-lg border border-white/[0.08] bg-[#101114] pl-8 pr-3 text-xs outline-none placeholder:text-white/25 focus:border-[#d8f45a]/40" /></label>
-            <select aria-label="Filtrar despesas por status" value={statusDespesa} onChange={(event) => setStatusDespesa(event.target.value as typeof statusDespesa)} className="h-9 rounded-lg border border-white/[0.08] bg-[#101114] px-2 text-xs text-white/65"><option>Todas</option><option>Pendentes</option><option>Pagas</option></select>
-            <select aria-label="Ordenar despesas" value={ordemDespesa} onChange={(event) => setOrdemDespesa(event.target.value as typeof ordemDespesa)} className="h-9 rounded-lg border border-white/[0.08] bg-[#101114] px-2 text-xs text-white/65"><option>Recentes</option><option>Vencimento</option></select>
+          <div className="grid gap-2 border-b border-border p-3 sm:grid-cols-[minmax(0,1fr)_130px_140px]">
+            <label className="relative"><Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input aria-label="Buscar despesa" value={buscaDespesa} onChange={(event) => setBuscaDespesa(event.target.value)} placeholder="Buscar despesa" className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-accent/40" /></label>
+            <select aria-label="Filtrar despesas por status" value={statusDespesa} onChange={(event) => setStatusDespesa(event.target.value as typeof statusDespesa)} className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-secondary-foreground"><option>Todas</option><option>Pendentes</option><option>Pagas</option></select>
+            <select aria-label="Ordenar despesas" value={ordemDespesa} onChange={(event) => setOrdemDespesa(event.target.value as typeof ordemDespesa)} className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-secondary-foreground"><option>Recentes</option><option>Vencimento</option></select>
           </div>
           <div className="erp-table-scroll erp-table-fit flex-1">
             <table className="w-full table-fixed text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/35"><th className="px-3 py-3">Despesa</th><th className="w-[94px] px-2 py-3">Vencimento</th><th className="w-[98px] px-2 py-3 text-right">Valor</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="px-3 py-3">Despesa</th><th className="w-[94px] px-2 py-3">Vencimento</th><th className="w-[98px] px-2 py-3 text-right">Valor</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
+              <tbody className="divide-y divide-border">
                 {despesasVisiveis.length === 0 && (
-                  <tr><td colSpan={4} className="py-8 text-center text-xs text-white/40">Nenhuma despesa corresponde aos filtros.</td></tr>
+                  <tr><td colSpan={4} className="py-8 text-center text-xs text-muted-foreground">Nenhuma despesa corresponde aos filtros.</td></tr>
                 )}
                 {despesasVisiveis.map(d => (
-                  <tr key={d.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setDespesaModal(d)}>
+                  <tr key={d.id} className="group hover:bg-subtle cursor-pointer" onClick={() => setDespesaModal(d)}>
                     <td className="px-3 py-3">
-                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-white" title={d.descricao}>{d.descricao}</p>
-                      <p className="mt-0.5 truncate text-xs leading-4 text-white/45" title={`${d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}vence ${d.vencimento_em.split('-').reverse().join('/')}${d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}${d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}`}>
+                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-foreground" title={d.descricao}>{d.descricao}</p>
+                      <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground" title={`${d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}vence ${d.vencimento_em.split('-').reverse().join('/')}${d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}${d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}`}>
                         {d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}
                         vence {d.vencimento_em.split('-').reverse().join('/')}
                         {d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}
                         {d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}
                       </p>
-                      <div className="mt-1 flex min-w-0 gap-1"><span className="truncate rounded bg-white/[0.05] px-1.5 py-0.5 text-[10px] uppercase text-white/50">{d.categoria}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${d.pago_em ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{d.pago_em ? 'Paga' : 'Pendente'}</span></div>
+                      <div className="mt-1 flex min-w-0 gap-1"><span className="truncate rounded bg-subtle px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">{d.categoria}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${d.pago_em ? 'bg-emerald-500/10 text-success' : 'bg-amber-500/10 text-warning'}`}>{d.pago_em ? 'Paga' : 'Pendente'}</span></div>
                     </td>
-                    <td className="px-2 py-3 font-mono text-[11px] text-white/70 whitespace-nowrap">{d.vencimento_em.split('-').reverse().join('/')}</td>
-                    <td className="px-2 py-3 text-right font-mono text-xs text-red-400 whitespace-nowrap">{fmtBRL(d.valor)}</td>
+                    <td className="px-2 py-3 font-mono text-[11px] text-secondary-foreground whitespace-nowrap">{d.vencimento_em.split('-').reverse().join('/')}</td>
+                    <td className="px-2 py-3 text-right font-mono text-xs text-destructive whitespace-nowrap">{fmtBRL(d.valor)}</td>
                     <td className="px-3 py-3 text-right">
                       <button type="button" disabled={isPending} onClick={(event) => alternarPagamento(event, d)}
-                        className={`w-full rounded px-2 py-1.5 text-[11px] font-medium disabled:opacity-50 ${d.pago_em ? 'bg-white/[0.05] text-white/50 hover:bg-white/[0.1]' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                        className={`w-full rounded px-2 py-1.5 text-[11px] font-medium disabled:opacity-50 ${d.pago_em ? 'bg-subtle text-muted-foreground hover:bg-subtle' : 'bg-emerald-500/10 text-success hover:bg-emerald-500/20'}`}>
                         {d.pago_em ? 'Reabrir' : 'Dar baixa'}
                       </button>
                     </td>
@@ -242,29 +242,29 @@ export function FinanceiroPage({
       </div>
       
       {/* Fluxo Capital */}
-      <div className="mt-6 rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
-          <div><h2 className="text-sm font-semibold text-white">Aportes & retiradas</h2><p className="mt-1 text-xs text-white/35">{fluxo.length} movimentação(ões) de capital</p></div>
-          <button onClick={() => setFluxoModal('new')} className="rounded bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/[0.1]">
+      <div className="mt-6 rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div><h2 className="text-sm font-semibold text-foreground">Aportes & retiradas</h2><p className="mt-1 text-xs text-muted-foreground">{fluxo.length} movimentação(ões) de capital</p></div>
+          <button onClick={() => setFluxoModal('new')} className="rounded bg-subtle px-3 py-1.5 text-xs font-medium text-foreground hover:bg-subtle">
             Nova Movimentação
           </button>
         </div>
         <div className="erp-table-scroll">
             <table className="w-full min-w-[520px] text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-white/30"><th className="px-4 py-3">Movimentação</th><th className="px-4 py-3">Data</th><th className="px-4 py-3 text-right">Valor</th></tr></thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="px-4 py-3">Movimentação</th><th className="px-4 py-3">Data</th><th className="px-4 py-3 text-right">Valor</th></tr></thead>
+              <tbody className="divide-y divide-border">
                 {fluxo.length === 0 && (
-                  <tr><td colSpan={3} className="py-8 text-center text-xs text-white/40">Nenhuma movimentação.</td></tr>
+                  <tr><td colSpan={3} className="py-8 text-center text-xs text-muted-foreground">Nenhuma movimentação.</td></tr>
                 )}
                 {fluxo.map(f => (
-                  <tr key={f.id} className="group hover:bg-white/[0.02] cursor-pointer" onClick={() => setFluxoModal(f)}>
+                  <tr key={f.id} className="group hover:bg-subtle cursor-pointer" onClick={() => setFluxoModal(f)}>
                     <td className="p-4">
-                      <span className={`inline-block mb-1 rounded px-2 py-0.5 text-[10px] uppercase ${f.tipo==='Aporte' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>{f.tipo}</span>
-                      <p className="font-medium text-white">{f.descricao || f.tipo}</p>
-                      {f.conta_financeira_nome && <p className="mt-1 text-xs text-white/35">{f.conta_financeira_nome}</p>}
+                      <span className={`inline-block mb-1 rounded px-2 py-0.5 text-[10px] uppercase ${f.tipo==='Aporte' ? 'bg-emerald-500/10 text-success' : 'bg-amber-500/10 text-warning'}`}>{f.tipo}</span>
+                      <p className="font-medium text-foreground">{f.descricao || f.tipo}</p>
+                      {f.conta_financeira_nome && <p className="mt-1 text-xs text-muted-foreground">{f.conta_financeira_nome}</p>}
                     </td>
-                    <td className="p-4 font-mono text-white/80">{f.data_movimentacao.substring(0,10)}</td>
-                    <td className="p-4 text-right font-mono text-white">{fmtBRL(f.valor)}</td>
+                    <td className="p-4 font-mono text-secondary-foreground">{f.data_movimentacao.substring(0,10)}</td>
+                    <td className="p-4 text-right font-mono text-foreground">{fmtBRL(f.valor)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -85,28 +85,28 @@ export function RecebimentoModal({ pedidoId, onClose, contas = [] }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
-      <div className="my-6 max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#15171b] p-6">
+      <div className="my-6 max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6">
         <div className="mb-6 flex items-center justify-between">
           <h3 className="text-lg font-semibold">Registrar Pagamento</h3>
-          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={20}/></button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
         </div>
 
-        {contexto && <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] p-4 text-xs">
-          <div><span className="text-white/35">Total</span><p className="mt-1 font-mono text-white/80">{moeda(contexto.valor_total)}</p></div>
-          <div><span className="text-white/35">Saldo pendente</span><p className="mt-1 font-mono text-amber-300">{moeda(contexto.saldo_pendente)}</p></div>
-          {contexto.sinal_percentual > 0 && <><div><span className="text-white/35">Sinal combinado</span><p className="mt-1 font-mono text-[#d8f45a]">{contexto.sinal_percentual.toLocaleString('pt-BR')}% · {moeda(contexto.valor_sinal)}</p></div><div><span className="text-white/35">Sinal já recebido</span><p className="mt-1 font-mono text-emerald-400">{moeda(contexto.sinal_recebido)}</p></div></>}
+        {contexto && <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-border bg-subtle p-4 text-xs">
+          <div><span className="text-muted-foreground">Total</span><p className="mt-1 font-mono text-secondary-foreground">{moeda(contexto.valor_total)}</p></div>
+          <div><span className="text-muted-foreground">Saldo pendente</span><p className="mt-1 font-mono text-warning">{moeda(contexto.saldo_pendente)}</p></div>
+          {contexto.sinal_percentual > 0 && <><div><span className="text-muted-foreground">Sinal combinado</span><p className="mt-1 font-mono text-accent">{contexto.sinal_percentual.toLocaleString('pt-BR')}% · {moeda(contexto.valor_sinal)}</p></div><div><span className="text-muted-foreground">Sinal já recebido</span><p className="mt-1 font-mono text-success">{moeda(contexto.sinal_recebido)}</p></div></>}
         </div>}
 
         {historico.length > 0 && (
-          <div className="mb-6 rounded-lg bg-white/[0.03] p-4">
-            <h4 className="text-xs font-medium text-white/50 mb-2">Histórico de Pagamentos</h4>
+          <div className="mb-6 rounded-lg bg-subtle p-4">
+            <h4 className="text-xs font-medium text-muted-foreground mb-2">Histórico de Pagamentos</h4>
             <div className="space-y-2">
               {historico.map(h => (
                 <div key={h.id} className="flex justify-between items-center text-sm">
-                  <span className="text-white/70"><b>{h.tipo_recebimento === 'Quitacao' ? 'Quitação' : h.tipo_recebimento}{h.tipo_recebimento === 'Sinal' ? ` de ${h.percentual_pedido.toLocaleString('pt-BR')}%` : ''}</b><small className="block text-[10px] text-white/35">{h.forma_pagamento}{h.conta_financeira_nome ? ` · ${h.conta_financeira_nome}` : ''}</small></span>
+                  <span className="text-secondary-foreground"><b>{h.tipo_recebimento === 'Quitacao' ? 'Quitação' : h.tipo_recebimento}{h.tipo_recebimento === 'Sinal' ? ` de ${h.percentual_pedido.toLocaleString('pt-BR')}%` : ''}</b><small className="block text-[10px] text-muted-foreground">{h.forma_pagamento}{h.conta_financeira_nome ? ` · ${h.conta_financeira_nome}` : ''}</small></span>
                   <div className="flex items-center gap-3">
-                    <span className="text-[#d8f45a] font-mono">R$ {h.valor.toFixed(2)}</span>
-                    <button onClick={() => handleDel(h.id)} className="text-red-400 hover:text-red-300 text-xs">Estornar</button>
+                    <span className="text-accent font-mono">R$ {h.valor.toFixed(2)}</span>
+                    <button onClick={() => handleDel(h.id)} className="text-destructive hover:text-destructive text-xs">Estornar</button>
                   </div>
                 </div>
               ))}
@@ -116,51 +116,51 @@ export function RecebimentoModal({ pedidoId, onClose, contas = [] }: {
 
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-white/55">Tipo do recebimento</span>
+            <span className="text-xs font-medium text-secondary-foreground">Tipo do recebimento</span>
             <select value={tipoRecebimento} onChange={e => alterarTipo(e.target.value as 'Sinal' | 'Parcial' | 'Quitacao')}
-              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60">
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60">
               <option value="Sinal">Sinal para iniciar a produção</option>
               <option value="Parcial">Pagamento parcial</option>
               <option value="Quitacao">Quitação do saldo</option>
             </select>
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-white/55">Valor (R$)</span>
+            <span className="text-xs font-medium text-secondary-foreground">Valor (R$)</span>
             <input required type="number" step="0.01" min="0.01" value={valor} onChange={e=>setValor(e.target.value)}
-              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" />
-            {tipoRecebimento === 'Sinal' && contexto?.sinal_percentual === 0 && <span className="text-[10px] text-amber-300/70">Este pedido não tinha percentual de sinal definido; o percentual será calculado pelo valor recebido.</span>}
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60" />
+            {tipoRecebimento === 'Sinal' && contexto?.sinal_percentual === 0 && <span className="text-[10px] text-warning">Este pedido não tinha percentual de sinal definido; o percentual será calculado pelo valor recebido.</span>}
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-white/55">Conta de entrada</span>
+            <span className="text-xs font-medium text-secondary-foreground">Conta de entrada</span>
             <select required value={contaId ?? ''} onChange={e => setContaId(Number(e.target.value))}
-              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60">
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60">
               <option value="" disabled>Selecione a conta</option>
               {contasDisponiveis.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}
             </select>
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-white/55">Observação</span>
+            <span className="text-xs font-medium text-secondary-foreground">Observação</span>
             <textarea
               value={obs}
               onChange={e => setObs(e.target.value)}
-              className="min-h-20 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 py-2 text-sm focus:border-[#d8f45a]/60"
+              className="min-h-20 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-accent/60"
             />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-white/55">Data do recebimento</span>
+            <span className="text-xs font-medium text-secondary-foreground">Data do recebimento</span>
             <input required type="date" value={dataRecebimento} onChange={e => setDataRecebimento(e.target.value)}
-              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60" />
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60" />
           </label>
           <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-white/55">Forma de Pagamento</span>
+            <span className="text-xs font-medium text-secondary-foreground">Forma de Pagamento</span>
             <select value={forma} onChange={e=>setForma(e.target.value)}
-              className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm focus:border-[#d8f45a]/60">
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60">
               {['Pix', 'Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'Transferência', 'Outro'].map(f=><option key={f} value={f}>{f}</option>)}
             </select>
           </label>
           <div className="mt-4 flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-xs text-white/50">Cancelar</button>
-            <button type="submit" disabled={isPending || contaId === null} className="rounded-lg bg-[#d8f45a] px-5 py-2 text-xs font-semibold text-[#15180d] disabled:opacity-50">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs text-muted-foreground">Cancelar</button>
+            <button type="submit" disabled={isPending || contaId === null} className="rounded-lg bg-accent px-5 py-2 text-xs font-semibold text-accent-foreground disabled:opacity-50">
               Salvar
             </button>
           </div>

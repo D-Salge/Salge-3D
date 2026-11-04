@@ -35,7 +35,7 @@ export default async function DashboardLayout({
   const config = await getConfiguracoes()
 
   return (
-    <div className="flex min-h-screen bg-[#101114] text-[#f4f4f5]">
+    <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar
         pedidosEmProducao={stats.pedidosEmProducao}
         faturamentoMes={stats.faturamentoBruto}

@@ -28,22 +28,22 @@ export default async function ProducaoPage() {
       {/* Header da Página */}
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end shrink-0">
         <div>
-          <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
+          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
             <span>Dashboard</span>
             <span>/</span>
-            <span className="text-white/65">Produção</span>
+            <span className="text-secondary-foreground">Produção</span>
           </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-[34px]">
             Fila de Produção
           </h1>
-          <p className="mt-2 text-sm text-white/40">
+          <p className="mt-2 text-sm text-muted-foreground">
             Acompanhe o andamento das peças e atualize os status.
           </p>
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-white/60">
-            <Box size={14} className="text-[#d8f45a]" />
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-subtle px-3 py-2 text-xs text-secondary-foreground">
+            <Box size={14} className="text-accent" />
             {pedidos.filter(p => p.status !== 'Finalizado').length} peças ativas
           </div>
         </div>

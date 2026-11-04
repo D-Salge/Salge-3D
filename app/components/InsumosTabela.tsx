@@ -59,64 +59,64 @@ export function InsumosTabela({ insumos }: { insumos: Insumo[] }) {
     <>
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
-            <span>Estoque</span><span>/</span><span className="text-white/65">Insumos</span>
+          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Estoque</span><span>/</span><span className="text-secondary-foreground">Insumos</span>
           </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">Insumos</h1>
-          <p className="mt-2 text-sm text-white/40">Materiais extras: suporte, cola, lixa, embalagem, etc.</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-[34px]">Insumos</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Materiais extras: suporte, cola, lixa, embalagem, etc.</p>
         </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 self-start rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] transition hover:bg-[#e4ff76] sm:self-auto">
+        <button onClick={openNew} className="inline-flex items-center gap-2 self-start rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground transition hover:bg-accent-hover sm:self-auto">
           <Plus size={14} /> Novo insumo
         </button>
       </div>
 
-      <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
-        <div className="flex items-center gap-3 border-b border-white/[0.07] px-6 py-5 sm:px-8">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-white/[0.06] text-[#d8f45a]"><Package size={18} /></div>
+      <div className="rounded-2xl border border-border bg-card shadow-2xl shadow-black/10">
+        <div className="flex items-center gap-3 border-b border-border px-6 py-5 sm:px-8">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-subtle text-accent"><Package size={18} /></div>
           <div>
             <h2 className="text-sm font-semibold">Inventario de Insumos</h2>
-            <p className="mt-0.5 text-xs text-white/35">{insumos.length} cadastrados</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{insumos.length} cadastrados</p>
           </div>
         </div>
         <div className="erp-table-scroll p-6 sm:p-8">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/[0.06]">
+              <tr className="border-b border-border">
                 {['#', 'Nome', 'Unidade', 'Custo Unit.', 'Estoque', 'Minimo', ''].map((h, i) => (
-                  <th key={i} className="pb-3.5 px-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25 first:pl-0 last:pr-0 last:text-right">{h}</th>
+                  <th key={i} className="pb-3.5 px-3 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground first:pl-0 last:pr-0 last:text-right">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.04]">
+            <tbody className="divide-y divide-border">
               {insumos.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-xs text-white/30">Nenhum insumo cadastrado. Clique em Novo insumo para comecar.</td></tr>
+                <tr><td colSpan={7} className="py-8 text-center text-xs text-muted-foreground">Nenhum insumo cadastrado. Clique em Novo insumo para comecar.</td></tr>
               )}
               {insumos.map((ins) => {
                 const bar = estoqueBar(ins.estoque_atual, ins.estoque_minimo)
                 return (
-                  <tr key={ins.id} className="group hover:bg-white/[0.02] transition-colors">
-                    <td className="py-4 pl-0 pr-3 font-mono text-white/20 text-xs">#{ins.id}</td>
-                    <td className="py-4 px-3 font-medium text-white/90">{ins.nome}</td>
+                  <tr key={ins.id} className="group hover:bg-subtle transition-colors">
+                    <td className="py-4 pl-0 pr-3 font-mono text-muted-foreground text-xs">#{ins.id}</td>
+                    <td className="py-4 px-3 font-medium text-foreground">{ins.nome}</td>
                     <td className="py-4 px-3">
-                      <span className="rounded border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/50 uppercase">{ins.unidade}</span>
+                      <span className="rounded border border-border bg-subtle px-2 py-0.5 text-[10px] text-muted-foreground uppercase">{ins.unidade}</span>
                     </td>
-                    <td className="py-4 px-3 font-mono text-[#d8f45a]">{fmtBRL(ins.custo_unitario)}</td>
+                    <td className="py-4 px-3 font-mono text-accent">{fmtBRL(ins.custo_unitario)}</td>
                     <td className="py-4 px-3">
                       <div className="flex flex-col gap-1.5 w-28">
-                        <span className="flex items-center gap-1 text-xs font-medium text-white/70">
-                          {bar.alert && <AlertTriangle size={11} className="text-red-400" />}
+                        <span className="flex items-center gap-1 text-xs font-medium text-secondary-foreground">
+                          {bar.alert && <AlertTriangle size={11} className="text-destructive" />}
                           {ins.estoque_atual}
                         </span>
-                        <div className="h-1.5 w-full rounded-full bg-white/[0.06]">
+                        <div className="h-1.5 w-full rounded-full bg-subtle">
                           <div className={"h-full rounded-full " + bar.color} style={{ width: bar.pct + '%' }} />
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-3 text-white/40 text-xs">{ins.estoque_minimo}</td>
+                    <td className="py-4 px-3 text-muted-foreground text-xs">{ins.estoque_minimo}</td>
                     <td className="py-4 pl-3 pr-0 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                        <button onClick={() => openEdit(ins)} className="rounded-md p-1.5 text-white/30 hover:bg-white/[0.06] hover:text-white transition"><Pencil size={14} /></button>
-                        <button onClick={() => handleDelete(ins.id)} className="rounded-md p-1.5 text-red-400/50 hover:bg-red-500/10 hover:text-red-400 transition"><Trash2 size={14} /></button>
+                        <button onClick={() => openEdit(ins)} className="rounded-md p-1.5 text-muted-foreground hover:bg-subtle hover:text-foreground transition"><Pencil size={14} /></button>
+                        <button onClick={() => handleDelete(ins.id)} className="rounded-md p-1.5 text-destructive hover:bg-red-500/10 hover:text-destructive transition"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -129,53 +129,53 @@ export function InsumosTabela({ insumos }: { insumos: Insumo[] }) {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-lg font-semibold">{form.id ? 'Editar Insumo' : 'Novo Insumo'}</h3>
-              <button type="button" onClick={() => setModalOpen(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
+              <button type="button" onClick={() => setModalOpen(false)} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
             </div>
             <form onSubmit={handleSave} className="flex flex-col gap-5">
               <label className="flex flex-col gap-2">
-                <span className="text-xs font-medium text-white/55">Nome</span>
+                <span className="text-xs font-medium text-secondary-foreground">Nome</span>
                 <input autoFocus required value={form.nome}
                   onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                  className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60"
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-accent/60"
                   placeholder="Ex: Suporte de impressao, Lixa 400" />
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium text-white/55">Unidade</span>
+                  <span className="text-xs font-medium text-secondary-foreground">Unidade</span>
                   <select value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
-                    className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60">
+                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-accent/60">
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium text-white/55">Custo Unit. (R$)</span>
+                  <span className="text-xs font-medium text-secondary-foreground">Custo Unit. (R$)</span>
                   <input required type="number" step="0.01" min="0" value={form.custo_unitario}
                     onChange={e => setForm(f => ({ ...f, custo_unitario: Number(e.target.value) }))}
-                    className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60" />
+                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-accent/60" />
                 </label>
               </div>
-              <div className="h-px w-full bg-white/[0.08]" />
+              <div className="h-px w-full bg-subtle" />
               <div className="grid grid-cols-2 gap-4">
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium text-[#d8f45a]">Estoque Atual</span>
+                  <span className="text-xs font-medium text-accent">Estoque Atual</span>
                   <input required type="number" step="0.1" min="0" value={form.estoque_atual}
                     onChange={e => setForm(f => ({ ...f, estoque_atual: Number(e.target.value) }))}
-                    className="h-11 w-full rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.04] px-3 text-sm text-white outline-none focus:border-[#d8f45a]" />
+                    className="h-11 w-full rounded-lg border border-accent/30 bg-accent/[0.04] px-3 text-sm text-foreground outline-none focus:border-accent" />
                 </label>
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium text-white/55">Estoque Minimo</span>
+                  <span className="text-xs font-medium text-secondary-foreground">Estoque Minimo</span>
                   <input required type="number" step="0.1" min="0" value={form.estoque_minimo}
                     onChange={e => setForm(f => ({ ...f, estoque_minimo: Number(e.target.value) }))}
-                    className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white outline-none focus:border-[#d8f45a]/60" />
+                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-accent/60" />
                 </label>
               </div>
-              {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
+              {errorMsg && <p className="text-xs text-destructive">{errorMsg}</p>}
               <div className="mt-2 flex justify-end gap-3">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-xs text-white/50 hover:text-white">Cancelar</button>
-                <button type="submit" disabled={isPending} className="rounded-lg bg-[#d8f45a] px-5 py-2 text-xs font-semibold text-[#15180d] hover:bg-[#e4ff76] disabled:opacity-50">
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+                <button type="submit" disabled={isPending} className="rounded-lg bg-accent px-5 py-2 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50">
                   {isPending ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>

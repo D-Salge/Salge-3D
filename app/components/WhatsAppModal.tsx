@@ -108,48 +108,48 @@ export function WhatsAppModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Mensagem pelo WhatsApp">
-      <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#15171b] p-5 shadow-2xl sm:p-6">
+      <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-emerald-400"><MessageCircle size={18} /><h2 className="font-semibold text-white">WhatsApp</h2></div>
-            <p className="mt-1 text-xs text-white/40">{pedido.cliente_nome} · {pedido.numero_orcamento || `#${pedido.id}`}</p>
+            <div className="flex items-center gap-2 text-success"><MessageCircle size={18} /><h2 className="font-semibold text-foreground">WhatsApp</h2></div>
+            <p className="mt-1 text-xs text-muted-foreground">{pedido.cliente_nome} · {pedido.numero_orcamento || `#${pedido.id}`}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-white/35 hover:bg-white/[0.06] hover:text-white" aria-label="Fechar"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-subtle hover:text-foreground" aria-label="Fechar"><X size={18} /></button>
         </div>
 
-        <label className="block text-xs text-white/50">
+        <label className="block text-xs text-muted-foreground">
           Tipo de mensagem
-          <select value={tipo} onChange={(event) => trocarTipo(event.target.value as TipoMensagemWhatsApp)} className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#101114] px-3 text-sm text-white outline-none focus:border-emerald-400/50">
+          <select value={tipo} onChange={(event) => trocarTipo(event.target.value as TipoMensagemWhatsApp)} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-emerald-400/50">
             {TIPOS.map((item) => <option key={item} value={item}>{ROTULOS_MENSAGEM_WHATSAPP[item]}</option>)}
           </select>
         </label>
 
-        <label className="mt-4 block text-xs text-white/50">
+        <label className="mt-4 block text-xs text-muted-foreground">
           Mensagem — você pode editar antes de abrir
-          <textarea autoFocus maxLength={2000} rows={7} value={mensagem} onChange={(event) => setMensagem(event.target.value)} className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-[#101114] p-3 text-sm leading-6 text-white outline-none focus:border-emerald-400/50" />
+          <textarea autoFocus maxLength={2000} rows={7} value={mensagem} onChange={(event) => setMensagem(event.target.value)} className="mt-2 w-full resize-y rounded-lg border border-border bg-background p-3 text-sm leading-6 text-foreground outline-none focus:border-emerald-400/50" />
         </label>
 
         <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
-          <span className={numeroValido ? 'text-white/35' : 'text-red-300'}>
+          <span className={numeroValido ? 'text-muted-foreground' : 'text-destructive'}>
             {numeroValido ? `Destino: +${numeroValido}` : 'Telefone ausente ou inválido'}
           </span>
-          <span className="text-white/25">{mensagem.length}/2.000</span>
+          <span className="text-muted-foreground">{mensagem.length}/2.000</span>
         </div>
 
-        {retorno && <p className="mt-4 rounded-lg bg-white/[0.04] px-3 py-2 text-xs text-white/60">{retorno}</p>}
+        {retorno && <p className="mt-4 rounded-lg bg-subtle px-3 py-2 text-xs text-secondary-foreground">{retorno}</p>}
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={copiarMensagem} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-white/[0.06] px-4 text-xs font-medium text-white/70 hover:bg-white/[0.1]">
+          <button type="button" onClick={copiarMensagem} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-subtle px-4 text-xs font-medium text-secondary-foreground hover:bg-subtle">
             {copiado ? <Check size={14} /> : <Copy size={14} />}{copiado ? 'Copiado' : 'Copiar mensagem'}
           </button>
           <button type="button" disabled={!numeroValido || !mensagem.trim() || isPending} onClick={abrirWhatsApp} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-xs font-semibold text-[#07140d] hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-45">
             <ExternalLink size={14} />{isPending ? 'Registrando...' : 'Abrir WhatsApp'}
           </button>
-          <button type="button" disabled={!numeroValido || !mensagem.trim() || isPending} onClick={enviarOficial} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#d8f45a] px-4 text-xs font-semibold text-[#15180d] hover:bg-[#e4ff76] disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="button" disabled={!numeroValido || !mensagem.trim() || isPending} onClick={enviarOficial} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45">
             <Send size={14} />{isPending ? 'Enviando...' : 'Enviar pela API'}
           </button>
         </div>
-        <p className="mt-3 text-center text-[10px] text-white/25">“Abrir WhatsApp” mantém o fluxo manual. “Enviar pela API” usa um template aprovado e acompanha entrega e leitura.</p>
+        <p className="mt-3 text-center text-[10px] text-muted-foreground">“Abrir WhatsApp” mantém o fluxo manual. “Enviar pela API” usa um template aprovado e acompanha entrega e leitura.</p>
       </div>
     </div>
   )

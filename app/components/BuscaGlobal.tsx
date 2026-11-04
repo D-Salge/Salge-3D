@@ -22,11 +22,11 @@ const icones: Record<TipoResultadoBusca, typeof ReceiptText> = {
 }
 
 const cores: Record<TipoResultadoBusca, string> = {
-  Pedido: 'bg-[#d8f45a]/10 text-[#d8f45a]',
-  Cliente: 'bg-blue-500/10 text-blue-300',
-  Produto: 'bg-violet-500/10 text-violet-300',
-  Filamento: 'bg-orange-500/10 text-orange-300',
-  Insumo: 'bg-emerald-500/10 text-emerald-300',
+  Pedido: 'bg-accent/10 text-accent',
+  Cliente: 'bg-blue-500/10 text-info',
+  Produto: 'bg-violet-500/10 text-accent',
+  Filamento: 'bg-orange-500/10 text-warning',
+  Insumo: 'bg-emerald-500/10 text-success',
 }
 
 export function BuscaGlobal() {
@@ -99,18 +99,18 @@ export function BuscaGlobal() {
 
   return (
     <>
-      <button type="button" onClick={() => setAberta(true)} aria-label="Buscar no ERP" className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.035] px-2.5 text-white/40 transition hover:border-white/15 hover:text-white/75 sm:min-w-44 sm:px-3">
+      <button type="button" onClick={() => setAberta(true)} aria-label="Buscar no ERP" className="flex h-9 items-center gap-2 rounded-lg border border-border bg-subtle px-2.5 text-muted-foreground transition hover:border-border hover:text-secondary-foreground sm:min-w-44 sm:px-3">
         <Search size={14} />
         <span className="hidden flex-1 text-left text-xs sm:block">Buscar no ERP</span>
-        <kbd className="hidden rounded border border-white/10 bg-black/20 px-1.5 py-0.5 font-sans text-[9px] text-white/30 md:block">Ctrl K</kbd>
+        <kbd className="hidden rounded border border-border bg-black/20 px-1.5 py-0.5 font-sans text-[9px] text-muted-foreground md:block">Ctrl K</kbd>
       </button>
 
       {aberta && (
         <div className="fixed inset-0 z-[90] flex items-start justify-center bg-black/70 px-3 pt-[12vh] backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Busca global">
           <button type="button" aria-label="Fechar busca" onClick={fechar} className="absolute inset-0 cursor-default" />
-          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#15171b] shadow-2xl shadow-black/60">
-            <div className="flex items-center gap-3 border-b border-white/[0.07] px-4">
-              {carregando ? <LoaderCircle size={17} className="animate-spin text-[#d8f45a]" /> : <Search size={17} className="text-white/30" />}
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/60">
+            <div className="flex items-center gap-3 border-b border-border px-4">
+              {carregando ? <LoaderCircle size={17} className="animate-spin text-accent" /> : <Search size={17} className="text-muted-foreground" />}
               <input ref={inputRef} value={termo} onChange={(event) => {
                 const valor = event.target.value
                 setTermo(valor)
@@ -119,23 +119,23 @@ export function BuscaGlobal() {
                   setResultados([])
                   setCarregando(false)
                 }
-              }} placeholder="Pedido, cliente, produto ou item de estoque..." className="h-14 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/25" />
-              <button type="button" onClick={fechar} aria-label="Fechar" className="rounded-lg p-2 text-white/35 hover:bg-white/[0.06] hover:text-white"><X size={16} /></button>
+              }} placeholder="Pedido, cliente, produto ou item de estoque..." className="h-14 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />
+              <button type="button" onClick={fechar} aria-label="Fechar" className="rounded-lg p-2 text-muted-foreground hover:bg-subtle hover:text-foreground"><X size={16} /></button>
             </div>
 
             <div className="max-h-[58vh] overflow-y-auto p-2">
               {termo.trim().length < 2 ? (
-                <div className="px-4 py-10 text-center"><p className="text-sm text-white/45">Digite pelo menos duas letras.</p><p className="mt-2 text-xs text-white/25">A busca consulta pedidos, clientes, produtos, filamentos e insumos.</p></div>
+                <div className="px-4 py-10 text-center"><p className="text-sm text-muted-foreground">Digite pelo menos duas letras.</p><p className="mt-2 text-xs text-muted-foreground">A busca consulta pedidos, clientes, produtos, filamentos e insumos.</p></div>
               ) : !carregando && resultados.length === 0 ? (
-                <div className="px-4 py-10 text-center"><p className="text-sm text-white/45">Nenhum resultado encontrado.</p><p className="mt-2 text-xs text-white/25">Tente o nome do cliente, da peça ou o número do orçamento.</p></div>
+                <div className="px-4 py-10 text-center"><p className="text-sm text-muted-foreground">Nenhum resultado encontrado.</p><p className="mt-2 text-xs text-muted-foreground">Tente o nome do cliente, da peça ou o número do orçamento.</p></div>
               ) : (
                 resultados.map((item) => {
                   const Icone = icones[item.tipo]
                   return (
-                    <Link key={item.id} href={item.href} onClick={fechar} className="flex min-w-0 items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-white/[0.05] focus:bg-white/[0.05]">
+                    <Link key={item.id} href={item.href} onClick={fechar} className="flex min-w-0 items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-subtle focus:bg-subtle">
                       <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${cores[item.tipo]}`}><Icone size={16} /></span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-white/80">{item.titulo}</span><span className="mt-0.5 block truncate text-xs text-white/35">{item.detalhe}</span></span>
-                      <span className="shrink-0 rounded bg-white/[0.04] px-2 py-1 text-[9px] uppercase tracking-wide text-white/30">{item.tipo}</span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-secondary-foreground">{item.titulo}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.detalhe}</span></span>
+                      <span className="shrink-0 rounded bg-subtle px-2 py-1 text-[9px] uppercase tracking-wide text-muted-foreground">{item.tipo}</span>
                     </Link>
                   )
                 })
