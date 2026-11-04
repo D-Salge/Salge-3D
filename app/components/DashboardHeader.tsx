@@ -1,56 +1,75 @@
-'use client'
+"use client";
 
-/**
- * app/components/DashboardHeader.tsx
- * Header compartilhado entre todas as páginas do dashboard.
- * Client Component — gera data dinâmica no cliente para evitar hydration mismatch.
- */
+import { Box, ChevronRight, LogOut } from "lucide-react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import type { SessaoAtual } from "@/lib/session";
+import { BuscaGlobal } from "@/app/components/BuscaGlobal";
+import { ThemeToggle } from "@/app/components/ThemeToggle";
 
-import { Box, LogOut } from 'lucide-react'
-import type { SessaoAtual } from '@/lib/session'
-import { BuscaGlobal } from '@/app/components/BuscaGlobal'
-import { ThemeToggle } from '@/app/components/ThemeToggle'
+const labels: Record<string, string> = {
+  orcamentos: "Orçamentos",
+  produtos: "Produtos e vendas",
+  producao: "Produção",
+  clientes: "Clientes",
+  financeiro: "Financeiro",
+  filamentos: "Filamentos",
+  insumos: "Insumos",
+  estoque: "Estoque",
+  compras: "Compras",
+  impressoras: "Impressoras",
+  agenda: "Agenda",
+  atendimento: "Qualidade e entrega",
+  relatorios: "Relatórios",
+  configuracoes: "Configurações",
+  auditoria: "Auditoria",
+  pedidos: "Detalhes do pedido",
+};
 
 export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
-  const hoje = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  const hojeFormatado = hoje.charAt(0).toUpperCase() + hoje.slice(1)
-
+  const pathname = usePathname();
+  const label = labels[pathname.split("/")[1]] ?? "Visão geral";
   return (
-    <header className="sticky top-0 z-30 flex h-[68px] shrink-0 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:h-[76px] lg:px-10">
-      {/* Logo mobile */}
-      <div className="flex items-center gap-3 lg:hidden">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-          <Box size={18} />
-        </div>
-        <div><p className="text-sm font-semibold">Salge<span className="text-accent">3D</span></p><p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground">ERP</p></div>
+    <header className="studio-header">
+      <Link
+        href="/"
+        className="studio-mobile-brand"
+        aria-label="Salge 3D, visão geral"
+      >
+        <Box size={25} strokeWidth={1.4} />
+        <span>
+          salge<b>3d</b>
+        </span>
+      </Link>
+      <div className="studio-breadcrumb">
+        <span>Workspace</span>
+        <ChevronRight size={12} />
+        <strong>{label}</strong>
       </div>
-
-      {/* Saudação desktop */}
-      <div className="hidden lg:block">
-        <p className="text-xs text-muted-foreground">{hojeFormatado}</p>
-        <p className="mt-1 text-sm font-medium text-secondary-foreground">Olá, {usuario.nome.split(/\s+/)[0]} 👋</p>
-      </div>
-
-      {/* Ações */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="studio-header-actions">
         <BuscaGlobal />
         <ThemeToggle />
-        <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-full bg-subtle text-xs font-semibold text-accent">
-            {usuario.nome.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase()}
-          </div>
-          <div className="hidden text-left sm:block">
-            <p className="text-xs font-medium">{usuario.nome}</p>
-            <p className="text-[10px] text-muted-foreground">{usuario.perfil === 'admin' ? 'Administrador' : usuario.perfil === 'operador' ? 'Operador' : 'Visualizador'}</p>
-          </div>
-          <a href="/logout" title="Sair" aria-label="Sair" className="rounded-lg p-2 text-muted-foreground hover:bg-subtle hover:text-foreground"><LogOut size={14} /></a>
-        </div>
+        <span
+          className="studio-avatar"
+          title={usuario.nome}
+          aria-label={usuario.nome}
+        >
+          {usuario.nome
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((parte) => parte[0])
+            .join("")
+            .toUpperCase()}
+        </span>
+        <a
+          href="/logout"
+          title="Sair"
+          aria-label="Sair"
+          className="studio-logout"
+        >
+          <LogOut size={14} />
+        </a>
       </div>
     </header>
-  )
+  );
 }

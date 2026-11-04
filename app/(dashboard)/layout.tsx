@@ -35,12 +35,13 @@ export default async function DashboardLayout({
   const config = await getConfiguracoes()
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="erp-workspace flex min-h-screen bg-background text-foreground">
       <Sidebar
         pedidosEmProducao={stats.pedidosEmProducao}
         faturamentoMes={stats.faturamentoBruto}
         metaMensal={config.meta_mensal}
         perfil={sessao.perfil}
+        usuario={sessao}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader usuario={sessao} />
