@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['mqtt'],
   // better-sqlite3 é um módulo nativo Node.js (binário .node)
   // Precisa ser excluído do bundle do webpack para rodar no servidor.
   webpack: (config, { isServer }) => {

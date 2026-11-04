@@ -472,6 +472,38 @@ async function executarTestesPlates(baseUrl, db, dados, actions) {
     WHERE nome_da_peca = 'Kit automático inválido'`).get().total, totalAntesManipulacao)
 }
 
+async function executarTestesBambu(baseUrl, db, dados, actions) {
+  const impressora = db.prepare('SELECT id FROM impressoras WHERE tenant_id = ? AND ativo = 1 LIMIT 1').get(dados.tenantA)
+  assert.ok(impressora)
+  const fakeCipher = 'FAKE_PRIVATE_ACCESS_CODE_MUST_NOT_LEAK'
+  db.prepare(`INSERT INTO impressoras_bambu(tenant_id,impressora_id,host,serial,codigo_cifrado) VALUES(?,?,?,?,?)`)
+    .run(dados.tenantA,impressora.id,'192.168.1.120','FAKEP2S000001',fakeCipher)
+  const anonimo = await fetch(`${baseUrl}/api/impressoras/monitoramento`)
+  assert.equal(anonimo.status,401)
+  const consulta = async token => {
+    const res = await fetch(`${baseUrl}/api/impressoras/monitoramento`, {headers:{Cookie:`salge_session=${token}`}})
+    assert.equal(res.status,200);assert.match(res.headers.get('cache-control'),/no-store/)
+    const text=await res.text()
+    assert.doesNotMatch(text,/FAKE_PRIVATE_ACCESS_CODE|codigo_cifrado|password|accessCode|192\.168\.1\.120/)
+    return JSON.parse(text)
+  }
+  const a = await consulta(dados.sessoes.adminA)
+  assert.equal(a.impressoras.length,1);assert.equal(a.impressoras[0].dadosAtuais,false)
+  assert.deepEqual((await consulta(dados.sessoes.adminB)).impressoras,[])
+  assert.equal((await consulta(dados.sessoes.visualizadorA)).impressoras.length,1)
+  const salvar = async (token, input) => {
+    const res = await fetch(`${baseUrl}/impressoras`, {method:'POST',headers:{Accept:'text/x-component','Content-Type':'text/plain;charset=UTF-8','Next-Action':actions.salvarBambu,...(token?{Cookie:`salge_session=${token}`}:{})},body:JSON.stringify([input])})
+    return {status:res.status,text:await res.text()}
+  }
+  const input={impressoraId:impressora.id,host:'192.168.1.120',serial:'FAKEP2S000001',accessCode:'TEST1234'}
+  const before=db.prepare('SELECT * FROM impressoras_bambu').all()
+  assert.equal((await salvar(null,input)).status,401)
+  assert.match((await salvar(dados.sessoes.operadorA,input)).text,/perfil n.o permite/)
+  assert.match((await salvar(dados.sessoes.adminB,input)).text,/Impressora n.o encontrada/)
+  assert.match((await salvar(dados.sessoes.adminA,{...input,host:'169.254.169.254'})).text,/IPv4 local/)
+  assert.deepEqual(db.prepare('SELECT * FROM impressoras_bambu').all(),before)
+}
+
 let temporario
 let servidor
 let db
@@ -499,6 +531,7 @@ try {
     responder: idDaAction(manifesto, 'responderOrcamentoPortal'),
     criarPedido: idDaAction(manifesto, 'criarPedido', 'pedidos.ts'),
     atualizarOrcamento: idDaAction(manifesto, 'atualizarOrcamento', 'pedidos.ts'),
+    salvarBambu: idDaAction(manifesto, 'salvarConexaoBambu', 'bambu.ts'),
   }
 
   const porta = await portaLivre()
@@ -522,6 +555,7 @@ try {
   db.pragma('foreign_keys = ON')
   await executarTestesHttp(baseUrl, db, dados, actions)
   await executarTestesPlates(baseUrl, db, dados, actions)
+  await executarTestesBambu(baseUrl, db, dados, actions)
   console.log('OK: autorização, isolamento entre empresas, portal público e orçamento por plates validados por HTTP.')
 } finally {
   if (db) db.close()

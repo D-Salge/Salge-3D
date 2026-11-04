@@ -5,17 +5,21 @@ import {
   getManutencoesImpressoras,
 } from '@/app/actions/operacao'
 import { ImpressorasPage } from '@/app/components/ImpressorasPage'
+import { getBambuSetup } from '@/app/actions/bambu'
+import { BambuMonitor } from '@/app/components/BambuMonitor'
 
 export const metadata: Metadata = { title: 'Impressoras · Salge 3D' }
 
 export default async function Page() {
-  const [impressoras, indicadores, manutencoes] = await Promise.all([
+  const [impressoras, indicadores, manutencoes, bambuSetup] = await Promise.all([
     getImpressoras(),
     getIndicadoresQualidadeImpressoras(),
     getManutencoesImpressoras(),
+    getBambuSetup(),
   ])
   return (
     <div className="studio-page mx-auto max-w-[1100px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+      <BambuMonitor setup={bambuSetup} />
       <ImpressorasPage
         impressoras={impressoras}
         indicadores={indicadores}

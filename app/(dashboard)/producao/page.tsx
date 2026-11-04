@@ -13,6 +13,8 @@ import { PlanejamentoProducao } from '@/app/components/PlanejamentoProducao'
 import { getLotesProducao } from '@/app/actions/lotes-producao'
 import { getImpressoras } from '@/app/actions/operacao'
 import { LotesProducao } from '@/app/components/LotesProducao'
+import { BambuMonitor } from '@/app/components/BambuMonitor'
+import { getBambuSetup } from '@/app/actions/bambu'
 
 export const metadata: Metadata = {
   title: 'Produção · Salge 3D',
@@ -20,13 +22,14 @@ export const metadata: Metadata = {
 }
 
 export default async function ProducaoPage() {
-  const [pedidos, planejamento, controleLotes, impressoras] = await Promise.all([
-    getPedidosKanban(), getPlanejamentoProducao(), getLotesProducao(), getImpressoras(),
+  const [pedidos, planejamento, controleLotes, impressoras, bambuSetup] = await Promise.all([
+    getPedidosKanban(), getPlanejamentoProducao(), getLotesProducao(), getImpressoras(), getBambuSetup(),
   ])
 
   return (
     <div className="studio-page mx-auto flex h-full max-w-[1440px] flex-col px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <StudioPageHeading eyebrow="Pedidos e máquinas" title="Produção" description="Fila de impressão, plates e planejamento das impressoras." />
+      <BambuMonitor setup={bambuSetup} />
       <ProducaoWorkspace plano={planejamento} pedidos={pedidos} lotes={controleLotes.lotes}
         board={<KanbanBoard pedidos={pedidos} />}
         batches={<LotesProducao lotes={controleLotes.lotes} pedidos={controleLotes.pedidos} impressoras={impressoras.map(({ id, nome }) => ({ id, nome }))} />}

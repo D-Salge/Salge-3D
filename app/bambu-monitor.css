@@ -1,0 +1,323 @@
+.bambu-panel {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 18px;
+  padding: 24px;
+  margin-bottom: 26px;
+  min-width: 0;
+}
+.bambu-heading,
+.bambu-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bambu-heading {
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.bambu-heading h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.bambu-heading h2 svg {
+  color: var(--accent);
+}
+.bambu-heading p,
+.bambu-hint {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  margin-top: 7px;
+}
+.bambu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  gap: 20px;
+}
+.bambu-machine {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  min-width: 0;
+}
+.bambu-machine-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 21px 22px 10px;
+}
+.bambu-machine-header > svg {
+  height: 63px;
+  width: 45px;
+  flex-shrink: 0;
+  color: var(--secondary-foreground);
+}
+.bambu-machine-header > div {
+  flex: 1;
+  min-width: 0;
+}
+.bambu-machine-header h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+.bambu-machine-header p {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-top: 7px;
+}
+.bambu-file {
+  padding: 14px 22px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.bambu-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 22px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.bambu-progress-label strong {
+  font-weight: 500;
+  color: var(--foreground);
+}
+.bambu-machine > .ops-progress {
+  margin: 10px 22px 0;
+}
+.bambu-data {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 22px;
+}
+.bambu-data span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.bambu-data strong {
+  display: block;
+  font-size: 19px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+.bambu-temps {
+  border-top: 1px solid var(--border);
+  margin: 0 22px;
+  padding: 12px 0;
+}
+.bambu-temps > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 0;
+}
+.bambu-temps svg,
+.bambu-temps span {
+  color: var(--muted-foreground);
+}
+.bambu-temps strong {
+  font-weight: 500;
+  margin-left: auto;
+}
+.bambu-temps small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.bambu-machine > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding: 13px 22px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.bambu-machine > footer > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bambu-machine button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.bambu-machine button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.bambu-stale .ops-progress > span {
+  background: var(--muted-foreground);
+}
+.bambu-stale .bambu-data,
+.bambu-stale .bambu-temps {
+  opacity: 0.6;
+}
+.bambu-notice {
+  padding: 12px 15px;
+  margin: 10px 0;
+  border-radius: 10px;
+  background: var(--subtle);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--secondary-foreground);
+}
+.bambu-machine > .bambu-notice {
+  margin: 10px 22px;
+}
+.bambu-empty {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.bambu-empty > svg {
+  flex-shrink: 0;
+}
+.bambu-empty h3 {
+  color: var(--foreground);
+  font-weight: 500;
+  margin-bottom: 7px;
+}
+.bambu-empty p {
+  font-size: 12px;
+  line-height: 1.8;
+  max-width: 720px;
+  margin-top: 8px;
+}
+.bambu-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  margin: 0 22px 17px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.bambu-link > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.bambu-link p,
+.bambu-link small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 6px;
+}
+.bambu-link a:hover {
+  color: var(--accent);
+}
+.bambu-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--background) 55%, transparent);
+  backdrop-filter: blur(8px);
+  padding: 30px 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.bambu-modal > form {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+  background: var(--card);
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 30px 90px color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+.bambu-modal header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 24px;
+}
+.bambu-modal h2 {
+  font-size: 19px;
+  font-weight: 500;
+}
+.bambu-modal header p {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-top: 8px;
+}
+.bambu-modal label {
+  display: block;
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--secondary-foreground);
+}
+.bambu-modal :is(input, select) {
+  display: block;
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  padding: 0 12px;
+  margin-top: 9px;
+  font-size: 13px;
+}
+.bambu-modal small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  margin-top: 8px;
+}
+.bambu-modal form > .studio-button {
+  margin-top: 24px;
+  width: 100%;
+}
+.bambu-modal a {
+  color: var(--accent);
+}
+@media (max-width: 640px) {
+  .bambu-panel {
+    padding: 19px;
+  }
+  .bambu-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .bambu-heading > .studio-button {
+    width: 100%;
+  }
+  .bambu-machine-header {
+    flex-wrap: wrap;
+    padding: 18px;
+  }
+  .bambu-machine-header > .ops-status {
+    margin-left: 59px;
+  }
+  .bambu-file,
+  .bambu-data {
+    padding: 15px 18px;
+  }
+  .bambu-modal > form {
+    padding: 22px;
+  }
+  .bambu-empty {
+    align-items: flex-start;
+  }
+  .bambu-empty > svg {
+    display: none;
+  }
+}
