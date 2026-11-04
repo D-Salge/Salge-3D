@@ -35,7 +35,7 @@ export function DashboardOrders({ pedidos }: { pedidos: PedidoResumo[] }) {
       <div className="studio-card-heading">
         <div>
           <h2 id="pedidos-title">Pedidos recentes</h2>
-          <p>Da primeira ideia à última camada.</p>
+          <p>Últimos pedidos cadastrados.</p>
         </div>
         <Link className="studio-text-link" href="/produtos">
           Ver produtos e vendas <ArrowRight size={13} />
@@ -148,7 +148,7 @@ export function DashboardOrders({ pedidos }: { pedidos: PedidoResumo[] }) {
       {visiveis.length === 0 && (
         <div className="studio-empty">
           {pedidos.length === 0
-            ? "Seu próximo projeto começa em Novo orçamento."
+            ? "Cadastre um pedido em Novo orçamento."
             : "Nenhum pedido recente neste filtro."}
         </div>
       )}

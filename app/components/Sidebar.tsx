@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  BarChart3,
   Box,
   Boxes,
   CalendarDays,
@@ -23,7 +22,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShoppingCart,
-  Sparkles,
   TrendingUp,
   Users,
   X,
@@ -92,7 +90,7 @@ function Marca() {
       <Box size={31} strokeWidth={1.4} />
       <span>
         salge<b>3d</b>
-        <sup>®</sup>
+
       </span>
     </Link>
   );
@@ -116,12 +114,12 @@ function Navegacao({
     },
     {
       href: "/produtos",
-      icon: <BarChart3 size={16} />,
-      label: "Produtos e vendas",
+      icon: <Boxes size={18} />,
+      label: "Catálogo e vendas",
     },
     {
       href: "/producao",
-      icon: <Layers size={16} />,
+      icon: <Printer size={18} />,
       label: "Produção",
       badge: pedidosEmProducao ? String(pedidosEmProducao) : undefined,
     },
@@ -206,7 +204,7 @@ function Navegacao({
     });
   return (
     <nav className="studio-navigation">
-      <p className="studio-nav-label">Workspace</p>
+      <p className="studio-nav-label">Navegação</p>
       {principais.map((item) => (
         <NavItem
           key={item.href}
@@ -215,7 +213,7 @@ function Navegacao({
           onNavigate={onNavigate}
         />
       ))}
-      <p className="studio-nav-label studio-nav-management">Gestão do ateliê</p>
+      <p className="studio-nav-label studio-nav-management">Gerenciamento</p>
       {grupos.map((grupo) => (
         <details
           className="studio-nav-group"
@@ -254,9 +252,9 @@ function Meta({
       <div className="rounded-2xl border border-border bg-subtle p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
-            Seu ateliê crescendo
+            Recebido no mês
           </span>
-          <Sparkles size={15} className="text-accent" />
+          <TrendingUp size={15} className="text-muted-foreground" />
         </div>
         <p className="text-sm font-medium">Meta do mês</p>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-subtle">
@@ -320,7 +318,7 @@ export function Sidebar({
           <span>S3</span>
           <div>
             <strong>Salge 3D</strong>
-            <small>Meu ateliê</small>
+            <small>ERP pessoal</small>
           </div>
         </div>
         <div className="studio-sidebar-scroll">

@@ -65,7 +65,7 @@ function montar(pedidoInicial = null, produtosAcabados = []) {
   return {
     render, confirmacoes, gravacoes,
     confirmar(valor) { confirmar = valor },
-    botao(nome) { const no = encontrar(arvore, item => item.type === 'button' && texto(item).trim() === nome); assert.ok(no, nome); return no },
+    botao(nome) { const no = encontrar(arvore, item => item.type === 'button' && (item.props['aria-label'] ?? texto(item).trim()) === nome); assert.ok(no, nome); return no },
     async clicar(nome) { await this.botao(nome).props.onClick(); render() },
     texto: () => texto(arvore),
     async enviar() { const form = encontrar(arvore, item => item.type === 'form'); await form.props.onSubmit({ preventDefault() {} }); render() },

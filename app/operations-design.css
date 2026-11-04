@@ -1,0 +1,784 @@
+/* Operational views for the private ERP. Scope excludes login, portal and labels. */
+.erp-workspace .lucide {
+  stroke-width: 1.6;
+}
+.erp-workspace .studio-navigation > a > span:first-child .lucide {
+  width: 19px;
+  height: 19px;
+}
+.erp-workspace .studio-brand {
+  gap: 10px;
+}
+.erp-workspace .studio-printer-icon {
+  background: transparent;
+}
+.erp-workspace .studio-printer-icon > svg {
+  width: 50px;
+  height: 68px;
+}
+.ops-tabs {
+  display: flex;
+  gap: 28px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 26px;
+  overflow-x: auto;
+}
+.ops-tabs > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 16px 2px;
+  color: var(--muted-foreground);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ops-tabs > button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+.ops-tabs > button[aria-selected="true"] > svg {
+  color: var(--accent);
+}
+.ops-tabs > button > span {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--subtle);
+  font-size: 11px;
+}
+.ops-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 26px;
+}
+.ops-metrics > div {
+  padding: 22px 25px;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ops-metrics span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.ops-metrics strong {
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -1px;
+}
+.ops-production-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  gap: 24px;
+  margin-bottom: 22px;
+}
+.ops-panel {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  min-width: 0;
+}
+.ops-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 23px 25px;
+}
+.erp-workspace .studio-content .ops-panel-heading h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.ops-panel-heading p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.ops-text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ops-text-link:hover {
+  color: var(--accent);
+}
+.ops-machine-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 25px 23px;
+  gap: 25px;
+}
+.ops-machine + .ops-machine {
+  border-left: 1px solid var(--border);
+  padding-left: 25px;
+}
+.ops-machine-visual {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+.ops-machine-visual > svg {
+  width: 62px;
+  height: 89px;
+  color: var(--secondary-foreground);
+}
+.ops-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  padding: 5px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.ops-status::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ops-status.accent {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.ops-status.success {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 9%, transparent);
+}
+.ops-machine h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.ops-machine-project {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin: 10px 0;
+  line-height: 1.6;
+}
+.ops-progress {
+  height: 4px;
+  border-radius: 8px;
+  background: var(--subtle);
+  overflow: hidden;
+  margin-top: 14px;
+}
+.ops-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.ops-machine-meta,
+.ops-machine-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin-top: 9px;
+}
+.ops-machine-bottom {
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+}
+.ops-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 25px;
+  border-top: 1px solid var(--border);
+}
+.ops-queue-item > div {
+  flex: 1;
+  min-width: 0;
+}
+.ops-queue-item strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ops-queue-item p,
+.ops-queue-item small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  margin-top: 6px;
+}
+.ops-queue-item > svg {
+  color: var(--muted-foreground);
+}
+.ops-icon-tile {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+.ops-more {
+  margin: 16px 25px 22px;
+}
+.ops-empty {
+  padding: 32px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+  grid-column: 1/-1;
+}
+.ops-empty h3 {
+  color: var(--foreground);
+  font-size: 16px;
+}
+.ops-empty > svg {
+  opacity: 0.6;
+}
+.ops-kanban {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(250px, 1fr));
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 15px;
+}
+.ops-kanban-column {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--subtle) 35%, transparent);
+  align-self: start;
+}
+.ops-kanban-column-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 19px 17px;
+  border-bottom: 1px solid var(--border);
+}
+.ops-kanban-column-heading > div {
+  font-size: 13px;
+}
+.ops-kanban-list {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+}
+.ops-job-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 5px 16px -12px
+    color-mix(in srgb, var(--foreground) 20%, transparent);
+}
+.erp-workspace .studio-content .ops-job-card select {
+  min-height: 32px;
+  font-size: 11px;
+  padding: 5px;
+}
+.ops-catalog-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+}
+.ops-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0 14px;
+  border-radius: 10px;
+  color: var(--muted-foreground);
+  min-width: 280px;
+}
+.erp-workspace .studio-content .ops-search input {
+  min-height: 46px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  outline: none;
+}
+.ops-catalog-toolbar > select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 0 14px;
+  font-size: 12px;
+  min-width: 150px;
+}
+.ops-result-count {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.ops-catalog-toolbar > button {
+  margin-left: auto;
+}
+.ops-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.ops-product-card {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 17px;
+  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ops-product-visual {
+  min-height: 156px;
+  margin: 12px 12px 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background:
+    radial-gradient(
+      ellipse at center,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      transparent 75%
+    ),
+    var(--subtle);
+  color: var(--accent);
+}
+.ops-product-category,
+.ops-version {
+  position: absolute;
+  top: 12px;
+  font-size: 10px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  background: var(--card);
+}
+.ops-product-category {
+  left: 12px;
+}
+.ops-version {
+  right: 12px;
+}
+.ops-product-body {
+  padding: 22px 23px;
+  flex: 1;
+}
+.ops-product-code {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  letter-spacing: 0.7px;
+}
+.ops-product-body h3 {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.ops-product-description {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+.ops-product-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+  padding: 22px 0 17px;
+}
+.ops-product-price small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  margin-bottom: 7px;
+}
+.ops-product-price strong {
+  display: block;
+  font-weight: 500;
+  font-size: 24px;
+  letter-spacing: -0.6px;
+}
+.ops-product-price > span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.ops-product-stock {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+.ops-product-stock b {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.ops-product-details {
+  margin-top: 4px;
+}
+.ops-product-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 12px 0 0;
+}
+.ops-product-details[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.ops-product-details > div {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.7;
+  padding-top: 12px;
+}
+.ops-product-details p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+.ops-product-actions {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  gap: 3px;
+}
+.ops-product-actions > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px;
+  border-radius: 8px;
+  min-height: 36px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ops-product-actions > button:first-child {
+  margin-right: auto;
+  color: var(--foreground);
+}
+.ops-product-actions > button:hover {
+  background: var(--subtle);
+  color: var(--accent);
+}
+.ops-catalog-empty {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  min-height: 300px;
+}
+/* The quote is one document with an independent financial summary. */
+.ops-quote .studio-quote-steps {
+  border: 0;
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px 20px;
+  gap: 32px;
+  border: 1px solid var(--border);
+}
+.ops-quote .studio-quote-steps a {
+  font-size: 12px;
+}
+.ops-quote .studio-quote-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.erp-workspace .studio-content .ops-quote .studio-form-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 30px;
+  scroll-margin-top: 22px;
+}
+.erp-workspace
+  .studio-content
+  .ops-quote
+  .studio-form-card
+  + .studio-form-card {
+  border-top: 1px solid var(--border);
+}
+.ops-quote .studio-form-heading {
+  margin-bottom: 24px;
+}
+.ops-quote .studio-form-heading > span {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.ops-quote .studio-form-heading p {
+  font-size: 12px;
+}
+.ops-quote-mode-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-bottom: 10px;
+}
+.ops-quote-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ops-quote-modes > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--background);
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--muted-foreground);
+  min-width: 0;
+}
+.ops-quote-modes > button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+  color: var(--accent);
+}
+.ops-quote-modes strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ops-quote-modes small {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.ops-quote-modes svg {
+  flex-shrink: 0;
+}
+.ops-calculation-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 25px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+}
+.ops-calculation-mode > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+}
+.ops-calculation-mode > button[aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--subtle);
+  color: var(--foreground);
+}
+.ops-quote .studio-summary-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ops-quote .studio-summary-heading h2 {
+  font-size: 15px;
+}
+.ops-quote .studio-summary-heading p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+}
+.ops-quote .studio-quote-total {
+  text-align: left;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--subtle));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  padding: 23px;
+}
+.ops-quote .studio-quote-total > div {
+  font-weight: 500;
+  color: var(--foreground);
+  font-size: 36px;
+  letter-spacing: -1.2px;
+}
+.ops-quote .studio-quote-summary {
+  top: 24px;
+}
+.erp-workspace .ops-modal > form {
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 25px 100px
+    color-mix(in srgb, var(--background) 75%, transparent);
+}
+@media (min-width: 1700px) {
+  .ops-catalog-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1250px) {
+  .ops-catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops-production-overview {
+    grid-template-columns: 1fr;
+  }
+  .ops-quote-modes > button {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px;
+  }
+}
+@media (max-width: 1023px) {
+  .ops-quote .studio-quote-workbench {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .ops-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops-metrics > div {
+    padding: 17px;
+  }
+  .ops-metrics strong {
+    font-size: 24px;
+  }
+  .ops-machine-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 0 19px 19px;
+  }
+  .ops-machine + .ops-machine {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 20px;
+  }
+  .ops-panel-heading {
+    padding: 20px;
+  }
+  .ops-production-overview {
+    gap: 18px;
+  }
+  .ops-queue-item {
+    padding: 16px 20px;
+  }
+  .ops-catalog-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .ops-catalog-toolbar {
+    gap: 10px;
+  }
+  .ops-search {
+    width: 100%;
+    min-width: 0;
+  }
+  .ops-catalog-toolbar > select {
+    flex: 1;
+    min-width: 0;
+  }
+  .ops-catalog-toolbar > button {
+    width: 100%;
+  }
+  .ops-tabs {
+    gap: 22px;
+  }
+  .ops-quote .studio-quote-steps {
+    flex-wrap: wrap;
+    gap: 14px 20px;
+    padding: 15px;
+  }
+  .ops-quote .studio-quote-steps a {
+    font-size: 11px;
+  }
+  .erp-workspace .studio-content .ops-quote .studio-form-card {
+    padding: 21px;
+  }
+  .ops-calculation-mode {
+    align-items: stretch;
+    gap: 5px;
+  }
+  .ops-calculation-mode > button {
+    font-size: 10px;
+    flex: 1;
+    min-width: 0;
+    padding: 9px 6px;
+  }
+  .ops-quote .studio-quote-total > div {
+    font-size: 32px;
+  }
+  .ops-product-price strong {
+    font-size: 25px;
+  }
+}
+.ops-workspace [role="tabpanel"] > .ops-batches,
+.ops-workspace [role="tabpanel"] > .ops-planning {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.ops-batch-card,
+.ops-planning-machine {
+  border-radius: 16px;
+}
+.ops-batches > div:first-child,
+.ops-planning > div:first-child {
+  padding: 3px 0 18px;
+}
+.ops-workspace .ops-panel .ops-machine-grid:has(.ops-empty) {
+  min-height: 250px;
+}

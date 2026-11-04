@@ -8,7 +8,7 @@ import { exigirSessao } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Visão Geral · Salge 3D",
-  description: "Seu ateliê em um olhar: pedidos, recebimentos e produção.",
+  description: "Resumo de pedidos, recebimentos e produção.",
 };
 
 export default async function VisaoGeralPage() {
