@@ -26,6 +26,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 - Backup SQLite e exportação CSV.
 - Parcelas com vencimentos individuais, caixa versus competência e despesas pendentes.
 - Controle de rolos/lotes de filamento, perdas e consumo FIFO por pedido.
+- Monitoramento local Bambu (P2S): estado, progresso, temperaturas e vínculo explícito por plate, mantendo a conferência e as baixas manuais do ERP. [Configuração e limites](docs/monitoramento-bambu.md).
 - Restauração validada de backup e trilha de auditoria.
 - Importação validada da planilha Salge 3D, com prévia, backup e reconciliação de saldos.
 

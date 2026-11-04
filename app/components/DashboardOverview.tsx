@@ -16,6 +16,7 @@ import type { PendenciaCentral } from "@/app/actions/pendencias";
 import { DashboardChart } from "@/app/components/DashboardChart";
 import { DashboardOrders } from "@/app/components/DashboardOrders";
 import { CentralPendencias } from "@/app/components/CentralPendencias";
+import { BambuMonitor } from "@/app/components/BambuMonitor";
 
 const moeda = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -218,6 +219,7 @@ export function DashboardOverview({
           )}
         </section>
       </div>
+      <BambuMonitor />
       <DashboardOrders pedidos={pedidos} />
       <div className="studio-quick-grid">
         <Link href="/compras" className="studio-card studio-quick">

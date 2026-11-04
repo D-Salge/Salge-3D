@@ -46,3 +46,6 @@ next-env.d.ts
 *.sqlite-shm
 *.sqlite-wal
 database/backups/
+
+# Local encryption keys (printer access codes)
+**/segredos-locais/
