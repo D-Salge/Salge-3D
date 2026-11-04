@@ -34,7 +34,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
 
   return (
     <div className="studio-page mx-auto max-w-[1200px] shrink-0 px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
-      <StudioPageHeading eyebrow="Seu próximo projeto" title="Novo orçamento" description="Organize as peças, os materiais e a entrega em um só lugar." />
+      <StudioPageHeading eyebrow="Pedidos" title="Novo orçamento" description="Cliente, peças, custos de produção e condições de pagamento." />
       <div className="studio-support-tools">
         <details className="studio-disclosure"><summary>Modelos de orçamento <span>{modelos.length}</span></summary><div><ModelosOrcamento modelos={modelos}/></div></details>
         <details className="studio-disclosure"><summary>Acompanhamentos pelo WhatsApp <span>{pendenciasWhatsApp.length}</span></summary><div><PendenciasWhatsApp pendencias={pendenciasWhatsApp}/></div></details>

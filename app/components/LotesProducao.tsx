@@ -1,81 +1,340 @@
-'use client'
+"use client";
 
-import { useRouter } from 'next/navigation'
-import { useMemo, useState, useTransition } from 'react'
-import { Boxes, Check, Play, Plus, WandSparkles } from 'lucide-react'
-import { atualizarLoteProducao, criarLoteProducao, criarLotesAutomaticos, type LoteProducao, type PedidoParaLote } from '@/app/actions/lotes-producao'
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { Boxes, Check, Play, Plus, WandSparkles } from "lucide-react";
+import {
+  atualizarLoteProducao,
+  criarLoteProducao,
+  criarLotesAutomaticos,
+  type LoteProducao,
+  type PedidoParaLote,
+} from "@/app/actions/lotes-producao";
 
-type ImpressoraOpcao = { id: number; nome: string }
+type ImpressoraOpcao = { id: number; nome: string };
 
-export function LotesProducao({ lotes, pedidos, impressoras }: {
-  lotes: LoteProducao[]
-  pedidos: PedidoParaLote[]
-  impressoras: ImpressoraOpcao[]
+export function LotesProducao({
+  lotes,
+  pedidos,
+  impressoras,
+}: {
+  lotes: LoteProducao[];
+  pedidos: PedidoParaLote[];
+  impressoras: ImpressoraOpcao[];
 }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [mensagem, setMensagem] = useState('')
-  const [aberto, setAberto] = useState(false)
-  const [progresso, setProgresso] = useState<Record<number, string>>(() => Object.fromEntries(lotes.map((item) => [item.id, String(item.quantidade_produzida)])))
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [mensagem, setMensagem] = useState("");
+  const [aberto, setAberto] = useState(false);
+  const [progresso, setProgresso] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      lotes.map((item) => [item.id, String(item.quantidade_produzida)]),
+    ),
+  );
   const [form, setForm] = useState({
-    pedidoId: pedidos[0]?.id ?? 0, quantidade: 1,
-    impressoraId: pedidos[0]?.impressora_preferida_id ? String(pedidos[0].impressora_preferida_id) : '',
-    placaReferencia: pedidos[0]?.placa_referencia_padrao || '', observacoes: '',
-  })
-  const pedido = useMemo(() => pedidos.find((item) => item.id === form.pedidoId), [pedidos, form.pedidoId])
-  const disponivel = pedido ? Math.max(0, pedido.quantidade - pedido.quantidade_planejada) : 0
+    pedidoId: pedidos[0]?.id ?? 0,
+    quantidade: 1,
+    impressoraId: pedidos[0]?.impressora_preferida_id
+      ? String(pedidos[0].impressora_preferida_id)
+      : "",
+    placaReferencia: pedidos[0]?.placa_referencia_padrao || "",
+    observacoes: "",
+  });
+  const pedido = useMemo(
+    () => pedidos.find((item) => item.id === form.pedidoId),
+    [pedidos, form.pedidoId],
+  );
+  const disponivel = pedido
+    ? Math.max(0, pedido.quantidade - pedido.quantidade_planejada)
+    : 0;
 
   function criar(event: React.FormEvent) {
-    event.preventDefault()
+    event.preventDefault();
     startTransition(async () => {
       const result = await criarLoteProducao({
-        ...form, impressoraId: form.impressoraId ? Number(form.impressoraId) : null,
-      })
-      setMensagem(result.message)
-      if (result.success) { setAberto(false); router.refresh() }
-    })
+        ...form,
+        impressoraId: form.impressoraId ? Number(form.impressoraId) : null,
+      });
+      setMensagem(result.message);
+      if (result.success) {
+        setAberto(false);
+        router.refresh();
+      }
+    });
   }
 
   function atualizar(lote: LoteProducao, status: string, produzido: number) {
     startTransition(async () => {
-      const result = await atualizarLoteProducao({ loteId: lote.id, status, quantidadeProduzida: produzido, tempoRealHoras: lote.tempo_real_horas })
-      setMensagem(result.message)
-      if (result.success) router.refresh()
-    })
+      const result = await atualizarLoteProducao({
+        loteId: lote.id,
+        status,
+        quantidadeProduzida: produzido,
+        tempoRealHoras: lote.tempo_real_horas,
+      });
+      setMensagem(result.message);
+      if (result.success) router.refresh();
+    });
   }
 
   function gerarAutomaticamente() {
-    if (!pedido) return
+    if (!pedido) return;
     startTransition(async () => {
-      const result = await criarLotesAutomaticos(pedido.id)
-      setMensagem(result.message)
-      if (result.success) { setAberto(false); router.refresh() }
-    })
+      const result = await criarLotesAutomaticos(pedido.id);
+      setMensagem(result.message);
+      if (result.success) {
+        setAberto(false);
+        router.refresh();
+      }
+    });
   }
 
-  return <section className="mb-7 rounded-2xl border border-border bg-card p-5 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 font-semibold"><Boxes size={17} className="text-info" /> Lotes e placas</h2><p className="mt-1 text-xs text-muted-foreground">Divida pedidos grandes por placa, impressora ou remessa e acompanhe o realizado.</p></div>
-      <button type="button" onClick={() => setAberto((valor) => !valor)} disabled={pedidos.length === 0} className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-500/15 px-4 text-xs font-medium text-info disabled:opacity-40"><Plus size={14} /> Novo lote</button>
-    </div>
-    {mensagem && <p className="mt-4 rounded-lg bg-subtle p-3 text-xs text-secondary-foreground">{mensagem}</p>}
-    {aberto && <form onSubmit={criar} className="mt-5 grid gap-3 rounded-xl border border-blue-400/15 bg-blue-400/[0.03] p-4 sm:grid-cols-2 lg:grid-cols-5">
-      <label className="text-xs text-muted-foreground lg:col-span-2">Pedido<select required value={form.pedidoId} onChange={(e) => { const selecionado = pedidos.find(item => item.id === Number(e.target.value)); setForm({ ...form, pedidoId: Number(e.target.value), quantidade: 1, impressoraId: selecionado?.impressora_preferida_id ? String(selecionado.impressora_preferida_id) : '', placaReferencia: selecionado?.placa_referencia_padrao || '' }) }} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"><option value={0}>Selecione</option>{pedidos.map((item) => <option key={item.id} value={item.id}>{item.numero_orcamento} · {item.nome_da_peca} · livre {Math.max(0, item.quantidade - item.quantidade_planejada)}</option>)}</select></label>
-      <label className="text-xs text-muted-foreground">Quantidade<input required type="number" min="0.001" max={disponivel} step="0.001" value={form.quantidade} onChange={(e) => setForm({ ...form, quantidade: Number(e.target.value) })} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3" /></label>
-      <label className="text-xs text-muted-foreground">Impressora<select value={form.impressoraId} onChange={(e) => setForm({ ...form, impressoraId: e.target.value })} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"><option value="">Definir depois</option>{impressoras.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
-      <label className="text-xs text-muted-foreground">Placa/arquivo<input maxLength={100} value={form.placaReferencia} onChange={(e) => setForm({ ...form, placaReferencia: e.target.value })} placeholder="Placa 01 / 3MF" className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3" /></label>
-      {pedido?.unidades_por_placa && disponivel > 0 && <div className="flex flex-col gap-3 rounded-lg border border-accent/15 bg-accent/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between lg:col-span-5"><div><p className="text-xs font-medium text-accent">Sugestão da ficha: {Math.ceil(disponivel / pedido.unidades_por_placa)} placa(s) de até {pedido.unidades_por_placa} peça(s)</p><p className="mt-1 text-[10px] text-muted-foreground">{pedido.impressora_preferida_nome ? `Impressora ${pedido.impressora_preferida_nome}` : 'Impressora não definida'}{pedido.placa_referencia_padrao ? ` · ${pedido.placa_referencia_padrao}` : ''}</p></div><button type="button" disabled={isPending || !Number.isInteger(disponivel)} onClick={gerarAutomaticamente} className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground disabled:opacity-40"><WandSparkles size={13} /> Gerar todas as placas</button></div>}
-      <label className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-4">Observações<input maxLength={500} value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3" /></label>
-      <button disabled={isPending || disponivel <= 0} className="mt-auto h-10 rounded-lg bg-blue-400 px-3 text-xs font-semibold text-[#0d1117] disabled:opacity-40">Criar lote</button>
-    </form>}
-    <div className="mt-5 grid gap-3 lg:grid-cols-2">
-      {lotes.filter((item) => item.status !== 'Cancelado').slice(0, 12).map((lote) => <div key={lote.id} className="rounded-xl border border-border bg-black/15 p-4">
-        <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium">{lote.codigo} · {lote.nome_da_peca}</p><p className="mt-1 text-[10px] text-muted-foreground">{lote.cliente_nome} · {lote.impressora_nome ?? 'sem impressora'}{lote.placa_referencia ? ` · ${lote.placa_referencia}` : ''}</p></div><span className={`rounded px-2 py-1 text-[10px] ${lote.status === 'Concluído' ? 'bg-emerald-500/10 text-success' : lote.status === 'Imprimindo' ? 'bg-blue-500/10 text-info' : 'bg-subtle text-muted-foreground'}`}>{lote.status}</span></div>
-        <div className="mt-3"><div className="flex justify-between text-[10px] text-muted-foreground"><span>Produzido</span><span>{lote.quantidade_produzida}/{lote.quantidade_planejada}</span></div><div className="mt-1 h-1.5 overflow-hidden rounded bg-subtle"><div className="h-full bg-blue-400" style={{ width: `${Math.min(100, lote.quantidade_planejada ? lote.quantidade_produzida / lote.quantidade_planejada * 100 : 0)}%` }} /></div></div>
-        {lote.status === 'Planejado' && <button disabled={isPending} onClick={() => atualizar(lote, 'Imprimindo', lote.quantidade_produzida)} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2 text-xs text-info"><Play size={12} /> Iniciar</button>}
-        {lote.status === 'Imprimindo' && <div className="mt-3 flex flex-wrap items-center gap-2"><input aria-label={`Quantidade produzida do ${lote.codigo}`} type="number" min={lote.quantidade_produzida} max={lote.quantidade_planejada} step="0.001" value={progresso[lote.id] ?? ''} onChange={(e) => setProgresso({ ...progresso, [lote.id]: e.target.value })} className="h-9 w-24 rounded-lg border border-border bg-background px-2 text-xs" /><button disabled={isPending} onClick={() => atualizar(lote, 'Imprimindo', Number(progresso[lote.id]))} className="h-9 rounded-lg bg-blue-500/10 px-3 text-xs text-info">Salvar avanço</button><button disabled={isPending} onClick={() => atualizar(lote, 'Concluído', lote.quantidade_planejada)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-500/10 px-3 text-xs text-success"><Check size={12} /> Concluir lote</button></div>}
-      </div>)}
-      {lotes.length === 0 && <p className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground lg:col-span-2">Nenhum lote criado. Pedidos pequenos podem continuar pelo fluxo normal.</p>}
-    </div>
-  </section>
+  return (
+    <section className="ops-batches mb-7 rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Boxes size={17} className="text-info" /> Lotes e placas
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Divida pedidos grandes por placa, impressora ou remessa e acompanhe
+            o realizado.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAberto((valor) => !valor)}
+          disabled={pedidos.length === 0}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-500/15 px-4 text-xs font-medium text-info disabled:opacity-40"
+        >
+          <Plus size={14} /> Novo lote
+        </button>
+      </div>
+      {mensagem && (
+        <p className="mt-4 rounded-lg bg-subtle p-3 text-xs text-secondary-foreground">
+          {mensagem}
+        </p>
+      )}
+      {aberto && (
+        <form
+          onSubmit={criar}
+          className="mt-5 grid gap-3 rounded-xl border border-blue-400/15 bg-blue-400/[0.03] p-4 sm:grid-cols-2 lg:grid-cols-5"
+        >
+          <label className="text-xs text-muted-foreground lg:col-span-2">
+            Pedido
+            <select
+              required
+              value={form.pedidoId}
+              onChange={(e) => {
+                const selecionado = pedidos.find(
+                  (item) => item.id === Number(e.target.value),
+                );
+                setForm({
+                  ...form,
+                  pedidoId: Number(e.target.value),
+                  quantidade: 1,
+                  impressoraId: selecionado?.impressora_preferida_id
+                    ? String(selecionado.impressora_preferida_id)
+                    : "",
+                  placaReferencia: selecionado?.placa_referencia_padrao || "",
+                });
+              }}
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+            >
+              <option value={0}>Selecione</option>
+              {pedidos.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.numero_orcamento} · {item.nome_da_peca} · livre{" "}
+                  {Math.max(0, item.quantidade - item.quantidade_planejada)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Quantidade
+            <input
+              required
+              type="number"
+              min="0.001"
+              max={disponivel}
+              step="0.001"
+              value={form.quantidade}
+              onChange={(e) =>
+                setForm({ ...form, quantidade: Number(e.target.value) })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+            />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Impressora
+            <select
+              value={form.impressoraId}
+              onChange={(e) =>
+                setForm({ ...form, impressoraId: e.target.value })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+            >
+              <option value="">Definir depois</option>
+              {impressoras.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Placa/arquivo
+            <input
+              maxLength={100}
+              value={form.placaReferencia}
+              onChange={(e) =>
+                setForm({ ...form, placaReferencia: e.target.value })
+              }
+              placeholder="Placa 01 / 3MF"
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+            />
+          </label>
+          {pedido?.unidades_por_placa && disponivel > 0 && (
+            <div className="flex flex-col gap-3 rounded-lg border border-accent/15 bg-accent/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between lg:col-span-5">
+              <div>
+                <p className="text-xs font-medium text-accent">
+                  Sugestão da ficha:{" "}
+                  {Math.ceil(disponivel / pedido.unidades_por_placa)} placa(s)
+                  de até {pedido.unidades_por_placa} peça(s)
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {pedido.impressora_preferida_nome
+                    ? `Impressora ${pedido.impressora_preferida_nome}`
+                    : "Impressora não definida"}
+                  {pedido.placa_referencia_padrao
+                    ? ` · ${pedido.placa_referencia_padrao}`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isPending || !Number.isInteger(disponivel)}
+                onClick={gerarAutomaticamente}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground disabled:opacity-40"
+              >
+                <WandSparkles size={13} /> Gerar todas as placas
+              </button>
+            </div>
+          )}
+          <label className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-4">
+            Observações
+            <input
+              maxLength={500}
+              value={form.observacoes}
+              onChange={(e) =>
+                setForm({ ...form, observacoes: e.target.value })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+            />
+          </label>
+          <button
+            disabled={isPending || disponivel <= 0}
+            className="mt-auto h-10 rounded-lg bg-accent px-3 text-xs font-semibold text-accent-foreground disabled:opacity-40"
+          >
+            Criar lote
+          </button>
+        </form>
+      )}
+      <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        {lotes
+          .filter((item) => item.status !== "Cancelado")
+          .slice(0, 12)
+          .map((lote) => (
+            <div
+              key={lote.id}
+              className="ops-batch-card rounded-xl border border-border bg-card p-5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">
+                    {lote.codigo} · {lote.nome_da_peca}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {lote.cliente_nome} ·{" "}
+                    {lote.impressora_nome ?? "sem impressora"}
+                    {lote.placa_referencia ? ` · ${lote.placa_referencia}` : ""}
+                  </p>
+                </div>
+                <span
+                  className={`rounded px-2 py-1 text-[10px] ${lote.status === "Concluído" ? "bg-emerald-500/10 text-success" : lote.status === "Imprimindo" ? "bg-blue-500/10 text-info" : "bg-subtle text-muted-foreground"}`}
+                >
+                  {lote.status}
+                </span>
+              </div>
+              <div className="mt-3">
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Produzido</span>
+                  <span>
+                    {lote.quantidade_produzida}/{lote.quantidade_planejada}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded bg-subtle">
+                  <div
+                    className="h-full bg-accent"
+                    style={{
+                      width: `${Math.min(100, lote.quantidade_planejada ? (lote.quantidade_produzida / lote.quantidade_planejada) * 100 : 0)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              {lote.status === "Planejado" && (
+                <button
+                  disabled={isPending}
+                  onClick={() =>
+                    atualizar(lote, "Imprimindo", lote.quantidade_produzida)
+                  }
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2 text-xs text-info"
+                >
+                  <Play size={12} /> Iniciar
+                </button>
+              )}
+              {lote.status === "Imprimindo" && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    aria-label={`Quantidade produzida do ${lote.codigo}`}
+                    type="number"
+                    min={lote.quantidade_produzida}
+                    max={lote.quantidade_planejada}
+                    step="0.001"
+                    value={progresso[lote.id] ?? ""}
+                    onChange={(e) =>
+                      setProgresso({ ...progresso, [lote.id]: e.target.value })
+                    }
+                    className="h-9 w-24 rounded-lg border border-border bg-background px-2 text-xs"
+                  />
+                  <button
+                    disabled={isPending}
+                    onClick={() =>
+                      atualizar(lote, "Imprimindo", Number(progresso[lote.id]))
+                    }
+                    className="h-9 rounded-lg bg-blue-500/10 px-3 text-xs text-info"
+                  >
+                    Salvar avanço
+                  </button>
+                  <button
+                    disabled={isPending}
+                    onClick={() =>
+                      atualizar(lote, "Concluído", lote.quantidade_planejada)
+                    }
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-500/10 px-3 text-xs text-success"
+                  >
+                    <Check size={12} /> Concluir lote
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        {lotes.length === 0 && (
+          <p className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground lg:col-span-2">
+            Nenhum lote criado. Pedidos pequenos podem continuar pelo fluxo
+            normal.
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }

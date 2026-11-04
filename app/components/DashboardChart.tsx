@@ -47,7 +47,7 @@ export function DashboardChart({
     >
       <div className="studio-card-heading">
         <div>
-          <h2 id="recebimentos-title">Seu ateliê em números</h2>
+          <h2 id="recebimentos-title">Recebimentos</h2>
           <p>Recebimentos ao longo do período</p>
         </div>
         <select

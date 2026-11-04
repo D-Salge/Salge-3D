@@ -129,9 +129,9 @@ export function FilamentosTabela({
   return (
     <>
       <StudioPageHeading
-        eyebrow="Materiais e organização"
-        title="Cada grama conta."
-        description="Seus filamentos, cores e disponibilidade em um só lugar."
+        eyebrow="Estoque"
+        title="Filamentos"
+        description="Saldos, cores e custos dos materiais cadastrados."
         action={
           <button
             type="button"

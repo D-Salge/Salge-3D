@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PrinterGlyph } from "@/app/components/PrinterGlyph";
 import {
   ArrowRight,
   CalendarDays,
@@ -6,9 +7,8 @@ import {
   Layers,
   Package,
   Plus,
-  Printer,
   ReceiptText,
-  Sparkles,
+  Printer,
 } from "lucide-react";
 import type { DashboardStats, PedidoResumo } from "@/app/actions/pedidos";
 import type { DashboardVisual } from "@/app/actions/dashboard";
@@ -47,13 +47,12 @@ export function DashboardOverview({
     <div className="studio-overview">
       <section className="studio-welcome">
         <div>
-          <p className="studio-eyebrow">Seu ateliê, em um olhar</p>
+          <p className="studio-eyebrow">Salge 3D</p>
           <h1>
-            Tudo em ordem. <span>Vamos criar?</span>
+            Visão geral
           </h1>
           <p>
-            Olá, {nome.split(/\s+/)[0]}. Aqui está o que acontece na Salge 3D
-            hoje.
+            Olá, {nome.split(/\s+/)[0]}. Resumo dos pedidos, recebimentos e produção.
           </p>
         </div>
         <div className="studio-welcome-actions">
@@ -97,7 +96,7 @@ export function DashboardOverview({
             value: `${(visual.filamentoGramas / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} kg`,
             sub: stats.estoqueBaixo
               ? `${stats.estoqueBaixo} ${stats.estoqueBaixo === 1 ? "item precisa" : "itens precisam"} de reposição`
-              : "Materiais disponíveis para criar",
+              : "Estoque sem alertas de reposição",
             icon: <Layers size={16} />,
           },
         ].map((item) => (
@@ -119,7 +118,7 @@ export function DashboardOverview({
         >
           <div className="studio-card-heading">
             <div>
-              <h2 id="bancada-title">Na bancada</h2>
+              <h2 id="bancada-title">Impressoras</h2>
               <p>Registros de produção do ERP</p>
             </div>
             <Link href="/producao" className="studio-text-link">
@@ -152,7 +151,7 @@ export function DashboardOverview({
               return (
                 <article className="studio-printer" key={impressora.id}>
                   <div className="studio-printer-icon">
-                    <Printer size={31} strokeWidth={1} />
+                    <PrinterGlyph name={`${impressora.nome} ${impressora.modelo ?? ""}`} />
                   </div>
                   <div className="studio-printer-info">
                     <div className="studio-printer-title">
@@ -192,7 +191,7 @@ export function DashboardOverview({
                       <>
                         <p className="studio-printer-project">
                           {impressora.status === "Disponivel"
-                            ? "Pronta para uma nova ideia."
+                            ? "Sem impressão em andamento."
                             : "Nenhum trabalho em andamento registrado."}
                         </p>
                         <Link href="/producao" className="studio-text-link">
@@ -226,22 +225,22 @@ export function DashboardOverview({
             <Layers size={18} />
           </span>
           <div>
-            <h3>Um olhar no estoque</h3>
+            <h3>Reposição de materiais</h3>
             <p>
               {stats.estoqueBaixo
                 ? `${stats.estoqueBaixo} ${stats.estoqueBaixo === 1 ? "item precisa" : "itens precisam"} de reposição.`
-                : "Confira materiais e planeje suas próximas peças."}
+                : "Consultar o estoque e as sugestões de compra."}
             </p>
           </div>
           <ArrowRight size={15} />
         </Link>
         <Link href="/orcamentos" className="studio-card studio-quick">
           <span className="studio-quick-icon">
-            <Sparkles size={18} />
+            <ReceiptText size={18} />
           </span>
           <div>
-            <h3>A próxima ideia começa aqui.</h3>
-            <p>Crie um orçamento por peça ou por plates.</p>
+            <h3>Novo orçamento</h3>
+            <p>Cálculo tradicional ou por plates.</p>
           </div>
           <Plus size={15} />
         </Link>
@@ -270,8 +269,8 @@ export function DashboardOverview({
         <CentralPendencias pendencias={pendencias} />
       </div>
       <footer className="studio-footer">
-        <span>salge3d · Feito para transformar ideias em realidade.</span>
-        <span>Seu ateliê, em ordem.</span>
+        <span>Salge 3D</span>
+        <span>ERP pessoal</span>
       </footer>
     </div>
   );

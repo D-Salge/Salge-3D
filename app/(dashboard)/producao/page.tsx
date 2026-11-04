@@ -6,7 +6,8 @@
 import type { Metadata } from 'next'
 import { getPedidosKanban } from '@/app/actions/pedidos'
 import { KanbanBoard } from '@/app/components/KanbanBoard'
-import { Box } from 'lucide-react'
+import { StudioPageHeading } from '@/app/components/StudioPageHeading'
+import { ProducaoWorkspace } from '@/app/components/ProducaoWorkspace'
 import { getPlanejamentoProducao } from '@/app/actions/planejamento'
 import { PlanejamentoProducao } from '@/app/components/PlanejamentoProducao'
 import { getLotesProducao } from '@/app/actions/lotes-producao'
@@ -25,36 +26,12 @@ export default async function ProducaoPage() {
 
   return (
     <div className="studio-page mx-auto flex h-full max-w-[1440px] flex-col px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
-      {/* Header da Página */}
-      <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end shrink-0">
-        <div>
-          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-secondary-foreground">Produção</span>
-          </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-[34px]">
-            Fila de Produção
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Acompanhe o andamento das peças e atualize os status.
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-subtle px-3 py-2 text-xs text-secondary-foreground">
-            <Box size={14} className="text-accent" />
-            {pedidos.filter(p => p.status !== 'Finalizado').length} peças ativas
-          </div>
-        </div>
-      </div>
-
-      <PlanejamentoProducao plano={planejamento} />
-
-      <LotesProducao lotes={controleLotes.lotes} pedidos={controleLotes.pedidos} impressoras={impressoras.map(({ id, nome }) => ({ id, nome }))} />
-
-      {/* Kanban Board */}
-      <KanbanBoard pedidos={pedidos} />
+      <StudioPageHeading eyebrow="Pedidos e máquinas" title="Produção" description="Fila de impressão, plates e planejamento das impressoras." />
+      <ProducaoWorkspace plano={planejamento} pedidos={pedidos} lotes={controleLotes.lotes}
+        board={<KanbanBoard pedidos={pedidos} />}
+        batches={<LotesProducao lotes={controleLotes.lotes} pedidos={controleLotes.pedidos} impressoras={impressoras.map(({ id, nome }) => ({ id, nome }))} />}
+        planning={<PlanejamentoProducao plano={planejamento} />}
+      />
     </div>
   )
 }

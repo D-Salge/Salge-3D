@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/app/components/ThemeToggle";
 
 const labels: Record<string, string> = {
   orcamentos: "Orçamentos",
-  produtos: "Produtos e vendas",
+  produtos: "Catálogo e vendas",
   producao: "Produção",
   clientes: "Clientes",
   financeiro: "Financeiro",
@@ -42,7 +42,7 @@ export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
         </span>
       </Link>
       <div className="studio-breadcrumb">
-        <span>Workspace</span>
+        <span>Salge 3D</span>
         <ChevronRight size={12} />
         <strong>{label}</strong>
       </div>
