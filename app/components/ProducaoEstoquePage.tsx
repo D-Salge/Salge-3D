@@ -116,7 +116,7 @@ export function ProducaoEstoquePage({ dados }: { dados: ProducaoEstoqueDados }) 
     })
   }
 
-  return <div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+  return <div className="studio-page mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-3 text-xs text-muted-foreground">Produção / Produzir para estoque</p><h1 className="text-3xl font-semibold tracking-tight">Produção para estoque</h1><p className="mt-2 text-sm text-muted-foreground">Fabrique antecipadamente sem criar cliente, receita ou contas a receber.</p></div><div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-xs text-accent"><Factory className="mr-2 inline" size={15} />{dados.ordens.filter(item => !['Concluída', 'Cancelada', 'Falhou'].includes(item.status)).length} ordem(ns) ativa(s)</div></div>
     {mensagem && <p role="status" className="mb-5 rounded-xl border border-border bg-subtle p-4 text-sm text-secondary-foreground">{mensagem}</p>}
     <form onSubmit={criar} className="mb-8 rounded-2xl border border-border bg-card p-5 sm:p-6">

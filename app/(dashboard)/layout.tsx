@@ -45,7 +45,7 @@ export default async function DashboardLayout({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader usuario={sessao} />
-        <main className="flex-1 overflow-x-hidden pb-20 lg:pb-0">
+        <main className="studio-content flex-1 min-w-0 pb-20 lg:pb-0">
           {children}
         </main>
       </div>

@@ -125,6 +125,7 @@ function Navegacao({
       label: "Produção",
       badge: pedidosEmProducao ? String(pedidosEmProducao) : undefined,
     },
+    { href: "/filamentos", icon: <Database size={16}/>, label: "Estoque de materiais" },
     { href: "/clientes", icon: <Users size={16} />, label: "Clientes" },
     {
       href: "/financeiro",
@@ -313,7 +314,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="studio-sidebar sticky top-0 hidden h-screen w-[224px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+      <aside className="studio-sidebar sticky top-0 hidden h-screen w-[252px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
         <Marca />
         <div className="studio-workspace-badge">
           <span>S3</span>

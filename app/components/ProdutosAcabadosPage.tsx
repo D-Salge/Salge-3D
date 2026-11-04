@@ -28,7 +28,7 @@ export function ProdutosAcabadosPage({ dados }: {
   const unidades = dados.produtos.reduce((soma, item) => soma + item.saldo_fisico, 0)
   const disponiveis = dados.produtos.reduce((soma, item) => soma + item.disponivel, 0)
   const valor = dados.produtos.reduce((soma, item) => soma + item.valor_estoque, 0)
-  return <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+  return <div className="studio-page mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
     <div className="mb-8"><p className="mb-3 text-xs text-muted-foreground">Estoque / Produtos acabados</p><h1 className="text-3xl font-semibold tracking-tight">Produtos acabados</h1><p className="mt-2 text-sm text-muted-foreground">Saldo calculado pelo livro de entradas, saídas, perdas, ajustes e devoluções.</p></div>
     {mensagem && <p role="status" className="mb-5 rounded-xl border border-border bg-subtle p-4 text-sm text-secondary-foreground">{mensagem}</p>}
     <div className="mb-6 grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-border bg-card p-5"><Boxes className="mb-3 text-accent" size={18} /><p className="text-xs text-muted-foreground">Saldo físico</p><p className="mt-1 text-2xl font-semibold">{unidades} un.</p></div><div className="rounded-2xl border border-border bg-card p-5"><PackageCheck className="mb-3 text-success" size={18} /><p className="text-xs text-muted-foreground">Disponível para venda</p><p className="mt-1 text-2xl font-semibold">{disponiveis} un.</p></div><div className="rounded-2xl border border-border bg-card p-5"><Boxes className="mb-3 text-info" size={18} /><p className="text-xs text-muted-foreground">Valor gerencial</p><p className="mt-1 text-2xl font-semibold">{moeda(valor)}</p></div></div>

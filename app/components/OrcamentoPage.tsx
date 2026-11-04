@@ -615,8 +615,9 @@ export function OrcamentoPage({
   }
 
   return (
-    <div className="flex flex-col gap-8 lg:flex-row lg:items-start shrink-0">
-      <form onSubmit={handleSubmit} className="flex-1 space-y-8">
+    <div className="studio-quote-workbench">
+      <nav className="studio-quote-steps" aria-label="Seções do orçamento"><a href="#quote-details"><span>01</span> Projeto</a><a href={atendimentoEstoque ? "#quote-details" : "#quote-materials"}><span>02</span> {atendimentoEstoque ? "Produto em estoque" : "Materiais e produção"}</a><a href="#quote-logistics"><span>03</span> Valores e entrega</a></nav>
+      <form onSubmit={handleSubmit} className="studio-quote-form space-y-6">
         {pedidoInicial && !pedidoEdicaoId && <div className="rounded-xl border border-accent/20 bg-accent/[0.06] p-4 text-xs leading-5 text-accent/80">
           Cópia de {pedidoInicial.origem_numero ?? `pedido #${pedidoInicial.origem_id}`} (valor anterior: {pedidoInicial.valor_total_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O preço comercial por unidade foi preservado; os custos técnicos serão recalculados com os valores atuais. Cliente, datas, pagamentos e produção anterior não serão copiados.
         </div>}
@@ -625,8 +626,8 @@ export function OrcamentoPage({
         </div>}
         
         {/* 1. Dados Básicos */}
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
-          <h2 className="mb-5 text-sm font-semibold text-foreground">Dados do Pedido</h2>
+        <section id="quote-details" className="studio-form-card rounded-2xl border border-border bg-card p-6">
+          <div className="studio-form-heading"><span>01</span><div><h2>Dados do projeto</h2><p>O que vamos criar e para quem.</p></div></div>
           <div className="mb-5 grid grid-cols-2 rounded-xl border border-border bg-background p-1">
             <button type="button" onClick={() => setAtendimentoTipo('Encomenda')} aria-pressed={atendimentoTipo === 'Encomenda'} className={`rounded-lg px-3 py-2 text-xs font-medium ${atendimentoTipo === 'Encomenda' ? 'bg-subtle text-foreground' : 'text-muted-foreground'}`}>Produzir sob encomenda</button>
             <button type="button" onClick={() => {
@@ -705,9 +706,9 @@ export function OrcamentoPage({
         </section>
 
         {/* 2. Filamentos */}
-        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <section id="quote-materials" className="studio-form-card rounded-2xl border border-border bg-card p-6 shadow-2xl">
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Materiais e Cores</h2>
+            <div className="studio-form-heading"><span>02</span><div><h2>Materiais e cores</h2><p>Selecione os filamentos e o consumo da produção.</p></div></div>
           </div>
           <div className="space-y-4">
             {materiais.map((m, idx) => (
@@ -738,9 +739,9 @@ export function OrcamentoPage({
           </div>
         </section>}
 
-        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-6">
+        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && <section id="quote-materials" className="studio-form-card rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-6">
           <div className="mb-5">
-            <h2 className="text-sm font-semibold text-foreground">Composição por plates</h2>
+            <div className="studio-form-heading"><span>02</span><div><h2>Composição por plates</h2><p>Organize cada plate com seus materiais e tempo.</p></div></div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">Peças físicas e unidades comerciais são dados separados. Escolha se as execuções serão informadas manualmente ou dimensionadas pela quantidade.</p>
           </div>
 
@@ -890,8 +891,8 @@ export function OrcamentoPage({
         </section>
 
         {/* 4. Logística e Faturamento */}
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
-          <h2 className="mb-5 text-sm font-semibold text-foreground">Logística & Descontos</h2>
+        <section id="quote-logistics" className="studio-form-card rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <div className="studio-form-heading"><span>03</span><div><h2>Valores e entrega</h2><p>Condições comerciais, sinal e custos adicionais.</p></div></div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="flex flex-col gap-2">
               <span className="text-xs font-medium text-secondary-foreground">Data de Entrega</span>
@@ -987,8 +988,16 @@ export function OrcamentoPage({
       </form>
 
       {/* Painel Lateral - Resumo */}
-      <aside className="sticky top-6 w-full lg:w-[360px] rounded-2xl border border-border bg-card p-6 shadow-2xl">
-        <h2 className="mb-6 text-sm font-semibold text-foreground">Resumo do Orçamento</h2>
+      <aside className="studio-quote-summary rounded-2xl border border-border bg-card p-6">
+        <div className="studio-summary-heading"><p className="studio-eyebrow">Seu orçamento</p><h2>Resumo do projeto</h2></div>
+          <div className="studio-quote-total">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total para o cliente</span>
+            <div className="mt-1 text-3xl font-bold tracking-tight text-accent">
+              {fmt(valorFinal)}
+            </div>
+            <p className={`mt-2 text-xs ${lucroEstimado >= 0 ? 'text-success' : 'text-destructive'}`}>Lucro estimado: {fmt(lucroEstimado)}</p>
+          </div>
+
 
         {modoCalculo === MODO_CALCULO_PLATES && <div className="mb-5 rounded-xl border border-accent/20 bg-accent/[0.05] p-4 text-xs">
           <div className="grid grid-cols-2 gap-3 text-secondary-foreground">
@@ -1093,13 +1102,6 @@ export function OrcamentoPage({
             </div>
           )}
 
-          <div className="mt-4 rounded-xl bg-subtle p-4 text-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Valor final do orçamento</span>
-            <div className="mt-1 text-3xl font-bold tracking-tight text-accent">
-              {fmt(valorFinal)}
-            </div>
-            <p className={`mt-2 text-xs ${lucroEstimado >= 0 ? 'text-success' : 'text-destructive'}`}>Lucro estimado: {fmt(lucroEstimado)}</p>
-          </div>
           {sinalPercentual > 0 && <div className="rounded-xl border border-accent/20 bg-accent/[0.05] p-4 text-sm">
             <div className="flex justify-between text-secondary-foreground"><span>Sinal de {sinalPercentual.toLocaleString('pt-BR')}%</span><b className="font-mono text-accent">{fmt(valorSinal)}</b></div>
             <div className="mt-2 flex justify-between text-muted-foreground"><span>Restante na entrega</span><span className="font-mono">{fmt(saldoAposSinal)}</span></div>

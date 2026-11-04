@@ -29,7 +29,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (!pedido || !['Rascunho', 'Enviado'].includes(pedido.orcamento_status)) notFound()
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
+    <div className="studio-page mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8">
         <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
           <span>Workspace</span><span>/</span><span>Orçamentos</span><span>/</span><span className="text-secondary-foreground">Editar</span>
