@@ -87,7 +87,7 @@ export function DespesaModal({ despesa, onClose, contas = [] }: {
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <input required placeholder="Descrição" value={form.descricao} onChange={e=>setForm({...form, descricao: e.target.value})}
             className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-xs text-secondary-foreground">{despesa ? 'Valor da parcela' : 'Valor total'}
               <input required type="number" min="0.01" step="0.01" value={form.valor || ''} onChange={e=>setForm({...form, valor: Number(e.target.value)})}
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60" />
@@ -110,7 +110,7 @@ export function DespesaModal({ despesa, onClose, contas = [] }: {
               {contasDisponiveis.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-xs text-secondary-foreground">Forma de pagamento
               <select value={form.forma_pagamento} onChange={e=>setForm({...form, forma_pagamento: e.target.value})}
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground">
@@ -127,7 +127,7 @@ export function DespesaModal({ despesa, onClose, contas = [] }: {
             <input required type="date" value={form.data_despesa} onChange={e=>setForm({...form, data_despesa: e.target.value, competencia_em: e.target.value})}
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm focus:border-accent/60" />
           </label>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-xs text-secondary-foreground">Competência
               <input required type="date" value={form.competencia_em} onChange={e=>setForm({...form, competencia_em: e.target.value})}
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground" />

@@ -97,7 +97,7 @@ export function FinanceiroPage({
 
       <ContasFinanceiras contas={contas} transferencias={transferencias} />
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-6">
         {/* Recebido */}
         <div className="rounded-2xl border border-border bg-card p-5 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
@@ -157,16 +157,16 @@ export function FinanceiroPage({
 
       <ProjecaoFluxoCaixa projecao={projecao} />
 
-      <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-6 2xl:grid-cols-2">
         {/* Pagamentos Pendentes */}
-        <div className="flex min-h-0 flex-col rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-border bg-card shadow-2xl">
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
             <div><h2 className="text-sm font-semibold text-foreground">Pagamentos pendentes</h2><p className="mt-1 text-xs text-muted-foreground">Valores que ainda precisam ser recebidos.</p></div>
             <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] text-warning">{pendentes.length}</span>
           </div>
-          <div className="erp-table-scroll erp-table-fit flex-1">
-            <table className="w-full table-fixed text-sm">
-              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="px-3 py-3">Pedido</th><th className="w-[98px] px-2 py-3">Saldo</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
+          <div className="erp-table-scroll flex-1">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="min-w-[220px] px-3 py-3">Pedido</th><th className="w-px whitespace-nowrap px-2 py-3">Saldo</th><th className="w-px whitespace-nowrap px-3 py-3 text-right">Ação</th></tr></thead>
               <tbody className="divide-y divide-border">
                 {pendentes.length === 0 && (
                   <tr><td colSpan={3} className="py-8 text-center text-xs text-muted-foreground">Nenhum pagamento pendente!</td></tr>
@@ -174,14 +174,14 @@ export function FinanceiroPage({
                 {pendentes.map(p => (
                   <tr key={p.parcela_id} className="group hover:bg-subtle">
                     <td className="px-3 py-3">
-                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-foreground" title={p.nome_da_peca}>{p.nome_da_peca}</p>
-                      <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground" title={`${p.cliente_nome} · parcela ${p.numero_parcela}/${p.total_parcelas} · ${p.situacao}${p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}`}>{p.cliente_nome} · parcela {p.numero_parcela}/{p.total_parcelas} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
+                      <p className="line-clamp-2 break-words text-[13px] font-medium leading-[18px] text-foreground" title={p.nome_da_peca}>{p.nome_da_peca}</p>
+                      <p className="mt-0.5 line-clamp-2 break-words text-xs leading-4 text-muted-foreground" title={`${p.cliente_nome} · parcela ${p.numero_parcela}/${p.total_parcelas} · ${p.situacao}${p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}`}>{p.cliente_nome} · parcela {p.numero_parcela}/{p.total_parcelas} · {p.situacao}{p.vencimento_em ? ` · vence ${p.vencimento_em.split('-').reverse().join('/')}` : ''}</p>
                     </td>
                     <td className="px-2 py-3 font-mono text-xs text-accent whitespace-nowrap">{fmtBRL(p.saldo_pendente)}</td>
-                    <td className="px-3 py-3 text-right">
-                      <button 
+                    <td className="whitespace-nowrap px-3 py-3 text-right">
+                      <button type="button"
                         onClick={() => setRecModal(p.pedido_id)}
-                        className="w-full rounded bg-emerald-500/10 px-2 py-1.5 text-xs font-medium text-success hover:bg-emerald-500/20"
+                        className="inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded bg-emerald-500/10 px-2 py-1.5 text-xs font-medium text-success hover:bg-emerald-500/20"
                       >
                         Receber
                       </button>
@@ -194,7 +194,7 @@ export function FinanceiroPage({
         </div>
 
         {/* Despesas */}
-        <div className="flex min-h-0 flex-col rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-border bg-card shadow-2xl">
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
             <div><h2 className="text-sm font-semibold text-foreground">Despesas e contas a pagar</h2><p className="mt-1 text-xs text-muted-foreground">{despesasVisiveis.length} de {despesas.length} lançamento(s)</p></div>
             <button onClick={() => setDespesaModal('new')} className="rounded bg-subtle px-3 py-1.5 text-xs font-medium text-foreground hover:bg-subtle">
@@ -206,9 +206,9 @@ export function FinanceiroPage({
             <select aria-label="Filtrar despesas por status" value={statusDespesa} onChange={(event) => setStatusDespesa(event.target.value as typeof statusDespesa)} className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-secondary-foreground"><option>Todas</option><option>Pendentes</option><option>Pagas</option></select>
             <select aria-label="Ordenar despesas" value={ordemDespesa} onChange={(event) => setOrdemDespesa(event.target.value as typeof ordemDespesa)} className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-secondary-foreground"><option>Recentes</option><option>Vencimento</option></select>
           </div>
-          <div className="erp-table-scroll erp-table-fit flex-1">
-            <table className="w-full table-fixed text-sm">
-              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="px-3 py-3">Despesa</th><th className="w-[94px] px-2 py-3">Vencimento</th><th className="w-[98px] px-2 py-3 text-right">Valor</th><th className="w-[86px] px-3 py-3 text-right">Ação</th></tr></thead>
+          <div className="erp-table-scroll flex-1">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead><tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground"><th className="min-w-[220px] px-3 py-3">Despesa</th><th className="w-px whitespace-nowrap px-2 py-3">Vencimento</th><th className="w-px whitespace-nowrap px-2 py-3 text-right">Valor</th><th className="w-px whitespace-nowrap px-3 py-3 text-right">Ação</th></tr></thead>
               <tbody className="divide-y divide-border">
                 {despesasVisiveis.length === 0 && (
                   <tr><td colSpan={4} className="py-8 text-center text-xs text-muted-foreground">Nenhuma despesa corresponde aos filtros.</td></tr>
@@ -216,8 +216,8 @@ export function FinanceiroPage({
                 {despesasVisiveis.map(d => (
                   <tr key={d.id} className="group hover:bg-subtle cursor-pointer" onClick={() => setDespesaModal(d)}>
                     <td className="px-3 py-3">
-                      <p className="line-clamp-2 text-[13px] font-medium leading-[18px] text-foreground" title={d.descricao}>{d.descricao}</p>
-                      <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground" title={`${d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}vence ${d.vencimento_em.split('-').reverse().join('/')}${d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}${d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}`}>
+                      <p className="line-clamp-2 break-words text-[13px] font-medium leading-[18px] text-foreground" title={d.descricao}>{d.descricao}</p>
+                      <p className="mt-0.5 line-clamp-2 break-words text-xs leading-4 text-muted-foreground" title={`${d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}vence ${d.vencimento_em.split('-').reverse().join('/')}${d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}${d.conta_financeira_nome ? ` · ${d.conta_financeira_nome}` : ''}`}>
                         {d.total_parcelas > 1 ? `Parcela ${d.numero_parcela}/${d.total_parcelas} · ` : ''}
                         vence {d.vencimento_em.split('-').reverse().join('/')}
                         {d.forma_pagamento ? ` · ${d.forma_pagamento}` : ''}
@@ -227,9 +227,9 @@ export function FinanceiroPage({
                     </td>
                     <td className="px-2 py-3 font-mono text-[11px] text-secondary-foreground whitespace-nowrap">{d.vencimento_em.split('-').reverse().join('/')}</td>
                     <td className="px-2 py-3 text-right font-mono text-xs text-destructive whitespace-nowrap">{fmtBRL(d.valor)}</td>
-                    <td className="px-3 py-3 text-right">
+                    <td className="whitespace-nowrap px-3 py-3 text-right">
                       <button type="button" disabled={isPending} onClick={(event) => alternarPagamento(event, d)}
-                        className={`w-full rounded px-2 py-1.5 text-[11px] font-medium disabled:opacity-50 ${d.pago_em ? 'bg-subtle text-muted-foreground hover:bg-subtle' : 'bg-emerald-500/10 text-success hover:bg-emerald-500/20'}`}>
+                        className={`inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded px-2 py-1.5 text-[11px] font-medium disabled:opacity-50 ${d.pago_em ? 'bg-subtle text-muted-foreground hover:bg-subtle' : 'bg-emerald-500/10 text-success hover:bg-emerald-500/20'}`}>
                         {d.pago_em ? 'Reabrir' : 'Dar baixa'}
                       </button>
                     </td>
@@ -243,7 +243,7 @@ export function FinanceiroPage({
       
       {/* Fluxo Capital */}
       <div className="mt-6 rounded-2xl border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div><h2 className="text-sm font-semibold text-foreground">Aportes & retiradas</h2><p className="mt-1 text-xs text-muted-foreground">{fluxo.length} movimentação(ões) de capital</p></div>
           <button onClick={() => setFluxoModal('new')} className="rounded bg-subtle px-3 py-1.5 text-xs font-medium text-foreground hover:bg-subtle">
             Nova Movimentação

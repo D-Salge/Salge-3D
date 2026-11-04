@@ -108,7 +108,7 @@ export function WhatsAppModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Mensagem pelo WhatsApp">
-      <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6">
+      <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-xl rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-success"><MessageCircle size={18} /><h2 className="font-semibold text-foreground">WhatsApp</h2></div>

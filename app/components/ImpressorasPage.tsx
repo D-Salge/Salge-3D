@@ -241,16 +241,16 @@ export function ImpressorasPage({
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
-          <form onSubmit={salvar} className="my-6 w-full max-w-lg rounded-2xl border border-border bg-card p-6">
+          <form onSubmit={salvar} className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6">
             <div className="mb-6 flex items-center justify-between"><h2 className="font-semibold">{form.id ? 'Editar impressora' : 'Nova impressora'}</h2><button type="button" onClick={() => setModal(false)}><X size={18} /></button></div>
             <div className="space-y-4">
               <label className="block text-xs text-secondary-foreground">Nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               <label className="block text-xs text-secondary-foreground">Modelo<input value={form.modelo ?? ''} onChange={(e) => setForm({ ...form, modelo: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-xs text-secondary-foreground">Potência (W)<input type="number" min="0" value={form.potencia_w} onChange={(e) => setForm({ ...form, potencia_w: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
                 <label className="text-xs text-secondary-foreground">Custo/hora<input type="number" step="0.01" min="0" value={form.custo_hora} onChange={(e) => setForm({ ...form, custo_hora: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-xs text-secondary-foreground">Bico atual<input placeholder="Ex.: 0.2 mm" maxLength={40} value={form.bico_atual ?? ''} onChange={(e) => setForm({ ...form, bico_atual: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
                 <label className="text-xs text-secondary-foreground">Revisão a cada (h)<input required type="number" step="1" min="1" value={form.intervalo_manutencao_horas} onChange={(e) => setForm({ ...form, intervalo_manutencao_horas: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               </div>
@@ -266,15 +266,15 @@ export function ImpressorasPage({
 
       {modalManutencao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
-          <form onSubmit={salvarManutencao} className="my-6 w-full max-w-lg rounded-2xl border border-border bg-card p-6">
+          <form onSubmit={salvarManutencao} className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6">
             <div className="mb-6 flex items-center justify-between"><div><h2 className="font-semibold">Registrar manutenção</h2><p className="mt-1 text-xs text-muted-foreground">{impressoras.find((item) => item.id === manutencao.impressoraId)?.nome}</p></div><button type="button" onClick={() => setModalManutencao(false)}><X size={18} /></button></div>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-xs text-secondary-foreground">Tipo<select value={manutencao.tipo} onChange={(e) => setManutencao({ ...manutencao, tipo: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm">{tiposManutencao.map((tipo) => <option key={tipo}>{tipo}</option>)}</select></label>
                 <label className="text-xs text-secondary-foreground">Data<input required type="date" max={hojeLocal()} value={manutencao.realizadaEm} onChange={(e) => setManutencao({ ...manutencao, realizadaEm: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
               </div>
               <label className="block text-xs text-secondary-foreground">Descrição<textarea maxLength={500} rows={3} placeholder="Ex.: limpeza dos eixos e troca do bico 0.2 mm" value={manutencao.descricao} onChange={(e) => setManutencao({ ...manutencao, descricao: e.target.value })} className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm" /></label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-xs text-secondary-foreground">Custo<input type="number" step="0.01" min="0" value={manutencao.custo} onChange={(e) => setManutencao({ ...manutencao, custo: Number(e.target.value) })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
                 <label className="text-xs text-secondary-foreground">Pagamento<select disabled={!manutencao.lancarFinanceiro || manutencao.custo <= 0} value={manutencao.formaPagamento} onChange={(e) => setManutencao({ ...manutencao, formaPagamento: e.target.value })} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-40"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Outro</option></select></label>
               </div>

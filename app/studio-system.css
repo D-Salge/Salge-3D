@@ -325,6 +325,7 @@
 .erp-workspace .studio-content table .font-mono {
   font-family: inherit;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .erp-workspace
   .studio-content

@@ -110,7 +110,7 @@ export function LotesFilamento({
         </div>
       </div>
 
-      {novoLote && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
+      {novoLote && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-md rounded-2xl border border-border bg-card p-6">
         <div className="mb-5 flex items-center justify-between"><h3 className="font-semibold">Registrar novo rolo</h3><button onClick={() => setNovoLote(false)}><X size={18} /></button></div>
         <form onSubmit={salvarLote} className="space-y-4">
           <label className="block text-xs text-secondary-foreground">Filamento<select required value={form.filamentoId} onChange={e => selecionarFilamento(Number(e.target.value))} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3">{filamentos.map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
@@ -121,7 +121,7 @@ export function LotesFilamento({
         </form>
       </div></div>}
 
-      {lotePerda && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
+      {lotePerda && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-md rounded-2xl border border-border bg-card p-6">
         <div className="mb-2 flex items-center justify-between"><h3 className="font-semibold">Registrar perda</h3><button onClick={() => setLotePerda(null)}><X size={18} /></button></div>
         <p className="mb-5 text-xs text-muted-foreground">{lotePerda.codigo} · saldo {lotePerda.saldo_gramas}g</p>
         <form onSubmit={salvarPerda} className="space-y-4">

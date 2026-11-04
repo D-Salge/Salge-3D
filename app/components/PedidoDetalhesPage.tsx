@@ -247,7 +247,7 @@ export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPag
         </div>
       </div>
       {salvarModelo && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-        <form onSubmit={criarModelo} className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        <form onSubmit={criarModelo} className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
           <div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold">Salvar como modelo</h2><p className="mt-1 text-xs text-muted-foreground">Depois ele aparecerá no início da tela Novo Orçamento.</p></div><button type="button" onClick={() => setSalvarModelo(false)} className="text-muted-foreground hover:text-foreground"><X size={18} /></button></div>
           <label className="text-xs text-secondary-foreground">Nome do modelo<input autoFocus required maxLength={100} value={nomeModelo} onChange={(event) => setNomeModelo(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent/60" /></label>
           <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setSalvarModelo(false)} className="rounded-lg bg-subtle px-4 py-2.5 text-xs text-secondary-foreground">Cancelar</button><button disabled={isPending} className="rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground disabled:opacity-50">{isPending ? 'Salvando...' : 'Salvar modelo'}</button></div>
