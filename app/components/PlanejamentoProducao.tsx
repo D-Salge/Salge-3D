@@ -306,7 +306,7 @@ export function PlanejamentoProducao({ plano }: { plano: Plano }) {
         <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/75 p-4">
           <form
             onSubmit={salvarBloqueio}
-            className="my-6 w-full max-w-lg rounded-2xl border border-border bg-card p-6"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-lg rounded-2xl border border-border bg-card p-6"
           >
             <div className="mb-5 flex items-center justify-between">
               <div>

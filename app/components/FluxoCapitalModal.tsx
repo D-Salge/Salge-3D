@@ -52,7 +52,7 @@ export function FluxoCapitalModal({ fluxo, onClose, contas = [] }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6">
         <div className="mb-6 flex items-center justify-between">
           <h3 className="text-lg font-semibold">{fluxo ? 'Visualizar' : 'Nova'} Movimentação</h3>
           <button onClick={onClose} className="text-muted-foreground"><X size={20}/></button>
