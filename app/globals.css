@@ -1,8 +1,58 @@
 @import "tailwindcss";
 
 /* ── Fonte base ──────────────────────────────────────────────────────────────── */
-@theme {
+@theme inline {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-info: var(--info);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+  --background: hsl(225 21% 7%);
+  --card: hsl(224 18% 10%);
+  --foreground: hsl(220 20% 93%);
+  --secondary-foreground: hsl(222 14% 78%);
+  --muted-foreground: hsl(222 12% 66%);
+  --subtle: hsl(224 16% 15%);
+  --border: hsl(224 14% 20%);
+  --accent: hsl(242 89% 76%);
+  --accent-hover: hsl(242 89% 82%);
+  --accent-foreground: hsl(240 30% 13%);
+  --success: hsl(154 48% 63%);
+  --warning: hsl(38 85% 65%);
+  --destructive: hsl(0 70% 70%);
+  --info: hsl(210 90% 75%);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: hsl(220 20% 98%);
+  --card: hsl(0 0% 100%);
+  --foreground: hsl(210 14% 17%);
+  --secondary-foreground: hsl(215 13% 35%);
+  --muted-foreground: hsl(215 10% 43%);
+  --subtle: hsl(220 16% 95%);
+  --border: hsl(220 14% 88%);
+  --accent: hsl(239 70% 55%);
+  --accent-hover: hsl(239 70% 48%);
+  --accent-foreground: hsl(0 0% 100%);
+  --success: hsl(156 60% 28%);
+  --warning: hsl(32 85% 31%);
+  --destructive: hsl(0 65% 43%);
+  --info: hsl(212 75% 38%);
 }
 
 /* ── Reset e base ────────────────────────────────────────────────────────────── */
@@ -19,7 +69,8 @@ html {
 }
 
 body {
-  background: #101114;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 /* ── Scrollbar custom (dark theme) ──────────────────────────────────────────── */
@@ -40,8 +91,8 @@ body {
 
 /* ── Selects e inputs: remove aparência nativa no dark ──────────────────────── */
 select option {
-  background-color: #1e293b;
-  color: #f1f5f9;
+  background-color: var(--card);
+  color: var(--foreground);
 }
 
 /* ── Animação de entrada da tabela ───────────────────────────────────────────── */
@@ -62,7 +113,7 @@ tbody tr {
 
 /* ── Foco acessível global ───────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid rgb(139 92 246);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -81,8 +132,8 @@ tbody tr {
   position: sticky;
   top: 0;
   z-index: 12;
-  background: #15171b;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.07);
+  background: var(--card);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 /* Tabelas compactas devem usar só a rolagem vertical do card. */
@@ -118,4 +169,37 @@ tbody tr {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* A feathered horizontal reveal: sunrise upwards, sunset downwards.
+   Only a theme click opts into these pseudo-elements, never route navigation. */
+@property --theme-reveal {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: -12%;
+}
+
+html[data-theme-transition]::view-transition-group(root) {
+  animation-duration: 820ms;
+}
+html[data-theme-transition]::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html[data-theme-transition]::view-transition-new(root) {
+  animation: theme-horizon 820ms cubic-bezier(.22, .61, .36, 1) both;
+  mix-blend-mode: normal;
+  mask-image: linear-gradient(to top, #000 calc(var(--theme-reveal) - 12%), transparent var(--theme-reveal));
+}
+html[data-theme-transition="sunset"]::view-transition-new(root) {
+  mask-image: linear-gradient(to bottom, #000 calc(var(--theme-reveal) - 12%), transparent var(--theme-reveal));
+}
+@keyframes theme-horizon {
+  from { --theme-reveal: -12%; }
+  to { --theme-reveal: 112%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme-transition]::view-transition-group(root),
+  html[data-theme-transition]::view-transition-old(root),
+  html[data-theme-transition]::view-transition-new(root) { animation: none !important; }
 }

@@ -503,7 +503,7 @@ try {
 
   const porta = await portaLivre()
   let saidaServidor = ''
-  servidor = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(porta)], {
+  servidor = spawn(process.execPath, [NEXT_BIN, 'start', '-H', '127.0.0.1', '-p', String(porta)], {
     cwd: ROOT,
     env: {
       ...process.env,

@@ -34,10 +34,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   return (
     <div className="mx-auto max-w-[1200px] shrink-0 px-4 py-6 sm:px-6 sm:py-9 lg:px-10">
       <div className="mb-8">
-        <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
-          <span>Workspace</span><span>/</span><span className="text-white/65">Orçamentos</span>
+        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Workspace</span><span>/</span><span className="text-secondary-foreground">Orçamentos</span>
         </div>
-        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">
+        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-[34px]">
           Novo Orçamento
         </h1>
       </div>
@@ -66,10 +66,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         clienteInicialId={Number.isSafeInteger(clienteInicialId) && clienteInicialId > 0 ? clienteInicialId : null}
       />
 
-      <div className="mt-10 rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 sm:p-8">
+      <div className="mt-10 rounded-2xl border border-border bg-card p-6 sm:p-8">
         <div className="mb-6">
           <h2 className="text-sm font-semibold">Gestão de orçamentos</h2>
-          <p className="mt-1 text-xs text-white/35">Rascunhos, aprovações, pagamentos e pedidos.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Rascunhos, aprovações, pagamentos e pedidos.</p>
         </div>
         <TabelaPedidos pedidos={pedidos} />
       </div>

@@ -49,16 +49,16 @@ function MetricCard({
   accent?: boolean
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl shadow-black/10">
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-[0.14em] text-white/30">
+        <span className="text-xs font-medium text-muted-foreground">
           {label}
         </span>
         <div
           className={`flex size-9 items-center justify-center rounded-lg ${
             accent
-              ? 'bg-[#d8f45a]/10 text-[#d8f45a]'
-              : 'bg-white/[0.05] text-white/35'
+              ? 'bg-accent/10 text-accent'
+              : 'bg-subtle text-muted-foreground'
           }`}
         >
           {icon}
@@ -66,31 +66,31 @@ function MetricCard({
       </div>
       <p
         className={`text-3xl font-semibold tracking-[-0.04em] ${
-          accent ? 'text-[#d8f45a]' : 'text-white'
+          accent ? 'text-accent' : 'text-foreground'
         }`}
       >
         {value}
       </p>
-      <p className="mt-2 text-xs text-white/30">{sub}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{sub}</p>
     </div>
   )
 }
 
 // ── Badge de status ───────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; dot: string; text: string }> = {
-  'Fila':        { label: 'Fila',       dot: 'bg-amber-400',  text: 'text-amber-400/80' },
-  'Imprimindo':  { label: 'Imprimindo', dot: 'bg-blue-400',   text: 'text-blue-400/80' },
-  'Acabamento':  { label: 'Acabamento', dot: 'bg-violet-400', text: 'text-violet-400/80' },
-  'Finalizado':  { label: 'Finalizado', dot: 'bg-[#d8f45a]',  text: 'text-[#d8f45a]/80' },
-  'Cancelado':   { label: 'Cancelado',  dot: 'bg-red-400',    text: 'text-red-400/80' },
-  'Rascunho':    { label: 'Rascunho',   dot: 'bg-slate-400',  text: 'text-slate-400/80' },
-  'Enviado':     { label: 'Enviado',    dot: 'bg-cyan-400',   text: 'text-cyan-400/80' },
-  'Recusado':    { label: 'Recusado',   dot: 'bg-red-400',    text: 'text-red-400/80' },
-  'Expirado':    { label: 'Expirado',   dot: 'bg-orange-400', text: 'text-orange-400/80' },
+  'Fila':        { label: 'Fila',       dot: 'bg-amber-400',  text: 'text-warning' },
+  'Imprimindo':  { label: 'Imprimindo', dot: 'bg-blue-400',   text: 'text-info' },
+  'Acabamento':  { label: 'Acabamento', dot: 'bg-violet-400', text: 'text-accent' },
+  'Finalizado':  { label: 'Finalizado', dot: 'bg-accent',  text: 'text-accent/80' },
+  'Cancelado':   { label: 'Cancelado',  dot: 'bg-red-400',    text: 'text-destructive' },
+  'Rascunho':    { label: 'Rascunho',   dot: 'bg-slate-400',  text: 'text-muted-foreground' },
+  'Enviado':     { label: 'Enviado',    dot: 'bg-cyan-400',   text: 'text-info' },
+  'Recusado':    { label: 'Recusado',   dot: 'bg-red-400',    text: 'text-destructive' },
+  'Expirado':    { label: 'Expirado',   dot: 'bg-orange-400', text: 'text-warning' },
 }
 
 function StatusDot({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status] ?? { label: status, dot: 'bg-slate-400', text: 'text-slate-400/80' }
+  const cfg = STATUS_CFG[status] ?? { label: status, dot: 'bg-slate-400', text: 'text-muted-foreground' }
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`size-1.5 rounded-full ${cfg.dot}`} />
@@ -104,13 +104,13 @@ function TabelaHistorico({ pedidos }: { pedidos: PedidoResumo[] }) {
   if (pedidos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-white/[0.04] text-3xl">
+        <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-subtle text-3xl">
           📋
         </div>
-        <p className="text-sm font-medium text-white/50">Nenhum orçamento ainda</p>
-        <p className="mt-1 text-xs text-white/25">
+        <p className="text-sm font-medium text-muted-foreground">Nenhum orçamento ainda</p>
+        <p className="mt-1 text-xs text-muted-foreground">
           Crie o primeiro em{' '}
-          <Link href="/orcamentos" className="text-[#d8f45a] hover:underline">
+          <Link href="/orcamentos" className="text-accent hover:underline">
             Orçamentos
           </Link>
           .
@@ -123,41 +123,41 @@ function TabelaHistorico({ pedidos }: { pedidos: PedidoResumo[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-white/[0.06]">
+          <tr className="border-b border-border">
             {['#', 'Peça', 'Cliente', 'Materiais', 'Status', 'Data', 'Valor'].map((h) => (
               <th
                 key={h}
-                className="pb-3.5 px-3 text-left text-[10px] font-medium uppercase tracking-wider text-white/25 first:pl-0 last:pr-0 last:text-right"
+                className="pb-3.5 px-3 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground first:pl-0 last:pr-0 last:text-right"
               >
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/[0.04]">
+        <tbody className="divide-y divide-border">
           {pedidos.map((p) => (
-            <tr key={p.id} className="group hover:bg-white/[0.02] transition-colors">
-              <td className="py-4 pl-0 pr-3 font-mono text-white/20 text-xs">
-                <Link href={`/pedidos/${p.id}`} className="hover:text-[#d8f45a]">{p.numero_orcamento ?? `#${p.id}`}</Link>
+            <tr key={p.id} className="group hover:bg-subtle transition-colors">
+              <td className="py-4 pl-0 pr-3 font-mono text-muted-foreground text-xs">
+                <Link href={`/pedidos/${p.id}`} className="hover:text-accent">{p.numero_orcamento ?? `#${p.id}`}</Link>
               </td>
-              <td className="py-4 px-3 font-medium text-white/90 max-w-[160px] truncate">
+              <td className="py-4 px-3 font-medium text-foreground max-w-[160px] truncate">
                 {p.nome_da_peca}
               </td>
-              <td className="py-4 px-3 text-white/50">{p.cliente_nome}</td>
-              <td className="py-4 px-3 text-white/30 text-xs max-w-[180px] truncate">
+              <td className="py-4 px-3 text-muted-foreground">{p.cliente_nome}</td>
+              <td className="py-4 px-3 text-muted-foreground text-xs max-w-[180px] truncate">
                 {p.materiais}
               </td>
               <td className="py-4 px-3">
                 <StatusDot status={p.orcamento_status === 'Aprovado' ? p.status : p.orcamento_status} />
               </td>
-              <td className="py-4 px-3 text-white/25 text-xs whitespace-nowrap">
+              <td className="py-4 px-3 text-muted-foreground text-xs whitespace-nowrap">
                 {new Date(p.data_pedido).toLocaleDateString('pt-BR', {
                   day: '2-digit',
                   month: '2-digit',
                   year: '2-digit',
                 })}
               </td>
-              <td className="py-4 pl-3 pr-0 text-right font-mono font-semibold text-[#d8f45a] whitespace-nowrap">
+              <td className="py-4 pl-3 pr-0 text-right font-mono font-semibold text-accent whitespace-nowrap">
                 {fmtBRL(p.valor_total_cobrado)}
               </td>
             </tr>
@@ -184,22 +184,22 @@ export default async function VisaoGeralPage() {
       {/* ── Cabeçalho da página ─────────────────────────────────────────────── */}
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-3 flex items-center gap-2 text-xs text-white/35">
+          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
             <span>Dashboard</span>
             <span>/</span>
-            <span className="text-white/65">Visão geral</span>
+            <span className="text-secondary-foreground">Visão geral</span>
           </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-[34px]">
-            Visão geral
+          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-[34px]">
+            Tudo em ordem. <span className="text-accent">Vamos criar?</span>
           </h1>
-          <p className="mt-2 text-sm text-white/40">
-            Métricas do mês atual e histórico recente.
+          <p className="mt-2 text-sm text-muted-foreground">
+            Seu ateliê em um olhar: métricas do mês e pedidos recentes.
           </p>
         </div>
 
         <Link
           href="/orcamentos"
-          className="inline-flex items-center gap-2 self-start rounded-lg bg-[#d8f45a] px-4 py-2.5 text-xs font-semibold text-[#15180d] transition hover:bg-[#e4ff76] sm:self-auto"
+          className="inline-flex items-center gap-2 self-start rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-accent-foreground transition hover:bg-accent-hover sm:self-auto"
         >
           <Plus size={14} />
           Novo orçamento
@@ -251,17 +251,17 @@ export default async function VisaoGeralPage() {
       <CentralPendencias pendencias={pendencias} />
 
       {/* ── Tabela de histórico ─────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#15171b] shadow-2xl shadow-black/10">
+      <div className="rounded-2xl border border-border bg-card shadow-sm">
 
         {/* Header do card */}
-        <div className="flex items-center justify-between border-b border-white/[0.07] px-6 py-5 sm:px-8">
+        <div className="flex items-center justify-between border-b border-border px-6 py-5 sm:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-white/[0.06] text-[#d8f45a]">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-subtle text-accent">
               <TrendingUp size={18} />
             </div>
             <div>
               <h2 className="text-sm font-semibold">Orçamentos recentes</h2>
-              <p className="mt-0.5 text-xs text-white/35">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Últimos {pedidos.length} registros
               </p>
             </div>
@@ -270,7 +270,7 @@ export default async function VisaoGeralPage() {
           {pedidos.length > 0 && (
             <Link
               href="/orcamentos"
-              className="flex items-center gap-1.5 text-xs text-white/35 transition hover:text-[#d8f45a]"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-accent"
             >
               Ver todos
               <ArrowRight size={13} />
@@ -285,18 +285,18 @@ export default async function VisaoGeralPage() {
 
         {/* Footer com mini-stat */}
         {pedidos.length > 0 && (
-          <div className="flex items-center justify-between border-t border-white/[0.06] px-6 py-4 sm:px-8">
-            <p className="text-xs text-white/25">
+          <div className="flex items-center justify-between border-t border-border px-6 py-4 sm:px-8">
+            <p className="text-xs text-muted-foreground">
               Margem aparente:{' '}
-              <span className="text-white/50 font-medium">
+              <span className="text-muted-foreground font-medium">
                 {stats.faturamentoBruto > 0
                   ? `${Math.round(((stats.faturamentoBruto - stats.custosTotais) / stats.faturamentoBruto) * 100)}%`
                   : '—'}
               </span>
             </p>
-            <p className="text-xs text-white/25">
+            <p className="text-xs text-muted-foreground">
               Ticket médio:{' '}
-              <span className="text-white/50 font-medium">
+              <span className="text-muted-foreground font-medium">
                 {stats.pedidosFinalizadosMes > 0
                   ? fmtBRL(stats.faturamentoBruto / stats.pedidosFinalizadosMes)
                   : '—'}

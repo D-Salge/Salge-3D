@@ -605,11 +605,11 @@ export function OrcamentoPage({
   if (sucesso) {
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
-        <div className="mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
+        <div className="mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-500/10 text-success">
           <CheckCircle2 size={40} />
         </div>
-        <h2 className="mb-2 text-2xl font-bold text-white">{pedidoEdicaoId ? 'Orçamento Atualizado!' : 'Orçamento Gerado!'}</h2>
-        <p className="text-sm text-white/50">{pedidoEdicaoId ? 'As alterações foram salvas com segurança.' : 'O orçamento foi salvo como rascunho. Aprove-o antes de iniciar a produção.'}</p>
+        <h2 className="mb-2 text-2xl font-bold text-foreground">{pedidoEdicaoId ? 'Orçamento Atualizado!' : 'Orçamento Gerado!'}</h2>
+        <p className="text-sm text-muted-foreground">{pedidoEdicaoId ? 'As alterações foram salvas com segurança.' : 'O orçamento foi salvo como rascunho. Aprove-o antes de iniciar a produção.'}</p>
       </div>
     )
   }
@@ -617,18 +617,18 @@ export function OrcamentoPage({
   return (
     <div className="flex flex-col gap-8 lg:flex-row lg:items-start shrink-0">
       <form onSubmit={handleSubmit} className="flex-1 space-y-8">
-        {pedidoInicial && !pedidoEdicaoId && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.06] p-4 text-xs leading-5 text-[#d8f45a]/80">
+        {pedidoInicial && !pedidoEdicaoId && <div className="rounded-xl border border-accent/20 bg-accent/[0.06] p-4 text-xs leading-5 text-accent/80">
           Cópia de {pedidoInicial.origem_numero ?? `pedido #${pedidoInicial.origem_id}`} (valor anterior: {pedidoInicial.valor_total_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O preço comercial por unidade foi preservado; os custos técnicos serão recalculados com os valores atuais. Cliente, datas, pagamentos e produção anterior não serão copiados.
         </div>}
-        {pedidoInicial && pedidoEdicaoId && <div className="rounded-xl border border-blue-400/20 bg-blue-400/[0.06] p-4 text-xs leading-5 text-blue-200/80">
+        {pedidoInicial && pedidoEdicaoId && <div className="rounded-xl border border-blue-400/20 bg-blue-400/[0.06] p-4 text-xs leading-5 text-info">
           Editando {pedidoInicial.origem_numero ?? `orçamento #${pedidoInicial.origem_id}`}. Esta opção fica disponível somente antes da aprovação, sem pagamento e sem produção iniciada.
         </div>}
         
         {/* 1. Dados Básicos */}
-        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
-          <h2 className="mb-5 text-sm font-semibold text-white">Dados do Pedido</h2>
-          <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
-            <button type="button" onClick={() => setAtendimentoTipo('Encomenda')} aria-pressed={atendimentoTipo === 'Encomenda'} className={`rounded-lg px-3 py-2 text-xs font-medium ${atendimentoTipo === 'Encomenda' ? 'bg-white/10 text-white' : 'text-white/45'}`}>Produzir sob encomenda</button>
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <h2 className="mb-5 text-sm font-semibold text-foreground">Dados do Pedido</h2>
+          <div className="mb-5 grid grid-cols-2 rounded-xl border border-border bg-background p-1">
+            <button type="button" onClick={() => setAtendimentoTipo('Encomenda')} aria-pressed={atendimentoTipo === 'Encomenda'} className={`rounded-lg px-3 py-2 text-xs font-medium ${atendimentoTipo === 'Encomenda' ? 'bg-subtle text-foreground' : 'text-muted-foreground'}`}>Produzir sob encomenda</button>
             <button type="button" onClick={() => {
               const primeiro = produtosAcabados[0]
               setAtendimentoTipo('Estoque')
@@ -638,63 +638,63 @@ export function OrcamentoPage({
                 setNomeDaPeca(primeiro.nome)
                 setPrecoUnitarioVenda(primeiro.preco_base_unitario || '')
               }
-            }} aria-pressed={atendimentoTipo === 'Estoque'} className={`rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-35 ${atendimentoTipo === 'Estoque' ? 'bg-emerald-500/15 text-emerald-300' : 'text-white/45'}`}>Atender com estoque</button>
+            }} aria-pressed={atendimentoTipo === 'Estoque'} className={`rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-35 ${atendimentoTipo === 'Estoque' ? 'bg-emerald-500/15 text-success' : 'text-muted-foreground'}`}>Atender com estoque</button>
           </div>
-          {atendimentoEstoque && produtosAcabados.length === 0 && <div role="status" className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-xs leading-5 text-amber-100/80">
+          {atendimentoEstoque && produtosAcabados.length === 0 && <div role="status" className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-4 text-xs leading-5 text-warning">
             <p>Nenhum produto acabado com saldo disponível. Para vender por estoque, conclua um lote em <a href="/producao/estoque" className="font-medium underline underline-offset-2">Produzir para estoque</a>. Produtos cadastrados no catálogo ainda precisam ser fabricados e aprovados.</p>
             <a href="/estoque/produtos-acabados" className="mt-2 inline-block font-medium underline underline-offset-2">Consultar estoque de produtos acabados</a>
           </div>}
-          {atendimentoEstoque && produtosAcabados.length > 0 && <label className="mb-5 flex flex-col gap-2"><span className="text-xs font-medium text-white/55">Produto acabado disponível</span><select required value={produtoVersaoEstoqueId ?? ''} onChange={event => {
+          {atendimentoEstoque && produtosAcabados.length > 0 && <label className="mb-5 flex flex-col gap-2"><span className="text-xs font-medium text-secondary-foreground">Produto acabado disponível</span><select required value={produtoVersaoEstoqueId ?? ''} onChange={event => {
             const id = Number(event.target.value)
             const item = produtosAcabados.find(produto => produto.produto_versao_id === id)
             setProdutoVersaoEstoqueId(id)
             if (item) { setNomeDaPeca(item.nome); setPrecoUnitarioVenda(item.preco_base_unitario || '') }
-          }} className="h-11 rounded-lg border border-emerald-400/25 bg-[#101114] px-3 text-sm"><option value="">Selecione...</option>{produtosAcabados.map(item => <option key={item.produto_versao_id} value={item.produto_versao_id}>{item.nome} · v{item.versao} · {item.disponivel} disponível(is)</option>)}</select><span className="text-[10px] text-white/35">A reserva é feita ao salvar. A fabricação já realizada não será consumida novamente.</span></label>}
-          {!atendimentoEstoque && <div className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-[#101114] p-1">
+          }} className="h-11 rounded-lg border border-emerald-400/25 bg-background px-3 text-sm"><option value="">Selecione...</option>{produtosAcabados.map(item => <option key={item.produto_versao_id} value={item.produto_versao_id}>{item.nome} · v{item.versao} · {item.disponivel} disponível(is)</option>)}</select><span className="text-[10px] text-muted-foreground">A reserva é feita ao salvar. A fabricação já realizada não será consumida novamente.</span></label>}
+          {!atendimentoEstoque && <div className="mb-5 grid grid-cols-2 rounded-xl border border-border bg-background p-1">
             <button type="button" onClick={ativarModoTradicional} aria-pressed={modoCalculo === MODO_CALCULO_TRADICIONAL}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_TRADICIONAL ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_TRADICIONAL ? 'bg-subtle text-foreground' : 'text-muted-foreground hover:text-secondary-foreground'}`}>
               {modoCalculo === MODO_CALCULO_PLATES ? 'Converter para tradicional' : 'Cálculo tradicional'}
             </button>
             <button type="button" onClick={ativarModoPlates} aria-pressed={modoCalculo === MODO_CALCULO_PLATES}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_PLATES ? 'bg-[#d8f45a]/15 text-[#d8f45a]' : 'text-white/45 hover:text-white/70'}`}>
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition ${modoCalculo === MODO_CALCULO_PLATES ? 'bg-accent/15 text-accent' : 'text-muted-foreground hover:text-secondary-foreground'}`}>
               Cálculo por plates
             </button>
           </div>}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="flex flex-col gap-2 sm:col-span-2">
-              <span className="text-xs font-medium text-white/55">Nome da peça / Projeto</span>
+              <span className="text-xs font-medium text-secondary-foreground">Nome da peça / Projeto</span>
               <input required value={nomeDaPeca} onChange={e => setNomeDaPeca(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Cliente</span>
+              <span className="text-xs font-medium text-secondary-foreground">Cliente</span>
               <select required value={clienteId} onChange={e => setClienteId(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none">
                 <option value="" disabled>Selecione...</option>
                 {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Quantidade comercial</span>
+              <span className="text-xs font-medium text-secondary-foreground">Quantidade comercial</span>
               <input required type="number" step="1" min="1" max="100000" value={quantidade} onChange={e => alterarQuantidade(Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Tempo de Impressão (Horas)</span>
+              <span className="text-xs font-medium text-secondary-foreground">Tempo de Impressão (Horas)</span>
               <input required type="number" step="0.1" min="0" value={tempoHoras} onChange={e => setTempoHoras(Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>}
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Tipo de pedido</span>
+              <span className="text-xs font-medium text-secondary-foreground">Tipo de pedido</span>
               <select value={tipoPedido} onChange={e => setTipoPedido(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none">
                 {TIPOS_PEDIDO.map(tipo => <option key={tipo}>{tipo}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Impressora usada no cálculo</span>
+              <span className="text-xs font-medium text-secondary-foreground">Impressora usada no cálculo</span>
               <select value={impressoraId} onChange={e => setImpressoraId(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none">
                 <option value="">Configuração geral</option>
                 {impressoras.filter(item => item.status !== 'Inativa').map(item => (
                   <option key={item.id} value={item.id}>{item.nome}{item.modelo ? ` — ${item.modelo}` : ''}</option>
@@ -705,68 +705,68 @@ export function OrcamentoPage({
         </section>
 
         {/* 2. Filamentos */}
-        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_TRADICIONAL && <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">Materiais e Cores</h2>
+            <h2 className="text-sm font-semibold text-foreground">Materiais e Cores</h2>
           </div>
           <div className="space-y-4">
             {materiais.map((m, idx) => (
               <div key={m.id} className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 <label className="flex-1 flex flex-col gap-2">
-                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Filamento</span>}
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-muted-foreground">Filamento</span>}
                   <select value={m.filamentoId} onChange={e => {
                     const newM = [...materiais]; newM[idx].filamentoId = e.target.value; setMateriais(newM)
-                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                  }} className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none">
                     <option value="" disabled>Selecione...</option>
                     {filamentos.map(f => <option key={f.id} value={f.id}>{f.material} {f.cor}</option>)}
                   </select>
                 </label>
                 <label className="flex w-full flex-col gap-2 sm:w-32">
-                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Gramas</span>}
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-muted-foreground">Gramas</span>}
                   <input type="number" step="0.1" min="0" value={m.pesoGasto} onChange={e => {
                     const newM = [...materiais]; newM[idx].pesoGasto = Number(e.target.value); setMateriais(newM)
-                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                  }} className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
                 </label>
-                <button type="button" onClick={() => removeMaterial(m.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/[0.1] text-white/30 hover:bg-white/[0.05] hover:text-red-400">
+                <button type="button" onClick={() => removeMaterial(m.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-subtle hover:text-destructive">
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
-            <button type="button" onClick={addMaterial} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.15] py-3 text-xs font-medium text-white/50 hover:border-[#d8f45a]/50 hover:text-[#d8f45a] hover:bg-[#d8f45a]/5 transition">
+            <button type="button" onClick={addMaterial} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-accent/50 hover:text-accent hover:bg-accent/5 transition">
               <Plus size={14} /> Adicionar filamento
             </button>
           </div>
         </section>}
 
-        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-4 shadow-2xl sm:p-6">
+        {!atendimentoEstoque && modoCalculo === MODO_CALCULO_PLATES && <section className="rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-6">
           <div className="mb-5">
-            <h2 className="text-sm font-semibold text-white">Composição por plates</h2>
-            <p className="mt-1 text-xs leading-5 text-white/40">Peças físicas e unidades comerciais são dados separados. Escolha se as execuções serão informadas manualmente ou dimensionadas pela quantidade.</p>
+            <h2 className="text-sm font-semibold text-foreground">Composição por plates</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">Peças físicas e unidades comerciais são dados separados. Escolha se as execuções serão informadas manualmente ou dimensionadas pela quantidade.</p>
           </div>
 
-          <div className="mb-5 grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-[#101114] p-1 sm:grid-cols-2">
+          <div className="mb-5 grid grid-cols-1 gap-2 rounded-xl border border-border bg-background p-1 sm:grid-cols-2">
             <button type="button" aria-pressed={dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL}
               onClick={() => solicitarDimensionamentoManual()}
-              className={`rounded-lg px-3 py-2.5 text-xs font-medium ${dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
+              className={`rounded-lg px-3 py-2.5 text-xs font-medium ${dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL ? 'bg-subtle text-foreground' : 'text-muted-foreground hover:text-secondary-foreground'}`}>
               Composição manual
             </button>
             <button type="button" aria-pressed={dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO}
               onClick={ativarDimensionamentoAutomatico}
-              className={`rounded-lg px-3 py-2.5 text-xs font-medium ${dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO ? 'bg-[#d8f45a]/15 text-[#d8f45a]' : 'text-white/45 hover:text-white/70'}`}>
+              className={`rounded-lg px-3 py-2.5 text-xs font-medium ${dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO ? 'bg-accent/15 text-accent' : 'text-muted-foreground hover:text-secondary-foreground'}`}>
               Automático por quantidade
             </button>
           </div>
 
-          {trocaManualPendente && <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/[0.08] p-4 text-xs leading-5 text-amber-100">
+          {trocaManualPendente && <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/[0.08] p-4 text-xs leading-5 text-warning">
             <strong className="block text-sm">O modo manual não reaproveita as execuções calculadas automaticamente.</strong>
             <p className="mt-1">Se continuar, as referências automáticas e eventuais valores reais das parciais serão preservados, mas você precisará definir e confirmar conscientemente as repetições da composição manual antes de salvar.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" onClick={() => solicitarDimensionamentoManual(true)} className="rounded-lg bg-amber-300 px-3 py-2 font-semibold text-amber-950">Trocar para manual e revisar</button>
-              <button type="button" onClick={() => setTrocaManualPendente(false)} className="rounded-lg border border-amber-200/20 px-3 py-2 text-amber-100">Continuar no automático</button>
+              <button type="button" onClick={() => setTrocaManualPendente(false)} className="rounded-lg border border-amber-200/20 px-3 py-2 text-warning">Continuar no automático</button>
             </div>
           </div>}
 
-          {dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL && quantidadePlatesRevisada !== quantidade && <div className="mb-5 rounded-xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-xs leading-5 text-amber-100">
+          {dimensionamentoPlates === DIMENSIONAMENTO_PLATES_MANUAL && quantidadePlatesRevisada !== quantidade && <div className="mb-5 rounded-xl border border-amber-400/25 bg-amber-400/[0.08] p-4 text-xs leading-5 text-warning">
             {quantidadePlatesRevisada == null
               ? <>Você saiu do dimensionamento automático. As referências foram preservadas, mas agora as repetições representam a produção total de <strong>{quantidade}</strong> unidade(s) comerciais. Revise-as antes de salvar.</>
               : <>A quantidade comercial mudou para <strong>{quantidade}</strong>. Os tempos e consumos foram preservados, sem escalonamento. Revise as plates antes de salvar.</>}
@@ -774,7 +774,7 @@ export function OrcamentoPage({
               Confirmar revisão manual para {quantidade}
             </button>
           </div>}
-          {avisoDimensionamento && <div className="mb-5 rounded-xl border border-blue-400/20 bg-blue-400/[0.07] p-4 text-xs leading-5 text-blue-100">{avisoDimensionamento}</div>}
+          {avisoDimensionamento && <div className="mb-5 rounded-xl border border-blue-400/20 bg-blue-400/[0.07] p-4 text-xs leading-5 text-info">{avisoDimensionamento}</div>}
 
           <div className="space-y-5">
             {plates.map((plate, plateIndex) => {
@@ -791,83 +791,83 @@ export function OrcamentoPage({
                   ? Number(plate.quantidadePecas) * quantidadeParcial / Number(plate.capacidadeComercial)
                   : null
               )
-              return <article key={plate.id} className="rounded-xl border border-white/10 bg-[#101114] p-4">
+              return <article key={plate.id} className="rounded-xl border border-border bg-background p-4">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-[#d8f45a]">Plate {plateIndex + 1}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-accent">Plate {plateIndex + 1}</span>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => duplicarPlate(plate.id)} aria-label={`Duplicar plate ${plateIndex + 1}`} className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-white"><Copy size={15} /></button>
-                    <button type="button" onClick={() => setPlates((lista) => lista.filter((item) => item.id !== plate.id))} aria-label={`Remover plate ${plateIndex + 1}`} className="flex size-9 items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-red-400"><Trash2 size={15} /></button>
+                    <button type="button" onClick={() => duplicarPlate(plate.id)} aria-label={`Duplicar plate ${plateIndex + 1}`} className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground"><Copy size={15} /></button>
+                    <button type="button" onClick={() => setPlates((lista) => lista.filter((item) => item.id !== plate.id))} aria-label={`Remover plate ${plateIndex + 1}`} className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-destructive"><Trash2 size={15} /></button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value }, true)} placeholder="Ex.: Potes" className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Peças físicas na plate cheia</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                  <label className="flex flex-col gap-2 sm:col-span-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-muted-foreground">Nome / referência</span><input value={plate.nome} onChange={(e) => atualizarPlate({ nome: e.target.value }, true)} placeholder="Ex.: Potes" className="h-11 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-muted-foreground">Peças físicas na plate cheia</span><input type="number" min="1" step="1" value={plate.quantidadePecas} onChange={(e) => atualizarPlate({ quantidadePecas: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent/60" /></label>
                   {dimensionamentoPlates === DIMENSIONAMENTO_PLATES_AUTOMATICO
-                    ? <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Kits comerciais atendidos</span><input type="number" min="1" step="1" value={plate.capacidadeComercial} onChange={(e) => atualizarPlate({ capacidadeComercial: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-[#d8f45a]/25 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]" /></label>
-                    : <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>}
-                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Horas / plate cheia</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
-                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-white/35">Minutos / plate cheia</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm outline-none focus:border-[#d8f45a]/60" /></label>
+                    ? <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-muted-foreground">Kits comerciais atendidos</span><input type="number" min="1" step="1" value={plate.capacidadeComercial} onChange={(e) => atualizarPlate({ capacidadeComercial: e.target.value === '' ? '' : Number(e.target.value) }, true)} className="h-11 rounded-lg border border-accent/25 bg-card px-3 text-sm outline-none focus:border-accent" /></label>
+                    : <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-muted-foreground">Repetições</span><input type="number" min="1" step="1" value={plate.repeticoes} onChange={(e) => atualizarPlate({ repeticoes: e.target.value === '' ? '' : Number(e.target.value) })} className="h-11 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent/60" /></label>}
+                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-muted-foreground">Horas / plate cheia</span><input type="number" min="0" step="1" value={horas} onChange={(e) => atualizarPlate({ tempoMinutos: Math.max(0, Number(e.target.value) * 60) + Number(minutos || 0) }, true)} className="h-11 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent/60" /></label>
+                  <label className="flex flex-col gap-2"><span className="flex min-h-7 items-end text-[11px] font-medium uppercase text-muted-foreground">Minutos / plate cheia</span><input type="number" min="0" max="59" step="1" value={minutos} onChange={(e) => atualizarPlate({ tempoMinutos: Number(horas || 0) * 60 + Math.max(0, Number(e.target.value)) }, true)} className="h-11 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent/60" /></label>
                 </div>
 
-                {execucaoAutomatica && <div className="mt-4 rounded-lg border border-[#d8f45a]/15 bg-[#d8f45a]/[0.04] p-3 text-xs text-white/55">
-                  <strong className="text-white">{execucaoAutomatica.repeticoesCheias} execução(ões) cheia(s)</strong>
-                  {execucaoAutomatica.parcial && <> + <strong className="text-[#d8f45a]">1 parcial para {execucaoAutomatica.quantidadeParcial} kit(s)</strong></>}
+                {execucaoAutomatica && <div className="mt-4 rounded-lg border border-accent/15 bg-accent/[0.04] p-3 text-xs text-secondary-foreground">
+                  <strong className="text-foreground">{execucaoAutomatica.repeticoesCheias} execução(ões) cheia(s)</strong>
+                  {execucaoAutomatica.parcial && <> + <strong className="text-accent">1 parcial para {execucaoAutomatica.quantidadeParcial} kit(s)</strong></>}
                   {!execucaoAutomatica.parcial && <span> · sem execução parcial</span>}
                 </div>}
 
-                <div className="mt-4 space-y-3 border-t border-white/[0.08] pt-4">
+                <div className="mt-4 space-y-3 border-t border-border pt-4">
                   {plate.filamentos.map((material, materialIndex) => <div key={material.id} className="grid grid-cols-[1fr_110px_40px] items-end gap-2 sm:grid-cols-[1fr_160px_40px]">
-                    <label className="flex min-w-0 flex-col gap-2"><span className="text-[10px] uppercase text-white/30">Filamento {materialIndex + 1}</span><select value={material.filamentoId} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, filamentoId: e.target.value } : item) }, true)} className="h-11 min-w-0 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none"><option value="">Selecione...</option>{filamentos.map((item) => <option key={item.id} value={item.id}>{item.material} — {item.cor}</option>)}</select></label>
-                    <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/30">g / plate cheia</span><input type="number" min="0.01" step="0.01" value={material.gramasPorExecucao} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasPorExecucao: e.target.value === '' ? '' : Number(e.target.value) } : item) }, true)} className="h-11 rounded-lg border border-white/10 bg-[#15171b] px-2 text-sm outline-none" /></label>
-                    <button type="button" onClick={() => atualizarPlate({ filamentos: plate.filamentos.filter((item) => item.id !== material.id) })} aria-label="Remover filamento da plate" className="flex size-10 items-center justify-center rounded-lg border border-white/10 text-white/35 hover:text-red-400"><Trash2 size={14} /></button>
+                    <label className="flex min-w-0 flex-col gap-2"><span className="text-[10px] uppercase text-muted-foreground">Filamento {materialIndex + 1}</span><select value={material.filamentoId} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, filamentoId: e.target.value } : item) }, true)} className="h-11 min-w-0 rounded-lg border border-border bg-card px-2 text-sm outline-none"><option value="">Selecione...</option>{filamentos.map((item) => <option key={item.id} value={item.id}>{item.material} — {item.cor}</option>)}</select></label>
+                    <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-muted-foreground">g / plate cheia</span><input type="number" min="0.01" step="0.01" value={material.gramasPorExecucao} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasPorExecucao: e.target.value === '' ? '' : Number(e.target.value) } : item) }, true)} className="h-11 rounded-lg border border-border bg-card px-2 text-sm outline-none" /></label>
+                    <button type="button" onClick={() => atualizarPlate({ filamentos: plate.filamentos.filter((item) => item.id !== material.id) })} aria-label="Remover filamento da plate" className="flex size-10 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-destructive"><Trash2 size={14} /></button>
                   </div>)}
-                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: gerarIdentificadorOperacao('plate-filamento'), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }] }, true)} className="flex items-center gap-2 text-xs text-[#d8f45a]/75 hover:text-[#d8f45a]"><Plus size={13} /> Outro filamento nesta plate</button>
+                  <button type="button" onClick={() => atualizarPlate({ filamentos: [...plate.filamentos, { id: gerarIdentificadorOperacao('plate-filamento'), filamentoId: '', gramasPorExecucao: '', gramasParcial: '' }] }, true)} className="flex items-center gap-2 text-xs text-accent/75 hover:text-accent"><Plus size={13} /> Outro filamento nesta plate</button>
                 </div>
 
                 {exibirParcialAutomatica && <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><strong className="text-xs text-amber-100">{estadoParcialReal?.editando ? 'Plate parcial com valores reais do fatiador' : 'Plate parcial estimada proporcionalmente'}</strong><p className="mt-1 text-[11px] leading-5 text-white/45">{quantidadeParcial ?? '—'} kit(s){quantidadePecasParcial == null ? '' : ` · ${quantidadePecasParcial.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} peça(s) física(s) estimada(s)`}</p></div>
+                    <div><strong className="text-xs text-warning">{estadoParcialReal?.editando ? 'Plate parcial com valores reais do fatiador' : 'Plate parcial estimada proporcionalmente'}</strong><p className="mt-1 text-[11px] leading-5 text-muted-foreground">{quantidadeParcial ?? '—'} kit(s){quantidadePecasParcial == null ? '' : ` · ${quantidadePecasParcial.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} peça(s) física(s) estimada(s)`}</p></div>
                     {!estadoParcialReal?.editando && execucaoAutomatica?.parcial
                       ? <button type="button" onClick={() => atualizarPlate({
                           parcialQuantidadeComercial: execucaoAutomatica.quantidadeParcial,
                           tempoParcialSegundos: execucaoAutomatica.parcial!.tempo_segundos,
                           filamentos: plate.filamentos.map((material, index) => ({ ...material, gramasParcial: execucaoAutomatica.parcial!.filamentos[index]?.gramas ?? '' })),
-                        })} className="rounded-lg border border-amber-300/25 px-3 py-2 text-[11px] text-amber-100">Informar valores reais</button>
-                      : <button type="button" onClick={() => atualizarPlate({ parcialQuantidadeComercial: null, tempoParcialSegundos: '', filamentos: plate.filamentos.map((material) => ({ ...material, gramasParcial: '' })) })} className="rounded-lg border border-white/10 px-3 py-2 text-[11px] text-white/55">Voltar à estimativa</button>}
+                        })} className="rounded-lg border border-amber-300/25 px-3 py-2 text-[11px] text-warning">Informar valores reais</button>
+                      : <button type="button" onClick={() => atualizarPlate({ parcialQuantidadeComercial: null, tempoParcialSegundos: '', filamentos: plate.filamentos.map((material) => ({ ...material, gramasParcial: '' })) })} className="rounded-lg border border-border px-3 py-2 text-[11px] text-secondary-foreground">Voltar à estimativa</button>}
                   </div>
                   {!estadoParcialReal?.editando && execucaoAutomatica?.parcial
                     ? <p className="mt-3 text-xs text-amber-50/70">Tempo estimado: {(execucaoAutomatica.parcial.tempo_segundos / 3600).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h. Os consumos abaixo são proporcionais à capacidade usada.</p>
                     : <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/35">Tempo real da parcial (min)</span><input type="number" min="0.01" step="0.01" value={plate.tempoParcialSegundos === '' ? '' : Number(plate.tempoParcialSegundos) / 60} onChange={(e) => atualizarPlate({ tempoParcialSegundos: e.target.value === '' ? '' : Math.round(Number(e.target.value) * 60) })} className="h-10 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm" /></label>
-                        {plate.filamentos.map((material) => <label key={material.id} className="flex flex-col gap-2"><span className="text-[10px] uppercase text-white/35">Gramas reais da parcial</span><input type="number" min="0.01" step="0.01" value={material.gramasParcial} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasParcial: e.target.value === '' ? '' : Number(e.target.value) } : item) })} className="h-10 rounded-lg border border-white/10 bg-[#15171b] px-3 text-sm" /></label>)}
-                        {estadoParcialReal && !estadoParcialReal.valida && <div className="sm:col-span-2 rounded-lg border border-red-400/20 bg-red-400/[0.07] p-3 text-xs text-red-200"><ul className="list-disc space-y-1 pl-4">{estadoParcialReal.erros.map((erro) => <li key={erro}>{erro}</li>)}</ul></div>}
+                        <label className="flex flex-col gap-2"><span className="text-[10px] uppercase text-muted-foreground">Tempo real da parcial (min)</span><input type="number" min="0.01" step="0.01" value={plate.tempoParcialSegundos === '' ? '' : Number(plate.tempoParcialSegundos) / 60} onChange={(e) => atualizarPlate({ tempoParcialSegundos: e.target.value === '' ? '' : Math.round(Number(e.target.value) * 60) })} className="h-10 rounded-lg border border-border bg-card px-3 text-sm" /></label>
+                        {plate.filamentos.map((material) => <label key={material.id} className="flex flex-col gap-2"><span className="text-[10px] uppercase text-muted-foreground">Gramas reais da parcial</span><input type="number" min="0.01" step="0.01" value={material.gramasParcial} onChange={(e) => atualizarPlate({ filamentos: plate.filamentos.map((item) => item.id === material.id ? { ...item, gramasParcial: e.target.value === '' ? '' : Number(e.target.value) } : item) })} className="h-10 rounded-lg border border-border bg-card px-3 text-sm" /></label>)}
+                        {estadoParcialReal && !estadoParcialReal.valida && <div className="sm:col-span-2 rounded-lg border border-red-400/20 bg-red-400/[0.07] p-3 text-xs text-destructive"><ul className="list-disc space-y-1 pl-4">{estadoParcialReal.erros.map((erro) => <li key={erro}>{erro}</li>)}</ul></div>}
                       </div>}
                 </div>}
               </article>
             })}
           </div>
-          <button type="button" onClick={() => setPlates((lista) => [...lista, criarPlateBase()])} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#d8f45a]/35 py-3 text-xs font-medium text-[#d8f45a]/80 hover:bg-[#d8f45a]/5"><Plus size={14} /> Adicionar plate</button>
+          <button type="button" onClick={() => setPlates((lista) => [...lista, criarPlateBase()])} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-accent/35 py-3 text-xs font-medium text-accent/80 hover:bg-accent/5"><Plus size={14} /> Adicionar plate</button>
         </section>}
 
         {/* 3. Insumos */}
-        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">Insumos Extras</h2>
+            <h2 className="text-sm font-semibold text-foreground">Insumos Extras</h2>
           </div>
           <div className="space-y-4">
             {insumos.map((ins, idx) => (
               <div key={ins.id} className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 <label className="flex-1 flex flex-col gap-2">
-                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Insumo</span>}
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-muted-foreground">Insumo</span>}
                   <select value={ins.insumoId} onChange={e => {
                     const newI = [...insumos]; newI[idx].insumoId = e.target.value; setInsumos(newI)
-                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                  }} className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none">
                     <option value="" disabled>Selecione...</option>
                     {insumosList.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
                   </select>
                 </label>
                 <label className="flex w-full flex-col gap-2 sm:w-32">
-                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-white/30">Quantidade</span>}
+                  {idx === 0 && <span className="text-[11px] font-medium uppercase text-muted-foreground">Quantidade</span>}
                   <input type="number" step="0.1" min="0" value={ins.quantidade} onChange={e => {
                     const valor = e.target.value === '' ? '' : Number(e.target.value)
                     const newI = [...insumos]
@@ -876,109 +876,109 @@ export function OrcamentoPage({
                       quantidadeComercialReferencia: quantidade,
                     }
                     setInsumos(newI)
-                  }} className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                  }} className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
                 </label>
-                <button type="button" onClick={() => removeInsumo(ins.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/[0.1] text-white/30 hover:bg-white/[0.05] hover:text-red-400">
+                <button type="button" onClick={() => removeInsumo(ins.id)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-subtle hover:text-destructive">
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
-            <button type="button" onClick={addInsumo} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/[0.15] py-3 text-xs font-medium text-white/50 hover:border-[#d8f45a]/50 hover:text-[#d8f45a] hover:bg-[#d8f45a]/5 transition">
+            <button type="button" onClick={addInsumo} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-accent/50 hover:text-accent hover:bg-accent/5 transition">
               <Plus size={14} /> Adicionar insumo (suporte, lixa, etc)
             </button>
           </div>
         </section>
 
         {/* 4. Logística e Faturamento */}
-        <section className="rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
-          <h2 className="mb-5 text-sm font-semibold text-white">Logística & Descontos</h2>
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <h2 className="mb-5 text-sm font-semibold text-foreground">Logística & Descontos</h2>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Data de Entrega</span>
+              <span className="text-xs font-medium text-secondary-foreground">Data de Entrega</span>
               <input type="date" value={dataEntrega} onChange={e => setDataEntrega(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Validade do Orçamento</span>
+              <span className="text-xs font-medium text-secondary-foreground">Validade do Orçamento</span>
               <input type="date" value={validadeOrcamento} onChange={e => setValidadeOrcamento(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Vencimento do Pagamento</span>
+              <span className="text-xs font-medium text-secondary-foreground">Vencimento do Pagamento</span>
               <input type="date" value={vencimentoEm} onChange={e => setVencimentoEm(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Forma / Condição</span>
+              <span className="text-xs font-medium text-secondary-foreground">Forma / Condição</span>
               <select value={condicaoPagamento} onChange={e => setCondicaoPagamento(e.target.value)}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none">
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none">
                 {['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência', 'Outro'].map(item => <option key={item}>{item}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Parcelas</span>
+              <span className="text-xs font-medium text-secondary-foreground">Parcelas</span>
               <input type="number" min="1" max="120" step="1" value={parcelas} onChange={e => setParcelas(Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-[#d8f45a]">Sinal para iniciar a produção (%)</span>
+              <span className="text-xs font-medium text-accent">Sinal para iniciar a produção (%)</span>
               <div className="relative">
                 <input type="number" min="0" max="100" step="1" value={sinalPercentual}
                   onChange={e => setSinalPercentual(Number(e.target.value))}
-                  className="h-11 w-full rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 pr-8 text-sm text-white focus:border-[#d8f45a] outline-none" />
-                <span className="absolute right-3 top-3 text-sm text-white/35">%</span>
+                  className="h-11 w-full rounded-lg border border-accent/30 bg-accent/[0.05] px-3 pr-8 text-sm text-foreground focus:border-accent outline-none" />
+                <span className="absolute right-3 top-3 text-sm text-muted-foreground">%</span>
               </div>
-              <span className="text-[10px] text-white/30">Use 0% quando o pedido não exigir sinal.</span>
+              <span className="text-[10px] text-muted-foreground">Use 0% quando o pedido não exigir sinal.</span>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-[#d8f45a]">Preço de venda por unidade (R$)</span>
+              <span className="text-xs font-medium text-accent">Preço de venda por unidade (R$)</span>
               <input type="number" min="0.01" step="0.01" placeholder={`Automático: ${fmt(precoAutomatico)}`} value={precoUnitarioVenda}
                 onChange={e => setPrecoUnitarioVenda(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-11 rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 text-sm text-white focus:border-[#d8f45a] outline-none" />
-              <span className="text-[10px] text-white/30">Editável. Vazio usa o maior valor entre a sugestão e o histórico deste cliente.</span>
+                className="h-11 rounded-lg border border-accent/30 bg-accent/[0.05] px-3 text-sm text-foreground focus:border-accent outline-none" />
+              <span className="text-[10px] text-muted-foreground">Editável. Vazio usa o maior valor entre a sugestão e o histórico deste cliente.</span>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-[#d8f45a]">Desconto (R$)</span>
+              <span className="text-xs font-medium text-accent">Desconto (R$)</span>
               <input type="number" step="0.01" min="0" value={desconto} onChange={e => setDesconto(Number(e.target.value))}
-                className="h-11 rounded-lg border border-[#d8f45a]/30 bg-[#d8f45a]/[0.05] px-3 text-sm text-white focus:border-[#d8f45a] outline-none" />
+                className="h-11 rounded-lg border border-accent/30 bg-accent/[0.05] px-3 text-sm text-foreground focus:border-accent outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Frete Cobrado do Cliente (R$)</span>
+              <span className="text-xs font-medium text-secondary-foreground">Frete Cobrado do Cliente (R$)</span>
               <input type="number" step="0.01" min="0" value={freteCobrado} onChange={e => setFreteCobrado(Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Frete Pago (Custo real) (R$)</span>
+              <span className="text-xs font-medium text-secondary-foreground">Frete Pago (Custo real) (R$)</span>
               <input type="number" step="0.01" min="0" value={fretePago} onChange={e => setFretePago(Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2 sm:col-span-2">
-              <span className="text-xs font-medium text-white/55">Custo com Embalagem (R$)</span>
+              <span className="text-xs font-medium text-secondary-foreground">Custo com Embalagem (R$)</span>
               <input type="number" step="0.01" min="0" value={custoEmbalagem} onChange={e => setCustoEmbalagem(Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Materiais avulsos por unidade (R$)</span>
+              <span className="text-xs font-medium text-secondary-foreground">Materiais avulsos por unidade (R$)</span>
               <input type="number" step="0.01" min="0" value={materiaisAvulsosPorUnidade} onChange={e => setMateriaisAvulsosPorUnidade(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Horas de trabalho ativo</span>
+              <span className="text-xs font-medium text-secondary-foreground">Horas de trabalho ativo</span>
               <input type="number" step="0.01" min="0" value={horasTrabalhoAtivo} onChange={e => setHorasTrabalhoAtivo(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
-              <span className="text-[10px] text-white/30">Somente modelagem, preparo e acabamento; não conte a impressora sozinha.</span>
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
+              <span className="text-[10px] text-muted-foreground">Somente modelagem, preparo e acabamento; não conte a impressora sozinha.</span>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Setup / projeto total (R$)</span>
+              <span className="text-xs font-medium text-secondary-foreground">Setup / projeto total (R$)</span>
               <input type="number" step="0.01" min="0" value={setupProjeto} onChange={e => setSetupProjeto(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-11 rounded-lg border border-white/[0.1] bg-[#101114] px-3 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
+                className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-accent/60 outline-none" />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-white/55">Margem para perdas</span>
+              <span className="text-xs font-medium text-secondary-foreground">Margem para perdas</span>
               <div className="relative">
                 <input type="number" step="1" min="0" max="100" value={arredondarMoeda(margemPerdas * 100)} onChange={e => setMargemPerdas(Number(e.target.value) / 100)}
-                  className="h-11 w-full rounded-lg border border-white/[0.1] bg-[#101114] px-3 pr-8 text-sm text-white focus:border-[#d8f45a]/60 outline-none" />
-                <span className="absolute right-3 top-3 text-sm text-white/35">%</span>
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground focus:border-accent/60 outline-none" />
+                <span className="absolute right-3 top-3 text-sm text-muted-foreground">%</span>
               </div>
             </label>
           </div>
@@ -987,24 +987,24 @@ export function OrcamentoPage({
       </form>
 
       {/* Painel Lateral - Resumo */}
-      <aside className="sticky top-6 w-full lg:w-[360px] rounded-2xl border border-white/[0.08] bg-[#15171b] p-6 shadow-2xl">
-        <h2 className="mb-6 text-sm font-semibold text-white">Resumo do Orçamento</h2>
+      <aside className="sticky top-6 w-full lg:w-[360px] rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        <h2 className="mb-6 text-sm font-semibold text-foreground">Resumo do Orçamento</h2>
 
-        {modoCalculo === MODO_CALCULO_PLATES && <div className="mb-5 rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.05] p-4 text-xs">
-          <div className="grid grid-cols-2 gap-3 text-white/55">
-            <div><span className="block text-[10px] uppercase text-white/30">Quantidade comercial</span><strong className="text-base text-white">{quantidade}</strong></div>
-            <div><span className="block text-[10px] uppercase text-white/30">Execuções físicas</span><strong className="text-base text-white">{agregacaoPlates?.totalExecucoes ?? 0}</strong></div>
-            <div className="col-span-2"><span className="block text-[10px] uppercase text-white/30">Tempo total</span><strong className="text-white">{formatarDuracao(agregacaoAutomatica?.tempoTotalSegundos ?? Number(agregacaoPlates?.tempoTotalMinutos ?? 0) * 60)}</strong></div>
+        {modoCalculo === MODO_CALCULO_PLATES && <div className="mb-5 rounded-xl border border-accent/20 bg-accent/[0.05] p-4 text-xs">
+          <div className="grid grid-cols-2 gap-3 text-secondary-foreground">
+            <div><span className="block text-[10px] uppercase text-muted-foreground">Quantidade comercial</span><strong className="text-base text-foreground">{quantidade}</strong></div>
+            <div><span className="block text-[10px] uppercase text-muted-foreground">Execuções físicas</span><strong className="text-base text-foreground">{agregacaoPlates?.totalExecucoes ?? 0}</strong></div>
+            <div className="col-span-2"><span className="block text-[10px] uppercase text-muted-foreground">Tempo total</span><strong className="text-foreground">{formatarDuracao(agregacaoAutomatica?.tempoTotalSegundos ?? Number(agregacaoPlates?.tempoTotalMinutos ?? 0) * 60)}</strong></div>
           </div>
-          {execucoesAutomaticas.length > 0 && <div className="mt-3 space-y-2 border-t border-white/10 pt-3 text-white/55">
+          {execucoesAutomaticas.length > 0 && <div className="mt-3 space-y-2 border-t border-border pt-3 text-secondary-foreground">
             {execucoesAutomaticas.map((execucao) => <div key={execucao.ordem}>
-              <strong className="text-white/75">{execucao.nome}:</strong> {execucao.repeticoesCheias} cheia(s)
-              {execucao.parcial && <span> + 1 parcial · <span className={execucao.parcial.estimada ? 'text-amber-200' : 'text-emerald-300'}>{execucao.parcial.estimada ? 'Plate parcial estimada proporcionalmente' : 'Parcial com valores reais'}</span></span>}
+              <strong className="text-secondary-foreground">{execucao.nome}:</strong> {execucao.repeticoesCheias} cheia(s)
+              {execucao.parcial && <span> + 1 parcial · <span className={execucao.parcial.estimada ? 'text-warning' : 'text-success'}>{execucao.parcial.estimada ? 'Plate parcial estimada proporcionalmente' : 'Parcial com valores reais'}</span></span>}
             </div>)}
           </div>}
-          <div className="mt-3 border-t border-white/10 pt-3">
-            <span className="text-[10px] uppercase text-white/30">Consumo total por filamento</span>
-            <div className="mt-2 space-y-1 text-white/65">{(agregacaoPlates?.materiais ?? []).map((material) => {
+          <div className="mt-3 border-t border-border pt-3">
+            <span className="text-[10px] uppercase text-muted-foreground">Consumo total por filamento</span>
+            <div className="mt-2 space-y-1 text-secondary-foreground">{(agregacaoPlates?.materiais ?? []).map((material) => {
               const filamento = filamentos.find((item) => item.id === material.filamento_id)
               return <div key={material.filamento_id} className="flex justify-between gap-3"><span>{filamento ? `${filamento.material} — ${filamento.cor}` : `Filamento #${material.filamento_id}`}</span><strong>{material.peso_gasto_gramas.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} g</strong></div>
             })}</div>
@@ -1012,104 +1012,104 @@ export function OrcamentoPage({
         </div>}
         
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between text-white/60">
-            <span>Filamentos</span><span className="font-mono text-white/80">{fmt(custoFilamento)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Filamentos</span><span className="font-mono text-secondary-foreground">{fmt(custoFilamento)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Reserva para perdas ({arredondarMoeda(margemPerdas * 100)}%)</span><span className="font-mono text-white/80">{fmt(calculo.reservaPerdas)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Reserva para perdas ({arredondarMoeda(margemPerdas * 100)}%)</span><span className="font-mono text-secondary-foreground">{fmt(calculo.reservaPerdas)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Insumos extras</span><span className="font-mono text-white/80">{fmt(custoInsumos)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Insumos extras</span><span className="font-mono text-secondary-foreground">{fmt(custoInsumos)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span className="flex items-center gap-1"><Zap size={13} className="text-amber-400"/> Energia ({(potenciaAplicada/1000).toFixed(2)}kW)</span>
-            <span className="font-mono text-white/80">{fmt(calculo.energia)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span className="flex items-center gap-1"><Zap size={13} className="text-warning"/> Energia ({(potenciaAplicada/1000).toFixed(2)}kW)</span>
+            <span className="font-mono text-secondary-foreground">{fmt(calculo.energia)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Reserva Máquina</span><span className="font-mono text-white/80">{fmt(reservaMaquina)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Reserva Máquina</span><span className="font-mono text-secondary-foreground">{fmt(reservaMaquina)}</span>
           </div>
-          {calculo.materiaisAvulsos > 0 && <div className="flex justify-between text-white/60"><span>Materiais avulsos</span><span className="font-mono text-white/80">{fmt(calculo.materiaisAvulsos)}</span></div>}
-          {calculo.maoObraAtiva > 0 && <div className="flex justify-between text-white/60"><span>Mão de obra ativa</span><span className="font-mono text-white/80">{fmt(calculo.maoObraAtiva)}</span></div>}
-          {calculo.setupProjeto > 0 && <div className="flex justify-between text-white/60"><span>Setup / projeto</span><span className="font-mono text-white/80">{fmt(calculo.setupProjeto)}</span></div>}
+          {calculo.materiaisAvulsos > 0 && <div className="flex justify-between text-secondary-foreground"><span>Materiais avulsos</span><span className="font-mono text-secondary-foreground">{fmt(calculo.materiaisAvulsos)}</span></div>}
+          {calculo.maoObraAtiva > 0 && <div className="flex justify-between text-secondary-foreground"><span>Mão de obra ativa</span><span className="font-mono text-secondary-foreground">{fmt(calculo.maoObraAtiva)}</span></div>}
+          {calculo.setupProjeto > 0 && <div className="flex justify-between text-secondary-foreground"><span>Setup / projeto</span><span className="font-mono text-secondary-foreground">{fmt(calculo.setupProjeto)}</span></div>}
           {Number(custoEmbalagem) > 0 && (
-            <div className="flex justify-between text-white/60">
-              <span>Embalagem</span><span className="font-mono text-white/80">{fmt(Number(custoEmbalagem))}</span>
+            <div className="flex justify-between text-secondary-foreground">
+              <span>Embalagem</span><span className="font-mono text-secondary-foreground">{fmt(Number(custoEmbalagem))}</span>
             </div>
           )}
-          {calculo.fretePago > 0 && <div className="flex justify-between text-white/60"><span>Frete pago</span><span className="font-mono text-white/80">{fmt(calculo.fretePago)}</span></div>}
+          {calculo.fretePago > 0 && <div className="flex justify-between text-secondary-foreground"><span>Frete pago</span><span className="font-mono text-secondary-foreground">{fmt(calculo.fretePago)}</span></div>}
           
-          <div className="my-3 h-px w-full bg-white/[0.08]" />
+          <div className="my-3 h-px w-full bg-subtle" />
           
-          <div className="flex justify-between font-medium text-white/80">
+          <div className="flex justify-between font-medium text-secondary-foreground">
             <span>Custo completo</span><span className="font-mono">{fmt(calculo.custoCompleto)}</span>
           </div>
 
-          <div className="flex justify-between text-white/60">
-            <span>Preço mínimo sem prejuízo</span><span className="font-mono text-white/80">{fmt(calculo.precoMinimo)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Preço mínimo sem prejuízo</span><span className="font-mono text-secondary-foreground">{fmt(calculo.precoMinimo)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Sugestão ({calculo.fatorAplicado.toFixed(2)}×)</span><span className="font-mono text-white/80">{fmt(calculo.totalArredondado)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Sugestão ({calculo.fatorAplicado.toFixed(2)}×)</span><span className="font-mono text-secondary-foreground">{fmt(calculo.totalArredondado)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Sugestão por unidade</span><span className="font-mono text-white/80">{fmt(calculo.precoUnitarioArredondado)}</span>
+          <div className="flex justify-between text-secondary-foreground">
+            <span>Sugestão por unidade</span><span className="font-mono text-secondary-foreground">{fmt(calculo.precoUnitarioArredondado)}</span>
           </div>
 
-          {referenciaPreco && <div className="rounded-lg border border-blue-400/15 bg-blue-400/[0.06] p-3 text-xs text-blue-200/75">
+          {referenciaPreco && <div className="rounded-lg border border-blue-400/15 bg-blue-400/[0.06] p-3 text-xs text-info">
             Último preço para este cliente: <strong>{fmt(referenciaPreco.preco_unitario)}/un.</strong> em {new Date(referenciaPreco.data_pedido).toLocaleDateString('pt-BR')}.
             {precoHistorico && precoHistorico > calculo.precoUnitarioArredondado && ' Esse valor foi mantido como piso automático.'}
           </div>}
 
-          <div className="flex justify-between font-medium text-[#d8f45a]">
+          <div className="flex justify-between font-medium text-accent">
             <span>Preço aplicado ({quantidade} × {fmt(precoAplicado)})</span><span className="font-mono">{fmt(baseComercial)}</span>
           </div>
 
           {precoAplicado !== calculo.precoUnitarioArredondado && (
-            <button type="button" onClick={() => setPrecoUnitarioVenda(calculo.precoUnitarioArredondado)} className="text-left text-[11px] text-[#d8f45a]/70 underline underline-offset-2">
+            <button type="button" onClick={() => setPrecoUnitarioVenda(calculo.precoUnitarioArredondado)} className="text-left text-[11px] text-accent/70 underline underline-offset-2">
               Usar preço sugerido de {fmt(calculo.precoUnitarioArredondado)} por unidade
             </button>
           )}
           {precoUnitario !== null && (
-            <button type="button" onClick={() => setPrecoUnitarioVenda('')} className="ml-3 text-left text-[11px] text-white/45 underline underline-offset-2">
+            <button type="button" onClick={() => setPrecoUnitarioVenda('')} className="ml-3 text-left text-[11px] text-muted-foreground underline underline-offset-2">
               Restaurar preço automático
             </button>
           )}
 
           {(desc > 0 || freteC > 0) && (
             <div className="pt-2 space-y-2">
-              {desc > 0 && <div className="flex justify-between text-red-400"><span className="text-xs">Desconto</span><span className="font-mono">- {fmt(desc)}</span></div>}
-              {freteC > 0 && <div className="flex justify-between text-blue-400"><span className="text-xs">Frete Cobrado</span><span className="font-mono">+ {fmt(freteC)}</span></div>}
+              {desc > 0 && <div className="flex justify-between text-destructive"><span className="text-xs">Desconto</span><span className="font-mono">- {fmt(desc)}</span></div>}
+              {freteC > 0 && <div className="flex justify-between text-info"><span className="text-xs">Frete Cobrado</span><span className="font-mono">+ {fmt(freteC)}</span></div>}
             </div>
           )}
-          {taxasEstimadas > 0 && <div className="flex justify-between text-white/60"><span>Taxas estimadas</span><span className="font-mono text-white/80">{fmt(taxasEstimadas)}</span></div>}
+          {taxasEstimadas > 0 && <div className="flex justify-between text-secondary-foreground"><span>Taxas estimadas</span><span className="font-mono text-secondary-foreground">{fmt(taxasEstimadas)}</span></div>}
 
           {valorFinal < calculo.precoMinimo && (
-            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs leading-5 text-red-300">
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs leading-5 text-destructive">
               Atenção: o valor final está abaixo do preço mínimo sem prejuízo calculado pela planilha.
             </div>
           )}
           {precoHistorico && precoAplicado < precoHistorico && (
-            <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-5 text-amber-200">
+            <div className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-5 text-warning">
               O preço manual está abaixo dos {fmt(precoHistorico)} por unidade cobrados anteriormente deste cliente.
             </div>
           )}
 
-          <div className="mt-4 rounded-xl bg-white/[0.03] p-4 text-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Valor final do orçamento</span>
-            <div className="mt-1 text-3xl font-bold tracking-tight text-[#d8f45a]">
+          <div className="mt-4 rounded-xl bg-subtle p-4 text-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Valor final do orçamento</span>
+            <div className="mt-1 text-3xl font-bold tracking-tight text-accent">
               {fmt(valorFinal)}
             </div>
-            <p className={`mt-2 text-xs ${lucroEstimado >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>Lucro estimado: {fmt(lucroEstimado)}</p>
+            <p className={`mt-2 text-xs ${lucroEstimado >= 0 ? 'text-success' : 'text-destructive'}`}>Lucro estimado: {fmt(lucroEstimado)}</p>
           </div>
-          {sinalPercentual > 0 && <div className="rounded-xl border border-[#d8f45a]/20 bg-[#d8f45a]/[0.05] p-4 text-sm">
-            <div className="flex justify-between text-white/60"><span>Sinal de {sinalPercentual.toLocaleString('pt-BR')}%</span><b className="font-mono text-[#d8f45a]">{fmt(valorSinal)}</b></div>
-            <div className="mt-2 flex justify-between text-white/45"><span>Restante na entrega</span><span className="font-mono">{fmt(saldoAposSinal)}</span></div>
+          {sinalPercentual > 0 && <div className="rounded-xl border border-accent/20 bg-accent/[0.05] p-4 text-sm">
+            <div className="flex justify-between text-secondary-foreground"><span>Sinal de {sinalPercentual.toLocaleString('pt-BR')}%</span><b className="font-mono text-accent">{fmt(valorSinal)}</b></div>
+            <div className="mt-2 flex justify-between text-muted-foreground"><span>Restante na entrega</span><span className="font-mono">{fmt(saldoAposSinal)}</span></div>
           </div>}
         </div>
 
-        {errorMsg && <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-red-400">{errorMsg}</div>}
+        {errorMsg && <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-destructive">{errorMsg}</div>}
 
         <button onClick={handleSubmit} disabled={isPending}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#d8f45a] py-3.5 text-sm font-bold text-[#15180d] transition hover:bg-[#e4ff76] disabled:opacity-50">
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-sm font-bold text-accent-foreground transition hover:bg-accent-hover disabled:opacity-50">
           {isPending ? 'Salvando...' : pedidoEdicaoId ? 'Salvar alterações' : 'Gerar Orçamento'}
           <ChevronRight size={16} />
         </button>

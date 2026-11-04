@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { themeInitializationScript } from "@/public/theme-transition.mjs";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -20,8 +21,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} h-full`}>
-      <body className="min-h-full antialiased font-sans bg-[#0a0b0f] text-white">
+    <html lang="pt-BR" data-theme="dark" suppressHydrationWarning className={`${inter.variable} h-full`}>
+      <head><script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} /></head>
+      <body className="min-h-full antialiased font-sans bg-background text-foreground">
         {children}
       </body>
     </html>
