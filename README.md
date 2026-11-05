@@ -48,6 +48,59 @@ npm run dev
 
 Abra `http://localhost:3000`.
 
+## Atalhos com Makefile
+
+O `Makefile` da raiz reúne atalhos para os scripts de `package.json`. Por exemplo,
+`make dev` executa `npm run dev -- --port 3002`. Cada nome, como `dev` ou `build`,
+é um alvo; as linhas abaixo dele são os comandos executados. Essas linhas devem
+começar com uma tabulação (TAB), não com espaços. Os comandos npm continuam
+disponíveis e são a fonte de verdade dos atalhos.
+
+Em `prod: build`, o alvo `build` é uma dependência: precisa terminar antes da
+receita de `prod`. A declaração `.PHONY` informa que esses nomes são tarefas,
+para que um arquivo chamado `build`, por exemplo, não impeça sua execução.
+
+Use Node.js `22.20.0`, npm e GNU Make. Dentro da pasta do projeto, execute
+`make` ou `make help` para ver a ajuda:
+
+| Comando | O que faz |
+| --- | --- |
+| `make install` | Instala as dependências do lockfile com `npm ci`. |
+| `make dev` | Abre o servidor de desenvolvimento em `http://localhost:3002`. |
+| `make build` | Gera o build de produção. |
+| `make start` | Inicia o build existente em `http://localhost:3002`. |
+| `make prod` | Executa o build e só inicia o servidor se ele terminar com sucesso. |
+| `make test` | Executa `npm test`. |
+| `make lint` | Executa `npm run lint`. |
+| `make typecheck` | Executa `npm run typecheck`. |
+| `make ci` | Executa toda a verificação de CI com banco descartável. |
+
+Exemplo de uso depois de baixar uma atualização com `git pull`:
+
+```bash
+make install
+make prod
+```
+
+Para trabalhar no código, use `make dev` no lugar de `make prod`. Escolha uma
+porta diferente com `make dev PORT=3000` ou `make prod PORT=3000`. Encerre o
+servidor com `Ctrl+C` antes de executar novamente instalação, build ou CI.
+`make ci`, assim como `npm run ci`, remove `.next` ao terminar; use `make prod`
+para gerar o build novamente e abrir o ERP depois da verificação.
+
+No Windows, o Makefile usa `npm.cmd` automaticamente para funcionar também
+quando o PowerShell bloqueia `npm.ps1`. A instalação do GNU Make é separada da
+instalação do Node.js. Depois de instalar, abra um novo terminal e confira
+`make --version`. Também é possível escolher o executável explicitamente, por
+exemplo `make dev NPM=npm.cmd`.
+
+Uma opção de instalação no PowerShell, usando o pacote do
+[catálogo oficial do WinGet](https://github.com/microsoft/winget-pkgs/tree/master/manifests/e/ezwinports/make):
+
+```powershell
+winget install --id ezwinports.make --exact --source winget
+```
+
 ## Atualização de uma instalação existente
 
 As migrações também são aplicadas automaticamente quando o ERP abre, mas é recomendado executá-las explicitamente após atualizar o código:
