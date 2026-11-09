@@ -1399,11 +1399,22 @@ export async function getPedidosKanban(): Promise<PedidoResumo[]> {
        WHERE p.tenant_id = ?
          AND p.orcamento_status = 'Aprovado'
          AND p.status IN ('Fila', 'Imprimindo', 'Acabamento', 'Finalizado')
+         AND (p.status <> 'Finalizado' OR p.id IN (
+           SELECT finalizado.id FROM pedidos finalizado
+           WHERE finalizado.tenant_id = ?
+             AND finalizado.orcamento_status = 'Aprovado'
+             AND finalizado.status = 'Finalizado'
+           ORDER BY datetime(COALESCE(NULLIF(finalizado.data_conclusao, ''), finalizado.data_pedido)) DESC,
+             finalizado.id DESC
+           LIMIT 5
+         ))
        ORDER BY CASE p.status WHEN 'Imprimindo' THEN 0 WHEN 'Fila' THEN 1 WHEN 'Acabamento' THEN 2 ELSE 3 END,
+         CASE WHEN p.status = 'Finalizado' THEN datetime(COALESCE(NULLIF(p.data_conclusao, ''), p.data_pedido)) END DESC,
+         CASE WHEN p.status = 'Finalizado' THEN p.id END DESC,
          CASE p.prioridade_producao WHEN 'Urgente' THEN 0 WHEN 'Alta' THEN 1 ELSE 2 END,
          COALESCE(p.ordem_fila, p.id), p.data_pedido ASC`
     )
-    .all(TENANT_ID) as PedidoResumo[]
+    .all(TENANT_ID, TENANT_ID) as PedidoResumo[]
 }
 
 export async function atualizarStatusPedido(pedidoId: number, novoStatus: string): Promise<ActionResult> {

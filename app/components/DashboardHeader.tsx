@@ -31,6 +31,9 @@ export function DashboardHeader({ usuario }: { usuario: SessaoAtual }) {
   const label = labels[pathname.split("/")[1]] ?? "Visão geral";
   return (
     <header className="studio-header">
+      <a href="#conteudo" className="reference-skip-link">
+        Ir para o conteúdo
+      </a>
       <Link
         href="/"
         className="studio-mobile-brand"

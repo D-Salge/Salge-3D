@@ -4,6 +4,7 @@ import "./globals.css";
 import "./studio-system.css";
 import "./operations-design.css";
 import "./bambu-monitor.css";
+import "./reference-design.css";
 import { themeInitializationScript } from "@/public/theme-transition.mjs";
 
 const inter = Inter({

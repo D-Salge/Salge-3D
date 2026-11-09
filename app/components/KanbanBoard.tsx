@@ -89,6 +89,9 @@ export function KanbanBoard({ pedidos }: KanbanBoardProps) {
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className={`size-2 rounded-full ${col.dot}`} />
               {col.label}
+              {col.id === "Finalizado" && (
+                <span className="ops-kanban-recent">Últimos 5</span>
+              )}
             </div>
             <span className="rounded-full bg-subtle px-2 py-0.5 text-xs font-medium text-muted-foreground">
               {col.items.length}

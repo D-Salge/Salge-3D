@@ -11,28 +11,30 @@
  *   app/(dashboard)/orcamentos/...   → /orcamentos
  */
 
-import { getDashboardStats } from '@/app/actions/pedidos'
-import { getConfiguracoes } from '@/app/actions/configuracoes'
-import { Sidebar } from '@/app/components/Sidebar'
-import { DashboardHeader } from '@/app/components/DashboardHeader'
-import { autenticacaoConfigurada, getSessaoAtual } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { garantirBackupDiario } from '@/lib/backup'
+import { getDashboardStats } from "@/app/actions/pedidos";
+import { getConfiguracoes } from "@/app/actions/configuracoes";
+import { Sidebar } from "@/app/components/Sidebar";
+import { DashboardHeader } from "@/app/components/DashboardHeader";
+import { autenticacaoConfigurada, getSessaoAtual } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { garantirBackupDiario } from "@/lib/backup";
 
 // O dashboard depende de dados operacionais do SQLite em cada requisição.
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  if (!autenticacaoConfigurada()) redirect('/setup')
-  const sessao = await getSessaoAtual()
-  if (!sessao) redirect('/login')
-  await garantirBackupDiario(sessao).catch((error) => console.error('[backup-diario]', error))
-  const stats = await getDashboardStats()
-  const config = await getConfiguracoes()
+  if (!autenticacaoConfigurada()) redirect("/setup");
+  const sessao = await getSessaoAtual();
+  if (!sessao) redirect("/login");
+  await garantirBackupDiario(sessao).catch((error) =>
+    console.error("[backup-diario]", error),
+  );
+  const stats = await getDashboardStats();
+  const config = await getConfiguracoes();
 
   return (
     <div className="erp-workspace flex min-h-screen bg-background text-foreground">
@@ -45,10 +47,10 @@ export default async function DashboardLayout({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader usuario={sessao} />
-        <main className="studio-content flex-1 min-w-0 pb-20 lg:pb-0">
+        <main id="conteudo" className="studio-content flex-1 min-w-0">
           {children}
         </main>
       </div>
     </div>
-  )
+  );
 }

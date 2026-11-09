@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Box,
   Boxes,
@@ -90,7 +90,6 @@ function Marca() {
       <Box size={31} strokeWidth={1.4} />
       <span>
         salge<b>3d</b>
-
       </span>
     </Link>
   );
@@ -123,7 +122,11 @@ function Navegacao({
       label: "Produção",
       badge: pedidosEmProducao ? String(pedidosEmProducao) : undefined,
     },
-    { href: "/filamentos", icon: <Database size={16}/>, label: "Estoque de materiais" },
+    {
+      href: "/filamentos",
+      icon: <Database size={16} />,
+      label: "Estoque de materiais",
+    },
     { href: "/clientes", icon: <Users size={16} />, label: "Clientes" },
     {
       href: "/financeiro",
@@ -251,9 +254,7 @@ function Meta({
     <div className="studio-sidebar-goal">
       <div className="rounded-2xl border border-border bg-subtle p-4">
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            Recebido no mês
-          </span>
+          <span className="text-xs text-muted-foreground">Recebido no mês</span>
           <TrendingUp size={15} className="text-muted-foreground" />
         </div>
         <p className="text-sm font-medium">Meta do mês</p>
@@ -280,39 +281,44 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const [menuAberto, setMenuAberto] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const primarios = [
-    { href: "/", icon: <LayoutDashboard size={18} />, label: "Início" },
+    { href: "/", icon: <LayoutDashboard size={17} />, label: "Visão geral" },
     {
       href: "/orcamentos",
-      icon: <ReceiptText size={18} />,
+      icon: <ReceiptText size={17} />,
       label: "Orçamentos",
     },
-    { href: "/producao", icon: <Layers size={18} />, label: "Produção" },
+    { href: "/producao", icon: <Layers size={17} />, label: "Produção" },
     {
       href: "/financeiro",
-      icon: <DollarSign size={18} />,
+      icon: <DollarSign size={17} />,
       label: "Financeiro",
     },
   ];
   const menuAtivo = !primarios.some((item) => estaAtivo(pathname, item.href));
 
   useEffect(() => {
-    if (!menuAberto) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!menuAberto) {
+      if (dialog.open) dialog.close();
+      return;
+    }
+    dialog.showModal();
     const overflowAnterior = document.body.style.overflow;
-    const fecharComEsc = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuAberto(false);
-    };
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", fecharComEsc);
     return () => {
       document.body.style.overflow = overflowAnterior;
-      window.removeEventListener("keydown", fecharComEsc);
     };
   }, [menuAberto]);
 
   return (
     <>
-      <aside className="studio-sidebar sticky top-0 hidden h-screen w-[252px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+      <aside
+        className="studio-sidebar reference-sidebar sticky top-0 h-dvh shrink-0 border-r border-border bg-card"
+        aria-label="Menu principal"
+      >
         <Marca />
         <div className="studio-workspace-badge">
           <span>S3</span>
@@ -354,67 +360,88 @@ export function Sidebar({
           )}
         </div>
       </aside>
-
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-5 border-t border-border bg-card/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
-        {primarios.map((item) => {
-          const active = estaAtivo(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] ${active ? "text-accent" : "text-muted-foreground"}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+      <nav
+        className="reference-mobile-navigation"
+        aria-label="Navegação rápida"
+      >
+        {primarios.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={estaAtivo(pathname, item.href) ? "page" : undefined}
+          >
+            {item.icon}
+            <span>{item.label === "Visão geral" ? "Início" : item.label}</span>
+          </Link>
+        ))}
         <button
           type="button"
           aria-expanded={menuAberto}
-          aria-controls="menu-mobile"
+          aria-controls="menu-modulos"
+          aria-haspopup="dialog"
+          className={menuAtivo ? "active" : ""}
           onClick={() => setMenuAberto(true)}
-          className={`flex flex-col items-center justify-center gap-1 text-[10px] ${menuAtivo ? "text-accent" : "text-muted-foreground"}`}
         >
           <Menu size={18} />
           <span>Menu</span>
         </button>
       </nav>
-
-      {menuAberto && (
-        <div className="fixed inset-0 z-[70] lg:hidden">
-          <button
-            type="button"
-            aria-label="Fechar menu"
-            onClick={() => setMenuAberto(false)}
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+      <dialog
+        ref={dialogRef}
+        id="menu-modulos"
+        className="reference-menu"
+        aria-labelledby="menu-modulos-title"
+        onClose={() => setMenuAberto(false)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setMenuAberto(false);
+        }}
+      >
+        <div className="reference-menu-body">
+          <div className="reference-menu-heading">
+            <Marca />
+            <button
+              type="button"
+              aria-label="Fechar menu"
+              className="studio-logout"
+              onClick={() => setMenuAberto(false)}
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <h2 id="menu-modulos-title" className="sr-only">
+            Todos os módulos
+          </h2>
+          <Navegacao
+            pathname={pathname}
+            perfil={perfil}
+            pedidosEmProducao={pedidosEmProducao}
+            onNavigate={() => setMenuAberto(false)}
           />
-          <aside
-            id="menu-mobile"
-            aria-label="Menu principal"
-            className="absolute inset-y-0 left-0 flex w-[min(86vw,320px)] flex-col overflow-y-auto border-r border-border bg-card px-5 py-6 shadow-2xl"
-          >
-            <div className="flex items-center justify-between">
-              <Marca />
-              <button
-                type="button"
-                onClick={() => setMenuAberto(false)}
-                className="rounded-lg p-2 text-muted-foreground hover:bg-subtle hover:text-foreground"
-              >
-                <X size={18} />
-              </button>
+          <Meta faturamentoMes={faturamentoMes} metaMensal={metaMensal} />
+          {usuario && (
+            <div className="studio-sidebar-profile">
+              <span className="studio-avatar">
+                {usuario.nome
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((parte) => parte[0])
+                  .join("")
+                  .toUpperCase()}
+              </span>
+              <div>
+                <strong>{usuario.nome}</strong>
+                <small>
+                  {perfil === "admin"
+                    ? "Administrador"
+                    : perfil === "operador"
+                      ? "Operador"
+                      : "Visualizador"}
+                </small>
+              </div>
             </div>
-            <Navegacao
-              pathname={pathname}
-              perfil={perfil}
-              pedidosEmProducao={pedidosEmProducao}
-              onNavigate={() => setMenuAberto(false)}
-            />
-            <Meta faturamentoMes={faturamentoMes} metaMensal={metaMensal} />
-          </aside>
+          )}
         </div>
-      )}
+      </dialog>
     </>
   );
 }

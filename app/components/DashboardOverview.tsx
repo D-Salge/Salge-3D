@@ -111,6 +111,7 @@ export function DashboardOverview({
           </div>
         ))}
       </div>
+      <DashboardOrders pedidos={pedidos} />
       <div className="studio-main-grid">
         <DashboardChart dias={visual.dias} />
         <section
@@ -220,7 +221,6 @@ export function DashboardOverview({
         </section>
       </div>
       <BambuMonitor />
-      <DashboardOrders pedidos={pedidos} />
       <div className="studio-quick-grid">
         <Link href="/compras" className="studio-card studio-quick">
           <span className="studio-quick-icon">
