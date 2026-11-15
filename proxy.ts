@@ -8,7 +8,7 @@ type PerfilUsuario = 'admin' | 'operador' | 'visualizador'
 const PUBLICOS = ['/login', '/setup', '/portal', '/pagamento/retorno', '/api/health', '/api/webhooks/whatsapp', '/api/webhooks/mercado-pago']
 
 function sessaoDaRequisicao(request: NextRequest) {
-  for (const candidato of candidatosSessao((nome) => request.cookies.get(nome)?.value)) {
+  for (const candidato of candidatosSessao((nome: string) => request.cookies.get(nome)?.value)) {
     const hash = createHash('sha256').update(candidato.token).digest('hex')
     const usuario = db.prepare(`
       SELECT u.id, u.perfil FROM sessoes s
