@@ -30,7 +30,7 @@ export async function criarSessao(usuario: { id: number; tenant_id: number }, pe
   `).run(usuario.tenant_id, usuario.id, tokenHash(token), expiraEm)
   const jar = await cookies()
   // Evita deixar dois tipos de sessão ativos no navegador após novo login.
-  for (const candidato of candidatosSessao((nome) => jar.get(nome)?.value)) {
+  for (const candidato of candidatosSessao((nome: string) => jar.get(nome)?.value)) {
     db.prepare('DELETE FROM sessoes WHERE token_hash = ?').run(tokenHash(candidato.token))
   }
   jar.delete(COOKIE_SESSAO)
@@ -46,7 +46,7 @@ export async function criarSessao(usuario: { id: number; tenant_id: number }, pe
 
 export async function encerrarSessao() {
   const jar = await cookies()
-  for (const candidato of candidatosSessao((nome) => jar.get(nome)?.value)) {
+  for (const candidato of candidatosSessao((nome: string) => jar.get(nome)?.value)) {
     db.prepare('DELETE FROM sessoes WHERE token_hash = ?').run(tokenHash(candidato.token))
   }
   jar.delete(COOKIE_SESSAO)
@@ -55,7 +55,7 @@ export async function encerrarSessao() {
 
 export async function getSessaoAtual(): Promise<SessaoAtual | null> {
   const jar = await cookies()
-  for (const candidato of candidatosSessao((nome) => jar.get(nome)?.value)) {
+  for (const candidato of candidatosSessao((nome: string) => jar.get(nome)?.value)) {
     const sessao = db.prepare(`
       SELECT s.usuario_id AS usuarioId, s.tenant_id AS tenantId,
         u.nome, u.email, u.perfil
