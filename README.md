@@ -48,6 +48,21 @@ npm run dev
 
 Abra `http://localhost:3000`.
 
+## Permanecer logado
+
+Na tela de login, a opção **Permanecer logado neste dispositivo (30 dias)** vem marcada
+por padrão. Quando ativada, a sessão usa um cookie `HttpOnly` persistente,
+válido por 30 dias e renovado enquanto o ERP é utilizado. Assim, parar e
+iniciar novamente o servidor com `make start` não exige novo login enquanto
+o cookie e o registro da sessão ainda forem válidos no mesmo navegador e endereço.
+
+Se a opção for desmarcada, a sessão mantém a duração original de 12 horas,
+renovada durante o uso. **Sair** revoga a sessão no servidor e limpa os cookies
+de autenticação. Em computadores compartilhados, desmarque a opção. Limpar
+cookies, usar um perfil anônimo, mudar entre `localhost` e outro domínio,
+ou trocar/restaurar o banco de dados pode exigir novo login. Não é necessário
+alterar o Makefile nem executar migrações de banco para ativar esta opção.
+
 ## Atalhos com Makefile
 
 O `Makefile` da raiz reúne atalhos para os scripts de `package.json`. Por exemplo,

@@ -46,7 +46,7 @@ export async function configurarPrimeiroAcesso(data: {
   }
 }
 
-export async function entrar(data: { email: string; senha: string }): Promise<AuthResult> {
+export async function entrar(data: { email: string; senha: string; permanecerLogado?: boolean }): Promise<AuthResult> {
   try {
     if (!autenticacaoConfigurada()) return { success: false, message: 'Conclua primeiro a configuração inicial.' }
     const email = normalizarEmail(data.email)
@@ -73,7 +73,7 @@ export async function entrar(data: { email: string; senha: string }): Promise<Au
     db.prepare('DELETE FROM tentativas_login WHERE chave = ?').run(email)
     db.prepare(`UPDATE usuarios SET ultimo_acesso_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?`).run(usuario.id)
     db.prepare(`DELETE FROM sessoes WHERE datetime(expira_em) <= datetime('now')`).run()
-    await criarSessao(usuario)
+    await criarSessao(usuario, data.permanecerLogado === true)
     return { success: true, message: 'Login realizado.' }
   } catch (error) {
     console.error('[entrar]', error)
