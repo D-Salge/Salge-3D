@@ -10,11 +10,8 @@ import {
   TIPOS_MENSAGEM_WHATSAPP,
 } from '@/lib/whatsapp.mjs'
 import { revalidatePath } from 'next/cache'
-import { exigirSessao } from '@/lib/session'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { configuracaoWhatsApp, nomeTemplateWhatsApp, payloadTemplateWhatsApp } from '@/lib/whatsapp-cloud.mjs'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export type TipoMensagemWhatsApp = 'orcamento' | 'followup' | 'cobranca' | 'producao' | 'pronto' | 'pos_venda'
 
@@ -44,6 +41,9 @@ type PedidoPendenteRow = PedidoWhatsApp & {
 }
 
 export async function getPendenciasWhatsApp(): Promise<PendenciaWhatsApp[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const pedidos = db.prepare(`
     SELECT p.id, p.numero_orcamento, p.nome_da_peca,
       c.nome AS cliente_nome, c.telefone AS cliente_telefone,
@@ -101,6 +101,10 @@ export async function registrarContatoWhatsApp(dados: {
   tipo: TipoMensagemWhatsApp
   mensagem: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(dados.pedidoId) || dados.pedidoId <= 0) {
       return { success: false, message: 'Pedido inválido.' }
@@ -141,7 +145,7 @@ export async function registrarContatoWhatsApp(dados: {
         UPDATE clientes SET ultimo_contato = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         WHERE id = ? AND tenant_id = ?
       `).run(pedido.cliente_id, TENANT_ID)
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Pedido',
         entidadeId: pedido.id,
         acao: 'WHATSAPP_ABERTO',
@@ -168,7 +172,7 @@ export async function dispensarPendenciaWhatsApp(dados: {
   tipo: TipoMensagemWhatsApp
 }): Promise<{ success: boolean; message: string }> {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!Number.isSafeInteger(dados.pedidoId) || dados.pedidoId <= 0 ||
         !TIPOS_MENSAGEM_WHATSAPP.includes(dados.tipo)) {
       return { success: false, message: 'Acompanhamento inválido.' }
@@ -263,7 +267,7 @@ export async function enviarWhatsAppOficial(dados: {
 }): Promise<{ success: boolean; message: string }> {
   let envioId: number | null = null
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!Number.isSafeInteger(dados.pedidoId) || dados.pedidoId <= 0 || !TIPOS_MENSAGEM_WHATSAPP.includes(dados.tipo)) {
       return { success: false, message: 'Dados do envio inválidos.' }
     }
@@ -299,7 +303,7 @@ export async function enviarWhatsAppOficial(dados: {
         `Mensagem enviada pela API oficial. Identificador: ${wamid}`)
       db.prepare(`UPDATE clientes SET ultimo_contato = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         WHERE id = ? AND tenant_id = ?`).run(pedido.cliente_id, sessao.tenantId)
-      registrarAuditoria(db, { entidade: 'WhatsAppEnvio', entidadeId: envioId!, acao: 'ENVIAR', descricao: `${pedido.numero_orcamento || `#${pedido.id}`} para ${pedido.cliente_nome}` })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'WhatsAppEnvio', entidadeId: envioId!, acao: 'ENVIAR', descricao: `${pedido.numero_orcamento || `#${pedido.id}`} para ${pedido.cliente_nome}` })
     })()
     revalidatePath('/')
     revalidatePath('/orcamentos')
@@ -320,7 +324,7 @@ export async function enviarWhatsAppOficial(dados: {
 
 export async function reenviarWhatsAppOficial(id: number) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const envio = db.prepare(`SELECT status FROM whatsapp_envios WHERE id = ? AND tenant_id = ?`)
       .get(id, sessao.tenantId) as { status: string } | undefined
     if (!envio) return { success: false, message: 'Envio não encontrado.' }

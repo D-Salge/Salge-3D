@@ -3,7 +3,7 @@ import { getClientesLista } from '@/app/actions/clientes'
 import { ClientesTabela } from '@/app/components/ClientesTabela'
 
 export const metadata: Metadata = {
-  title: 'Clientes · Salge 3D',
+  title: 'Clientes',
   description: 'Gerenciamento de clientes.',
 }
 

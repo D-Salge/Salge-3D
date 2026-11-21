@@ -9,7 +9,7 @@ import { OrcamentoPage } from '@/app/components/OrcamentoPage'
 import { getImpressoras } from '@/app/actions/operacao'
 import { getProdutosAcabadosParaVenda } from '@/app/actions/producao-estoque'
 
-export const metadata: Metadata = { title: 'Duplicar pedido - Salge 3D' }
+export const metadata: Metadata = { title: 'Duplicar pedido' }
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

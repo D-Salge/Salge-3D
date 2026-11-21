@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getInsumosLista } from '@/app/actions/insumos'
 import { InsumosTabela } from '@/app/components/InsumosTabela'
 
-export const metadata: Metadata = { title: 'Insumos - Salge 3D' }
+export const metadata: Metadata = { title: 'Insumos' }
 
 export default async function InsumosPage() {
   const insumos = await getInsumosLista()

@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { getInventario } from '@/app/actions/inventario'
 import { InventarioEstoque } from '@/app/components/InventarioEstoque'
 
-export const metadata: Metadata = { title: 'Inventário · Salge 3D' }
+export const metadata: Metadata = { title: 'Inventário' }
 
 export default async function Page() {
   const dados = await getInventario()

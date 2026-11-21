@@ -110,7 +110,7 @@ export function DashboardOrders({ pedidos }: { pedidos: PedidoResumo[] }) {
               </button>
             ))}
           </div>
-          <Link href="/produtos" className="reference-orders-all">
+          <Link href="/produtos?aba=vendas" className="reference-orders-all">
             Ver vendas <ArrowRight size={15} />
           </Link>
         </div>

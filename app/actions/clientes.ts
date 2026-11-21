@@ -2,10 +2,8 @@
 
 import db from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { exigirPerfil } from '@/lib/session'
+import { exigirPerfil, exigirSessao } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
-
-const TENANT_ID = 1
 
 export interface Cliente {
   id: number
@@ -75,6 +73,9 @@ export interface ActionResult {
 }
 
 export async function getClientesLista(): Promise<Cliente[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT c.id, c.nome, c.telefone, c.email, c.instagram, c.cidade, c.origem,
@@ -101,6 +102,9 @@ export async function getClientesLista(): Promise<Cliente[]> {
 }
 
 export async function getClienteDetalhes(clienteId: number): Promise<ClienteDetalhes | null> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(clienteId) || clienteId <= 0) return null
 
   const cliente = db.prepare(`
@@ -162,6 +166,9 @@ export async function getClienteDetalhes(clienteId: number): Promise<ClienteDeta
 }
 
 export async function salvarCliente(dados: SalvarClienteInput): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!dados.nome.trim()) return { success: false, message: 'O nome é obrigatório.' }
     if (dados.nome.trim().length > 160) return { success: false, message: 'O nome deve ter até 160 caracteres.' }
@@ -184,17 +191,18 @@ export async function salvarCliente(dados: SalvarClienteInput): Promise<ActionRe
     ]
 
     if (dados.id) {
-      db.prepare(
+      const result = db.prepare(
         `UPDATE clientes SET nome = ?, telefone = ?, email = ?, instagram = ?, cidade = ?,
           origem = ?, tipo_cliente = ?, observacoes = ? WHERE id = ? AND tenant_id = ?`,
       ).run(...valores, dados.id, TENANT_ID)
+      if (result.changes !== 1) return { success: false, message: 'Cliente não encontrado.' }
     } else {
       db.prepare(
         `INSERT INTO clientes (
           tenant_id, usuario_id, nome, telefone, email, instagram, cidade,
           origem, tipo_cliente, observacoes
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(TENANT_ID, ...valores)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(TENANT_ID, sessao.usuarioId, ...valores)
     }
 
     revalidatePath('/clientes')
@@ -208,6 +216,9 @@ export async function salvarCliente(dados: SalvarClienteInput): Promise<ActionRe
 }
 
 export async function deletarCliente(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     const res = db.prepare(
       'UPDATE clientes SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1',

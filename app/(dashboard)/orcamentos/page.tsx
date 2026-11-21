@@ -14,7 +14,7 @@ import { getPendenciasWhatsApp } from '@/app/actions/whatsapp'
 import { PendenciasWhatsApp } from '@/app/components/PendenciasWhatsApp'
 import { getProdutosAcabadosParaVenda } from '@/app/actions/producao-estoque'
 
-export const metadata: Metadata = { title: 'Novo Orçamento - Salge 3D' }
+export const metadata: Metadata = { title: 'Novo Orçamento' }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
   const { cliente } = await searchParams

@@ -5,7 +5,7 @@ import { FinanceiroPage } from '@/app/components/FinanceiroPage'
 import { getProjecaoFluxoCaixa } from '@/app/actions/financeiro'
 import { getContasFinanceiras, getTransferenciasFinanceiras } from '@/app/actions/contas-financeiras'
 
-export const metadata: Metadata = { title: 'Financeiro - Salge 3D' }
+export const metadata: Metadata = { title: 'Financeiro' }
 
 export default async function Page() {
   // Materializa primeiro a competência atual para os demais resumos já enxergarem as contas fixas.

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getPainelFiscal } from '@/app/actions/fiscal'
 import { FiscalMeiPage } from '@/app/components/FiscalMeiPage'
 
-export const metadata: Metadata = { title: 'Fiscal e MEI · Salge 3D' }
+export const metadata: Metadata = { title: 'Fiscal e MEI' }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ ano?: string }> }) {
   const params = await searchParams

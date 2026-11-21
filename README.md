@@ -5,7 +5,7 @@ ERP local para a operação da Salge 3D, construído com Next.js e SQLite.
 ## Módulos
 
 - Dashboard com faturamento, lucro, margem, pendências e alertas de estoque.
-- Busca global por pedido, cliente, produto, filamento e insumo com `Ctrl+K`.
+- Busca global por pedido, cliente, produto, filamento e insumo pelo botão no cabeçalho.
 - Orçamentos com validade, PDF, aprovação e conversão para produção.
 - Orçamentos com cálculo tradicional ou composição técnica por várias plates do fatiador.
 - Produção em Kanban, planejamento por impressora, produção antecipada e estoque de produtos acabados.

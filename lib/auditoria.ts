@@ -3,8 +3,8 @@ import type Database from 'better-sqlite3'
 export function registrarAuditoria(
   db: Database.Database,
   dados: {
-    tenantId?: number
-    usuarioId?: number
+    tenantId: number
+    usuarioId: number
     entidade: string
     entidadeId?: number | null
     acao: string
@@ -17,8 +17,8 @@ export function registrarAuditoria(
       tenant_id, usuario_id, entidade, entidade_id, acao, descricao, dados_json
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
-    dados.tenantId ?? 1,
-    dados.usuarioId ?? 1,
+    dados.tenantId,
+    dados.usuarioId,
     dados.entidade,
     dados.entidadeId ?? null,
     dados.acao,

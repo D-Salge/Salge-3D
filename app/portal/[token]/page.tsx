@@ -4,7 +4,7 @@ import { Box, Calendar, CreditCard, PackageCheck, Truck } from 'lucide-react'
 import { getOrcamentoPortal } from '@/app/actions/portal'
 import { PortalResposta } from '@/app/components/PortalResposta'
 
-export const metadata: Metadata = { title: 'Orçamento · Salge 3D', robots: { index: false, follow: false } }
+export const metadata: Metadata = { title: 'Orçamento', robots: { index: false, follow: false } }
 export const dynamic = 'force-dynamic'
 
 const moeda = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

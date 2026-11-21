@@ -4,11 +4,8 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { registrarEntregaParcialNoBanco } from '@/lib/registro-entrega.mjs'
 import { devolverSaidaProdutosAcabadosNoBanco, reconciliarPedidoEstoqueAposEstornoNoBanco } from '@/lib/producao-estoque.mjs'
-import { exigirPerfil } from '@/lib/session'
+import { exigirPerfil, exigirSessao } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface EntregaPedido {
   id: number
@@ -44,6 +41,10 @@ export async function atualizarQuantidadeProduzida(
   pedidoId: number,
   quantidadeProduzida: number,
 ): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0 || !Number.isSafeInteger(quantidadeProduzida) || quantidadeProduzida < 0) {
       return { success: false, message: 'Quantidade produzida inválida.' }
@@ -67,7 +68,7 @@ export async function atualizarQuantidadeProduzida(
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Progresso da produção', ?)
       `).run(TENANT_ID, pedidoId, USUARIO_ID, `${pedido.quantidade_produzida} → ${quantidadeProduzida} de ${pedido.quantidade} unidades`)
-      registrarAuditoria(db, { entidade: 'Pedido', entidadeId: pedidoId, acao: 'PROGRESSO_PRODUCAO', descricao: `${quantidadeProduzida}/${pedido.quantidade} unidades` })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Pedido', entidadeId: pedidoId, acao: 'PROGRESSO_PRODUCAO', descricao: `${quantidadeProduzida}/${pedido.quantidade} unidades` })
     })
     try { atualizar() } catch (error) {
       const message = error instanceof Error ? error.message : ''
@@ -196,6 +197,9 @@ export async function estornarEntregaPedido(entregaId: number): Promise<{ succes
 }
 
 export async function getComprovanteEntrega(entregaId: number): Promise<ComprovanteEntrega | null> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(entregaId) || entregaId <= 0) return null
   const entrega = db.prepare(`
     SELECT e.id, e.quantidade, e.valor_referente, e.entregue_em, e.observacao,

@@ -1,14 +1,13 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { classificarPrazo, resumirAgenda } from '@/lib/agenda.mjs'
 import { getPedidosComSaldoPendente } from '@/app/actions/recebimentos'
 import type { PedidoWhatsApp, TipoMensagemWhatsApp } from '@/app/actions/whatsapp'
 import { revalidatePath } from 'next/cache'
 
-const TENANT_ID = 1
-const USUARIO_ID = 1
 const TIPOS = ['Entrega', 'Cobranca', 'Follow-up', 'Pos-venda', 'Outro'] as const
 
 export type TipoAgenda = typeof TIPOS[number]
@@ -47,7 +46,7 @@ function hojeSaoPaulo() {
 
 type PedidoBase = PedidoWhatsApp & { cliente_id: number }
 
-function pedidosParaWhatsApp(ids: number[]) {
+function pedidosParaWhatsApp(ids: number[], TENANT_ID: number) {
   if (ids.length === 0) return new Map<number, PedidoBase>()
   const unicos = [...new Set(ids)]
   const placeholders = unicos.map(() => '?').join(', ')
@@ -66,6 +65,9 @@ function pedidosParaWhatsApp(ids: number[]) {
 }
 
 export async function getAgenda(): Promise<AgendaDados> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const hoje = hojeSaoPaulo()
   const configuracao = db.prepare(`
     SELECT dias_followup_orcamento, dias_pos_venda FROM tenants WHERE id = ?
@@ -139,7 +141,7 @@ export async function getAgenda(): Promise<AgendaDados> {
     ...entregas.map((item) => item.pedido_id), ...followups.map((item) => item.pedido_id),
     ...posVendas.map((item) => item.pedido_id), ...parcelas.map((item) => item.pedido_id),
   ]
-  const pedidos = pedidosParaWhatsApp(pedidoIds)
+  const pedidos = pedidosParaWhatsApp(pedidoIds, TENANT_ID)
   const bruto: Omit<ItemAgenda, 'grupo'>[] = []
 
   for (const item of tarefas) bruto.push({
@@ -211,6 +213,10 @@ export async function getAgenda(): Promise<AgendaDados> {
 export async function criarLembreteAgenda(data: {
   tipo: TipoAgenda; titulo: string; descricao: string; vencimento_em: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     const titulo = data.titulo.trim()
     if (!TIPOS.includes(data.tipo) || !titulo || titulo.length > 120) return { success: false, message: 'Preencha um título válido.' }
@@ -220,7 +226,7 @@ export async function criarLembreteAgenda(data: {
       INSERT INTO tarefas_agenda (tenant_id, usuario_id, tipo, titulo, descricao, vencimento_em)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(TENANT_ID, USUARIO_ID, data.tipo, titulo, data.descricao.trim() || null, data.vencimento_em)
-    registrarAuditoria(db, { entidade: 'Agenda', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR', descricao: titulo })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Agenda', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR', descricao: titulo })
     revalidatePath('/agenda'); revalidatePath('/')
     return { success: true, message: 'Lembrete criado.' }
   } catch (error) {
@@ -230,6 +236,9 @@ export async function criarLembreteAgenda(data: {
 }
 
 export async function concluirLembreteAgenda(id: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Lembrete inválido.' }
     const result = db.prepare(`
@@ -237,7 +246,7 @@ export async function concluirLembreteAgenda(id: number): Promise<{ success: boo
       WHERE id = ? AND tenant_id = ? AND status = 'Pendente'
     `).run(id, TENANT_ID)
     if (result.changes !== 1) return { success: false, message: 'Lembrete não encontrado.' }
-    registrarAuditoria(db, { entidade: 'Agenda', entidadeId: id, acao: 'CONCLUIR', descricao: 'Lembrete concluído' })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Agenda', entidadeId: id, acao: 'CONCLUIR', descricao: 'Lembrete concluído' })
     revalidatePath('/agenda'); revalidatePath('/')
     return { success: true, message: 'Lembrete concluído.' }
   } catch (error) {
@@ -247,11 +256,14 @@ export async function concluirLembreteAgenda(id: number): Promise<{ success: boo
 }
 
 export async function adiarLembreteAgenda(id: number, vencimentoEm: string): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!Number.isSafeInteger(id) || id <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(vencimentoEm)) return { success: false, message: 'Data inválida.' }
     const result = db.prepare(`UPDATE tarefas_agenda SET vencimento_em = ? WHERE id = ? AND tenant_id = ? AND status = 'Pendente'`).run(vencimentoEm, id, TENANT_ID)
     if (result.changes !== 1) return { success: false, message: 'Lembrete não encontrado.' }
-    registrarAuditoria(db, { entidade: 'Agenda', entidadeId: id, acao: 'ADIAR', descricao: `Novo prazo: ${vencimentoEm}` })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Agenda', entidadeId: id, acao: 'ADIAR', descricao: `Novo prazo: ${vencimentoEm}` })
     revalidatePath('/agenda')
     return { success: true, message: 'Lembrete adiado.' }
   } catch (error) {
@@ -263,6 +275,10 @@ export async function adiarLembreteAgenda(id: number, vencimentoEm: string): Pro
 export async function salvarAvaliacaoPedido(data: {
   pedidoId: number; nota: number; comentario: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0 || !Number.isSafeInteger(data.nota) || data.nota < 1 || data.nota > 5) {
       return { success: false, message: 'Pedido ou nota inválida.' }
@@ -280,7 +296,7 @@ export async function salvarAvaliacaoPedido(data: {
         INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Avaliação do cliente', ?)
       `).run(TENANT_ID, data.pedidoId, USUARIO_ID, `${data.nota}/5${data.comentario.trim() ? ` · ${data.comentario.trim()}` : ''}`)
-      registrarAuditoria(db, { entidade: 'Pedido', entidadeId: data.pedidoId, acao: 'AVALIAR', descricao: `${pedido.numero_orcamento ?? `#${pedido.id}`} · ${data.nota}/5` })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Pedido', entidadeId: data.pedidoId, acao: 'AVALIAR', descricao: `${pedido.numero_orcamento ?? `#${pedido.id}`} · ${data.nota}/5` })
     })()
     revalidatePath('/agenda'); revalidatePath(`/pedidos/${data.pedidoId}`)
     return { success: true, message: 'Avaliação registrada.' }

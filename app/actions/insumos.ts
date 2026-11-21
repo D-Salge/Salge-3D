@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 /**
  * app/actions/insumos.ts  -  v1
@@ -6,10 +6,8 @@
  */
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 // --- Tipos publicos ---
 
@@ -30,6 +28,9 @@ export interface ActionResult {
 // --- Queries de leitura ---
 
 export async function getInsumosLista(): Promise<Insumo[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT id, nome, unidade, custo_unitario, estoque_atual, estoque_minimo
@@ -46,6 +47,10 @@ export async function salvarInsumo(
   id: number | null,
   data: Omit<Insumo, 'id'>,
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!data.nome?.trim()) return { success: false, message: 'Informe o nome do insumo.' }
     if (!['unid', 'g', 'ml', 'cm', 'm'].includes(data.unidade)) {
@@ -117,6 +122,9 @@ export async function salvarInsumo(
 }
 
 export async function deletarInsumo(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     db.prepare('UPDATE insumos SET ativo = 0 WHERE id = ? AND tenant_id = ?').run(id, TENANT_ID)
     revalidatePath('/insumos')

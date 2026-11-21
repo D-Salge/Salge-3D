@@ -1,9 +1,8 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao } from '@/lib/session'
 import { agruparVendasPorProduto } from '@/lib/relatorios.mjs'
-
-const TENANT_ID = 1
 
 export interface ResumoProduto {
   chave: string
@@ -31,6 +30,9 @@ interface VendaProdutoRow {
 }
 
 export async function getResumoProdutos(): Promise<ResumoProduto[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const vendas = db.prepare(`
     SELECT p.id, p.nome_da_peca, p.cliente_id, p.quantidade,
       p.valor_total_cobrado, p.data_pedido,

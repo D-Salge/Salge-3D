@@ -8,7 +8,7 @@
  */
 
 import db from '@/lib/db'
-import { exigirPerfil } from '@/lib/session'
+import { exigirPerfil, exigirSessao } from '@/lib/session'
 import { finalizarPedidoNoBanco, mensagemErroFechamento } from '@/lib/fechamento-pedido.mjs'
 import { iniciarProducaoPedidoNoBanco, mensagemErroInicioProducao } from '@/lib/inicio-producao.mjs'
 import { calcularSugestaoReposicao, CONSULTA_ITENS_REPOSICAO } from '@/lib/estoque.mjs'
@@ -33,8 +33,6 @@ import {
   validarEDimensionarPlatesAutomaticamente,
   validarEAgruparPlates,
 } from '@/lib/orcamento-plates.mjs'
-
-const TENANT_ID = 1
 
 function buscarProdutoCatalogo(tenantId: number, nome: string): { produtoId: number; produtoVersaoId: number | null } | null {
   const produto = db.prepare(`SELECT pc.id,
@@ -98,7 +96,7 @@ function buscarReferenciaProdutoAcabado(
   }
 }
 
-function expirarOrcamentosVencidos() {
+function expirarOrcamentosVencidos(TENANT_ID: number, USUARIO_ID: number) {
   const vencidos = db.prepare(`
     SELECT id FROM pedidos
     WHERE tenant_id = ? AND orcamento_status IN ('Rascunho', 'Enviado')
@@ -112,7 +110,7 @@ function expirarOrcamentosVencidos() {
     `)
     const historico = db.prepare(`
       INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
-      VALUES (?, ?, 1, 'Status do orçamento', 'Validade encerrada automaticamente')
+      VALUES (?, ?, ?, 'Status do orçamento', 'Validade encerrada automaticamente')
     `)
     const liberarReserva = db.prepare(`UPDATE reservas_produtos_acabados
       SET liberada_em = COALESCE(liberada_em, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
@@ -120,7 +118,7 @@ function expirarOrcamentosVencidos() {
     for (const item of vencidos) {
       if (atualizar.run(item.id, TENANT_ID).changes === 1) {
         liberarReserva.run(item.id, TENANT_ID)
-        historico.run(TENANT_ID, item.id)
+        historico.run(TENANT_ID, item.id, USUARIO_ID)
       }
     }
   })()
@@ -252,7 +250,10 @@ export interface DashboardStats {
 // --- Dashboard stats ---
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  expirarOrcamentosVencidos()
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
+  expirarOrcamentosVencidos(TENANT_ID, sessao.usuarioId)
   const pedidosMesRow = db
     .prepare(
       `SELECT COUNT(*) AS pedidos_mes
@@ -385,6 +386,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 // --- Queries de leitura ---
 
 export async function getClientes(): Promise<Cliente[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT id, nome, telefone
@@ -396,6 +400,9 @@ export async function getClientes(): Promise<Cliente[]> {
 }
 
 export async function getFilamentos(): Promise<Filamento[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT id, material, cor, peso_rolo_gramas, preco_rolo
@@ -407,7 +414,10 @@ export async function getFilamentos(): Promise<Filamento[]> {
 }
 
 export async function getPedidosRecentes(limite = 20): Promise<PedidoResumo[]> {
-  expirarOrcamentosVencidos()
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
+  expirarOrcamentosVencidos(TENANT_ID, sessao.usuarioId)
   return db
     .prepare(
       `SELECT
@@ -524,6 +534,9 @@ export async function getPedidoParaDuplicar(pedidoId: number): Promise<PedidoPar
 }
 
 export async function getReferenciasPrecos(limite = 500): Promise<ReferenciaPreco[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const limiteSeguro = Number.isSafeInteger(limite) ? Math.min(Math.max(limite, 1), 2_000) : 500
   return db.prepare(`
     SELECT p.id AS pedido_id, p.numero_orcamento, p.cliente_id, p.nome_da_peca,
@@ -1327,6 +1340,9 @@ export async function atualizarOrcamento(pedidoId: number, data: CriarPedidoInpu
 // --- Kanban (Producao) ---
 
 export async function getPedidosKanban(): Promise<PedidoResumo[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT

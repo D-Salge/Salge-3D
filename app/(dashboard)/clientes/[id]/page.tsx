@@ -18,7 +18,7 @@ import { getClienteDetalhes } from '@/app/actions/clientes'
 import { PrivacidadeCliente } from '@/app/components/PrivacidadeCliente'
 import { getSessaoAtual } from '@/lib/session'
 
-export const metadata: Metadata = { title: 'Ficha do cliente · Salge 3D' }
+export const metadata: Metadata = { title: 'Ficha do cliente' }
 
 function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

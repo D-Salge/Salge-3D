@@ -130,7 +130,7 @@ export async function gerarCobrancaMercadoPago(pedidoId: number, valorSolicitado
       sessao.tenantId, sessao.usuarioId, pedido.id, preferencia.id, externalReference,
       url, preferencia.sandbox_init_point || null, valorCobranca,
     )
-    registrarAuditoria(db, {
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
       entidade: 'CobrancaMercadoPago', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
       descricao: `Cobrança de R$ ${valorCobranca.toFixed(2)} para ${pedido.numero_orcamento || `#${pedido.id}`}`,
     })

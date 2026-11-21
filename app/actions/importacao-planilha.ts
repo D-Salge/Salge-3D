@@ -1,13 +1,12 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirPerfil } from '@/lib/session'
 import { analisarPlanilha, contarDadosOperacionais, importarPlanilha } from '@/lib/importacao-planilha.mjs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { revalidatePath } from 'next/cache'
 
-const TENANT_ID = 1
-const USUARIO_ID = 1
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 
 export interface ImportacaoReport {
@@ -50,6 +49,10 @@ function safeError(error: unknown) {
 }
 
 export async function prepararImportacaoPlanilha(formData: FormData): Promise<ImportacaoActionResult> {
+  const sessao = await exigirPerfil(['admin'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     const uploaded = formData.get('arquivo')
     if (!(uploaded instanceof File) || uploaded.size === 0) {
@@ -107,6 +110,10 @@ export async function prepararImportacaoPlanilha(formData: FormData): Promise<Im
 }
 
 export async function executarImportacaoPlanilha(importacaoId: number, permitirMesclar: boolean): Promise<ImportacaoActionResult> {
+  const sessao = await exigirPerfil(['admin'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isInteger(importacaoId) || importacaoId <= 0) {
       return { success: false, message: 'Importação inválida.' }
@@ -155,6 +162,9 @@ export async function executarImportacaoPlanilha(importacaoId: number, permitirM
 }
 
 export async function getHistoricoImportacoes(): Promise<ImportacaoHistorico[]> {
+  const sessao = await exigirPerfil(['admin'])
+  const TENANT_ID = sessao.tenantId
+
   return db.prepare(`SELECT id, nome_arquivo, status, criado_em, concluido_em, erro
     FROM importacoes_planilha WHERE tenant_id = ? ORDER BY id DESC LIMIT 20`)
     .all(TENANT_ID) as ImportacaoHistorico[]

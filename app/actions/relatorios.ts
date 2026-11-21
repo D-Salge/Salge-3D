@@ -1,10 +1,9 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao } from '@/lib/session'
 import { criarUrlWhatsApp } from '@/lib/whatsapp.mjs'
 import { calcularConversaoFunil, montarDreMensal, percentualMeta, ultimasCompetencias, variacaoPercentual } from '@/lib/relatorios.mjs'
-
-const TENANT_ID = 1
 
 export interface DreMensal {
   competencia: string
@@ -58,6 +57,9 @@ function hojeSaoPaulo() {
 }
 
 export async function getRelatorioGerencial(): Promise<RelatorioGerencial> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const hoje = hojeSaoPaulo()
   const competencias = ultimasCompetencias(hoje, 12)
   const inicio = `${competencias[0]}-01`

@@ -1,12 +1,11 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao } from '@/lib/session'
 import { priorizarPendencias } from '@/lib/central-pendencias.mjs'
 import { getResumoEstoque } from '@/app/actions/estoque'
 import { getImpressoras } from '@/app/actions/operacao'
 import { getPedidosComSaldoPendente } from '@/app/actions/recebimentos'
-
-const TENANT_ID = 1
 
 export interface PendenciaCentral {
   id: string
@@ -20,6 +19,9 @@ export interface PendenciaCentral {
 }
 
 export async function getCentralPendencias(): Promise<PendenciaCentral[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const [parcelas, estoque, impressoras] = await Promise.all([
     getPedidosComSaldoPendente(),
     getResumoEstoque(),

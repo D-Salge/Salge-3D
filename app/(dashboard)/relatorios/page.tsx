@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getRelatorioGerencial } from '@/app/actions/relatorios'
 import { RelatoriosPage } from '@/app/components/RelatoriosPage'
 
-export const metadata: Metadata = { title: 'Relatórios · Salge 3D' }
+export const metadata: Metadata = { title: 'Relatórios' }
 
 export default async function Page() {
   return (

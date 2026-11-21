@@ -12,7 +12,7 @@ import {
   sugerirConciliacao,
   valoresFechamConciliacao,
 } from '@/lib/conciliacao.mjs'
-import { exigirSessao } from '@/lib/session'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
 export interface CandidatoConciliacao {
@@ -117,7 +117,7 @@ async function lerXlsxMercadoPago(buffer: Buffer) {
 
 export async function importarExtrato(formData: FormData): Promise<{ success: boolean; message: string }> {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const arquivo = formData.get('arquivo')
     const contaFinanceiraId = Number(formData.get('conta_financeira_id'))
     if (!(arquivo instanceof File) || arquivo.size === 0) {
@@ -265,7 +265,7 @@ export async function conciliarLancamento(
   entidadeIds: number[],
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const ids = [...new Set(Array.isArray(entidadeIds) ? entidadeIds : [])]
     if (!Number.isSafeInteger(lancamentoId) || lancamentoId <= 0 ||
         !['Recebimento', 'Despesa'].includes(tipo) || ids.length === 0 || ids.length > 50 ||
@@ -351,7 +351,7 @@ export async function classificarLancamento(
   opcoes?: { categoria?: CategoriaDespesa; descricao?: string },
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!Number.isSafeInteger(lancamentoId) || lancamentoId <= 0 ||
         !['Aporte', 'Despesa', 'Pessoal'].includes(classificacao)) {
       return { success: false, message: 'Classificação inválida.' }
@@ -427,7 +427,7 @@ export async function classificarLancamento(
 
 export async function ignorarLancamento(lancamentoId: number): Promise<{ success: boolean; message: string }> {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const result = db.prepare(`
       UPDATE extrato_lancamentos SET status = 'Ignorado'
       WHERE id = ? AND tenant_id = ? AND status = 'Pendente'
@@ -450,7 +450,7 @@ export async function desfazerTratamentoLancamento(
   lancamentoId: number,
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!Number.isSafeInteger(lancamentoId) || lancamentoId <= 0) {
       return { success: false, message: 'Lançamento inválido.' }
     }

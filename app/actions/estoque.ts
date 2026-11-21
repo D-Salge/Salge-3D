@@ -1,12 +1,10 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { calcularSugestaoReposicao, CONSULTA_ITENS_REPOSICAO, resumirListaCompras } from '@/lib/estoque.mjs'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export type TipoItemEstoque = 'Filamento' | 'Insumo'
 export type TipoMovimentoEstoque = 'Entrada' | 'Saida' | 'Ajuste' | 'Reversao'
@@ -65,6 +63,9 @@ export interface LoteFilamento {
 }
 
 export async function getResumoEstoque(): Promise<ResumoEstoque> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const itensEstoque = db.prepare(CONSULTA_ITENS_REPOSICAO).all(TENANT_ID, TENANT_ID) as Array<{
     tipo_item: TipoItemEstoque
     item_id: number
@@ -153,6 +154,10 @@ export async function registrarLoteFilamento(data: {
   precoCompra: number
   abertoEm?: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(data.filamentoId) || data.filamentoId <= 0) {
       return { success: false, message: 'Filamento inválido.' }
@@ -197,7 +202,7 @@ export async function registrarLoteFilamento(data: {
         TENANT_ID, USUARIO_ID, data.filamentoId, loteId, data.pesoInicialGramas,
         filamento.saldo, saldoPosterior,
       )
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'LoteFilamento', entidadeId: loteId, acao: 'CRIAR',
         descricao: `Lote ${data.codigo.trim()} com ${data.pesoInicialGramas}g`,
       })
@@ -224,6 +229,10 @@ export async function registrarPerdaFilamento(data: {
   quantidade: number
   motivo: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(data.loteId) || data.loteId <= 0 ||
         !Number.isFinite(data.quantidade) || data.quantidade <= 0) {
@@ -259,7 +268,7 @@ export async function registrarPerdaFilamento(data: {
         TENANT_ID, USUARIO_ID, lote.filamento_id, data.loteId, data.quantidade,
         lote.saldo_total, saldoPosterior, `Perda: ${data.motivo.trim()}`,
       )
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'LoteFilamento', entidadeId: data.loteId, acao: 'REGISTRAR_PERDA',
         descricao: `${data.quantidade}g — ${data.motivo.trim()}`,
       })
@@ -283,6 +292,10 @@ export async function ajustarEstoque(data: {
   novoSaldo: number
   motivo: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!['Filamento', 'Insumo'].includes(data.tipoItem)) {
       return { success: false, message: 'Tipo de item inválido.' }

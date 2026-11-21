@@ -3,7 +3,7 @@ import { getFilamentosLista } from '@/app/actions/filamentos'
 import { FilamentosTabela } from '@/app/components/FilamentosTabela'
 
 export const metadata: Metadata = {
-  title: 'Estoque de Filamentos · Salge 3D',
+  title: 'Estoque de Filamentos',
   description: 'Gerenciamento de estoque de materiais.',
 }
 

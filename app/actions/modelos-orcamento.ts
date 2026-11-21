@@ -1,11 +1,9 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface ModeloOrcamento {
   id: number
@@ -19,6 +17,9 @@ export interface ModeloOrcamento {
 }
 
 export async function getModelosOrcamento(): Promise<ModeloOrcamento[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db.prepare(`
     SELECT m.id, m.pedido_id, m.nome, p.nome_da_peca, p.quantidade,
       COALESCE(NULLIF(p.preco_unitario, 0),
@@ -37,6 +38,10 @@ export async function salvarModeloOrcamento(
   pedidoId: number,
   nome: string,
 ): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
       return { success: false, message: 'Pedido inválido.' }
@@ -62,7 +67,7 @@ export async function salvarModeloOrcamento(
           SET pedido_id = ?, ativo = 1, usuario_id = ?
           WHERE id = ? AND tenant_id = ?
         `).run(pedidoId, USUARIO_ID, existente.id, TENANT_ID)
-        registrarAuditoria(db, {
+        registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
           entidade: 'ModeloOrcamento', entidadeId: existente.id, acao: 'ATUALIZAR',
           descricao: `Modelo ${nomeLimpo} atualizado pelo pedido #${pedidoId}`,
         })
@@ -71,7 +76,7 @@ export async function salvarModeloOrcamento(
           INSERT INTO modelos_orcamento (tenant_id, usuario_id, pedido_id, nome)
           VALUES (?, ?, ?, ?)
         `).run(TENANT_ID, USUARIO_ID, pedidoId, nomeLimpo)
-        registrarAuditoria(db, {
+        registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
           entidade: 'ModeloOrcamento', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
           descricao: `Modelo ${nomeLimpo} criado pelo pedido #${pedidoId}`,
         })
@@ -89,6 +94,9 @@ export async function salvarModeloOrcamento(
 export async function arquivarModeloOrcamento(
   modeloId: number,
 ): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!Number.isSafeInteger(modeloId) || modeloId <= 0) {
       return { success: false, message: 'Modelo inválido.' }
@@ -98,7 +106,7 @@ export async function arquivarModeloOrcamento(
       WHERE id = ? AND tenant_id = ? AND ativo = 1
     `).run(modeloId, TENANT_ID)
     if (result.changes !== 1) return { success: false, message: 'Modelo não encontrado.' }
-    registrarAuditoria(db, {
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
       entidade: 'ModeloOrcamento', entidadeId: modeloId, acao: 'ARQUIVAR',
       descricao: 'Modelo de orçamento arquivado',
     })

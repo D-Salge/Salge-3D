@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 /**
  * app/actions/despesas.ts  -  v1
@@ -6,14 +6,12 @@
  */
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { gerarParcelas } from '@/lib/financeiro.mjs'
 import { listarCompetencias, vencimentoDaRecorrencia } from '@/lib/recorrencias.mjs'
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 // --- Tipos publicos ---
 
@@ -94,7 +92,7 @@ function hojeSaoPaulo() {
   }).format(new Date())
 }
 
-function materializarDespesasRecorrentes() {
+function materializarDespesasRecorrentes(TENANT_ID: number, USUARIO_ID: number) {
   const hoje = hojeSaoPaulo()
   const competenciaAtual = hoje.slice(0, 7)
   const recorrencias = db.prepare(`
@@ -130,6 +128,9 @@ function materializarDespesasRecorrentes() {
 // --- Queries de leitura ---
 
 export async function getDespesas(mes?: string): Promise<Despesa[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   if (mes) {
     return db
       .prepare(
@@ -162,7 +163,11 @@ export async function getDespesas(mes?: string): Promise<Despesa[]> {
 }
 
 export async function getDespesasRecorrentes(): Promise<DespesaRecorrente[]> {
-  materializarDespesasRecorrentes()
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
+  materializarDespesasRecorrentes(TENANT_ID, USUARIO_ID)
   return db.prepare(`
     SELECT id, categoria, descricao, valor, dia_vencimento, forma_pagamento,
       paga_automaticamente, inicia_em, termina_em, ativo
@@ -173,6 +178,9 @@ export async function getDespesasRecorrentes(): Promise<DespesaRecorrente[]> {
 }
 
 export async function getFluxoCapital(): Promise<FluxoCapital[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT f.id, f.tipo, f.valor, f.descricao, f.data_movimentacao,
@@ -192,6 +200,9 @@ export async function getResumoDespesas(): Promise<{
   totalAportes: number
   totalRetiradas: number
 }> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const despesasMesRow = db
     .prepare(
       `SELECT COALESCE(SUM(valor), 0) AS total
@@ -253,6 +264,10 @@ export async function salvarDespesa(
   id: number | null,
   data: DespesaInput,
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!data.descricao?.trim()) return { success: false, message: 'Informe a descricao da despesa.' }
     if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
@@ -309,7 +324,7 @@ export async function salvarDespesa(
           )
           ids.push(Number(res.lastInsertRowid))
         }
-        registrarAuditoria(db, {
+        registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
           entidade: 'Despesa', entidadeId: ids[0], acao: 'CRIAR',
           descricao: `${data.descricao.trim()} · ${data.parcelas}x`,
           detalhes: { valorTotal: data.valor, parcelas: data.parcelas, grupo, ids },
@@ -337,7 +352,7 @@ export async function salvarDespesa(
         TENANT_ID,
       )
       if (res.changes === 0) return { success: false, message: 'Despesa nao encontrada.' }
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Despesa', entidadeId: id, acao: 'ATUALIZAR',
         descricao: data.descricao.trim(), detalhes: { valor: data.valor, pagoEm: data.pago_em },
       })
@@ -360,6 +375,10 @@ export async function salvarDespesaRecorrente(
   id: number | null,
   data: DespesaRecorrenteInput,
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!data.descricao.trim() || data.descricao.trim().length > 160) {
       return { success: false, message: 'Informe uma descrição válida.' }
@@ -408,8 +427,8 @@ export async function salvarDespesaRecorrente(
       )
       if (result.changes !== 1) return { success: false, message: 'Despesa recorrente não encontrada.' }
     }
-    materializarDespesasRecorrentes()
-    registrarAuditoria(db, {
+    materializarDespesasRecorrentes(TENANT_ID, USUARIO_ID)
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
       entidade: 'DespesaRecorrente', entidadeId: recorrenciaId, acao: id ? 'ATUALIZAR' : 'CRIAR',
       descricao: `${data.descricao.trim()} · dia ${data.dia_vencimento}`,
       detalhes: { valor: data.valor, pagaAutomaticamente: data.paga_automaticamente },
@@ -424,13 +443,16 @@ export async function salvarDespesaRecorrente(
 }
 
 export async function arquivarDespesaRecorrente(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Despesa recorrente inválida.' }
     const result = db.prepare(`
       UPDATE despesas_recorrentes SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1
     `).run(id, TENANT_ID)
     if (result.changes !== 1) return { success: false, message: 'Despesa recorrente não encontrada.' }
-    registrarAuditoria(db, {
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
       entidade: 'DespesaRecorrente', entidadeId: id, acao: 'ARQUIVAR',
       descricao: 'Geração de novas competências interrompida',
     })
@@ -447,6 +469,9 @@ export async function alterarPagamentoDespesa(
   id: number,
   pagoEm: string | null,
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!Number.isSafeInteger(id) || id <= 0 || (pagoEm !== null && !/^\d{4}-\d{2}-\d{2}$/.test(pagoEm))) {
       return { success: false, message: 'Despesa ou data de pagamento inválida.' }
@@ -454,7 +479,7 @@ export async function alterarPagamentoDespesa(
     const result = db.prepare(`UPDATE despesas SET pago_em = ?
       WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`).run(pagoEm, id, TENANT_ID)
     if (result.changes !== 1) return { success: false, message: 'Despesa não encontrada.' }
-    registrarAuditoria(db, {
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
       entidade: 'Despesa', entidadeId: id, acao: pagoEm ? 'PAGAR' : 'REABRIR',
       descricao: pagoEm ? `Parcela paga em ${pagoEm}` : 'Pagamento da parcela removido',
     })
@@ -467,6 +492,9 @@ export async function alterarPagamentoDespesa(
 }
 
 export async function deletarDespesa(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     const estornar = db.transaction(() => {
       const res = db.prepare(`UPDATE despesas
@@ -475,7 +503,7 @@ export async function deletarDespesa(id: number): Promise<ActionResult> {
         WHERE id = ? AND tenant_id = ? AND estornada_em IS NULL`)
         .run(id, TENANT_ID)
       if (res.changes === 0) throw new Error('NOT_FOUND')
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Despesa', entidadeId: id, acao: 'ESTORNAR',
         descricao: 'Despesa estornada pelo usuário',
       })
@@ -502,6 +530,10 @@ export async function deletarDespesa(id: number): Promise<ActionResult> {
 export async function salvarFluxoCapital(
   data: Omit<FluxoCapital, 'id' | 'conta_financeira_nome'>,
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isFinite(data.valor) || data.valor <= 0 || data.valor > 10_000_000) {
       return { success: false, message: 'O valor deve ser maior que zero.' }
@@ -531,7 +563,7 @@ export async function salvarFluxoCapital(
       data.data_movimentacao,
       data.conta_financeira_id,
     )
-    registrarAuditoria(db, {
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
       entidade: 'FluxoCapital', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
       descricao: `${data.tipo} de R$ ${data.valor.toFixed(2)}`,
     })

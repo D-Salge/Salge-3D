@@ -25,11 +25,13 @@ function fmtBRL(valor: number) {
 export function ProdutosPage({
   produtos,
   catalogo,
+  abaInicial = "catalogo",
 }: {
   produtos: ResumoProduto[];
   catalogo: CatalogoDados;
+  abaInicial?: "catalogo" | "vendas";
 }) {
-  const [aba, setAba] = useState<"catalogo" | "vendas">("catalogo");
+  const [aba, setAba] = useState<"catalogo" | "vendas">(abaInicial);
   const [busca, setBusca] = useState("");
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("faturamento");
 

@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { getUsuarios } from '@/app/actions/usuarios'
 import { UsuariosSistema } from '@/app/components/UsuariosSistema'
 
-export const metadata: Metadata = { title: 'Usuários · Salge 3D' }
+export const metadata: Metadata = { title: 'Usuários' }
 
 export default async function Page() {
   const usuarios = await getUsuarios()

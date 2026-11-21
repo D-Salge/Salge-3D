@@ -9,7 +9,7 @@ import { getPedidoParaDuplicar, getReferenciasPrecos } from '@/app/actions/pedid
 import { OrcamentoPage } from '@/app/components/OrcamentoPage'
 import { getProdutosAcabadosParaVenda } from '@/app/actions/producao-estoque'
 
-export const metadata: Metadata = { title: 'Editar orçamento - Salge 3D' }
+export const metadata: Metadata = { title: 'Editar orçamento' }
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

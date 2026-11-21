@@ -5,7 +5,7 @@ import { getHistoricoImportacoes } from '@/app/actions/importacao-planilha'
 import { ImportacaoPlanilha } from '@/app/components/ImportacaoPlanilha'
 
 export const metadata: Metadata = {
-  title: 'Importar planilha · Salge 3D',
+  title: 'Importar planilha',
   description: 'Importação validada da planilha de controle para o ERP.',
 }
 

@@ -3,7 +3,7 @@
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { calcularLimiteMei, resumirLimiteMei, vencimentoDas } from '@/lib/mei.mjs'
-import { exigirSessao } from '@/lib/session'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
 export interface ReceitaFiscal {
@@ -107,7 +107,7 @@ export async function salvarConfiguracaoMei(data: {
   inicioMei: string | null; limiteAnual: number; naturezaPadrao: 'Venda' | 'Serviço'
 }) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (data.inicioMei && !/^\d{4}-\d{2}-\d{2}$/.test(data.inicioMei)) return { success: false, message: 'Data de abertura inválida.' }
     if (!Number.isFinite(data.limiteAnual) || data.limiteAnual <= 0) return { success: false, message: 'Limite anual inválido.' }
     if (!['Venda', 'Serviço'].includes(data.naturezaPadrao)) return { success: false, message: 'Natureza padrão inválida.' }
@@ -123,7 +123,7 @@ export async function adicionarReceitaExterna(data: {
   notaFiscalEmitida?: boolean; numeroDocumento?: string
 }) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.dataCompetencia)) return { success: false, message: 'Data inválida.' }
     if (!['Venda', 'Serviço'].includes(data.natureza)) return { success: false, message: 'Natureza inválida.' }
     if (!data.descricao.trim() || !Number.isFinite(data.valor) || data.valor <= 0) return { success: false, message: 'Preencha descrição e valor.' }
@@ -133,7 +133,7 @@ export async function adicionarReceitaExterna(data: {
     ) VALUES (?, ?, ?, ?, 'Externa', ?, ?, ?, ?)`
     ).run(sessao.tenantId, sessao.usuarioId, data.dataCompetencia, data.natureza,
       data.descricao.trim(), data.valor, data.notaFiscalEmitida ? 1 : 0, data.numeroDocumento?.trim() || null)
-    registrarAuditoria(db, { entidade: 'ReceitaFiscal', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR', descricao: `Receita externa de R$ ${data.valor.toFixed(2)}` })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'ReceitaFiscal', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR', descricao: `Receita externa de R$ ${data.valor.toFixed(2)}` })
     revalidatePath('/financeiro/fiscal')
     return { success: true, message: 'Receita adicionada ao controle do MEI.' }
   } catch (error) { console.error('[adicionarReceitaExterna]', error); return { success: false, message: 'Não foi possível adicionar a receita.' } }
@@ -141,7 +141,7 @@ export async function adicionarReceitaExterna(data: {
 
 export async function atualizarDocumentoFiscal(id: number, emitida: boolean, numeroDocumento?: string) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const result = db.prepare(`UPDATE receitas_fiscais SET nota_fiscal_emitida = ?, numero_documento = ?
       WHERE id = ? AND tenant_id = ? AND cancelada_em IS NULL`
     ).run(emitida ? 1 : 0, numeroDocumento?.trim() || null, id, sessao.tenantId)
@@ -153,7 +153,7 @@ export async function atualizarDocumentoFiscal(id: number, emitida: boolean, num
 
 export async function cancelarReceitaExterna(id: number) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const result = db.prepare(`UPDATE receitas_fiscais SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ? AND tenant_id = ? AND origem = 'Externa' AND cancelada_em IS NULL`
     ).run(id, sessao.tenantId)
@@ -168,7 +168,7 @@ export async function salvarObrigacaoFiscal(data: {
   status: ObrigacaoFiscal['status']; valor?: number | null
 }) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!['DAS', 'Relatório mensal', 'DASN'].includes(data.tipo) || !/^\d{4}(-\d{2})?$/.test(data.competencia) || !/^\d{4}-\d{2}-\d{2}$/.test(data.vencimentoEm)) {
       return { success: false, message: 'Obrigação fiscal inválida.' }
     }

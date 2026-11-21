@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { CheckCircle2, Clock3, XCircle } from 'lucide-react'
 import db from '@/lib/db'
 
-export const metadata = { title: 'Pagamento · Salge 3D', robots: { index: false, follow: false } }
+export const metadata = { title: 'Pagamento', robots: { index: false, follow: false } }
 export const dynamic = 'force-dynamic'
 
 export default async function RetornoPagamento({ searchParams }: {
