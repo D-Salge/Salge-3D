@@ -12,9 +12,6 @@ import { calcularDesviosOperacao } from '@/lib/desvios-operacao.mjs'
 import { obterPlatesPedidoNoBanco } from '@/lib/orcamento-plates.mjs'
 import { reservarProdutosAcabadosParaPedidoNoBanco } from '@/lib/producao-estoque.mjs'
 
-const TENANT_ID = 1
-const USUARIO_ID = 1
-
 export interface Impressora {
   id: number
   nome: string
@@ -239,6 +236,9 @@ export interface PedidoDetalhes {
 }
 
 export async function getImpressoras(): Promise<Impressora[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const impressoras = db.prepare(`
     SELECT imp.id, imp.nome, imp.modelo, imp.potencia_w, imp.custo_hora,
       imp.bico_atual, imp.horas_base, imp.intervalo_manutencao_horas,
@@ -279,6 +279,9 @@ export async function getImpressoras(): Promise<Impressora[]> {
 }
 
 export async function getIndicadoresQualidadeImpressoras(): Promise<IndicadoresQualidadeImpressora[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const linhas = db.prepare(`
     SELECT imp.id AS impressora_id,
       COUNT(p.id) AS pedidos_finalizados,
@@ -327,6 +330,9 @@ export async function getIndicadoresQualidadeImpressoras(): Promise<IndicadoresQ
 }
 
 export async function getManutencoesImpressoras(): Promise<ManutencaoImpressora[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db.prepare(`
     SELECT m.id, m.impressora_id, imp.nome AS impressora_nome, m.tipo, m.descricao,
       m.custo, m.horas_no_momento, m.realizada_em, m.despesa_id
@@ -344,6 +350,9 @@ export async function salvarImpressora(
     'nome' | 'modelo' | 'potencia_w' | 'custo_hora' | 'bico_atual' |
     'horas_base' | 'intervalo_manutencao_horas' | 'intervalo_entre_trabalhos_minutos' | 'status'>,
 ): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!data.nome.trim()) return { success: false, message: 'Informe o nome da impressora.' }
     if (!Number.isFinite(data.potencia_w) || data.potencia_w < 0 ||
@@ -400,6 +409,10 @@ export async function registrarManutencaoImpressora(data: {
   lancarFinanceiro: boolean
   formaPagamento: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     const tipos = ['Preventiva', 'Limpeza', 'Lubrificacao', 'Troca de bico', 'Calibracao', 'Corretiva', 'Outro']
     const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
@@ -457,7 +470,7 @@ export async function registrarManutencaoImpressora(data: {
         TENANT_ID, data.impressoraId, USUARIO_ID, despesaId, data.tipo,
         data.descricao.trim() || null, data.custo, horasNoMomento, data.realizadaEm,
       )
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Impressora', entidadeId: data.impressoraId, acao: 'REGISTRAR_MANUTENCAO',
         descricao: `${data.tipo} · ${horasNoMomento.toFixed(1)}h`,
         detalhes: { manutencaoId: Number(manutencao.lastInsertRowid), custo: data.custo, despesaId },
@@ -477,6 +490,9 @@ export async function registrarManutencaoImpressora(data: {
 }
 
 export async function arquivarImpressora(id: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     const ativa = db.prepare(`
       SELECT COUNT(*) AS total FROM pedidos
@@ -886,6 +902,9 @@ export async function salvarAnexoPedido(data: {
   nome: string
   url: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!data.nome.trim()) return { success: false, message: 'Informe o nome do arquivo.' }
     let url: URL
@@ -911,6 +930,9 @@ export async function salvarAnexoPedido(data: {
 }
 
 export async function removerAnexoPedido(id: number, pedidoId: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     const result = db.prepare(`
       DELETE FROM anexos_pedido WHERE id = ? AND pedido_id = ?

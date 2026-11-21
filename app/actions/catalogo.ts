@@ -1,13 +1,11 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { gerarCodigoProduto, verificarNomeProduto, mensagemConflitoProduto } from '@/lib/catalogo-cadastro.mjs'
 import { normalizarNomeProduto } from '@/lib/catalogo.mjs'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface ItemFichaTecnica {
   id?: number
@@ -97,6 +95,9 @@ export interface ProdutoCatalogoInput {
 type ActionResult = { success: boolean; message: string }
 
 export async function getCatalogoDados(): Promise<CatalogoDados> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const produtos = db.prepare(`
     SELECT pc.id, pc.codigo, pc.nome, pc.categoria, pc.descricao,
       pv.id AS versao_id, pv.versao,
@@ -189,6 +190,10 @@ export async function getCatalogoDados(): Promise<CatalogoDados> {
 }
 
 export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCatalogoInput): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     const nome = data.nome.trim()
     const nomeChave = normalizarNomeProduto(nome)
@@ -265,7 +270,7 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
       const inserirItem = db.prepare(`INSERT INTO produto_versao_itens
         (versao_id, tipo_item, item_id, quantidade_por_unidade) VALUES (?, ?, ?, ?)`)
       for (const item of data.itens) inserirItem.run(versaoId, item.tipoItem, item.itemId, item.quantidadePorUnidade)
-      registrarAuditoria(db, { entidade: 'ProdutoCatalogo', entidadeId: produtoId,
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'ProdutoCatalogo', entidadeId: produtoId,
         acao: id ? 'NOVA_VERSAO' : 'CRIAR', descricao: `${nome} · versão ${versao}` })
     })
     salvar.immediate()
@@ -284,16 +289,22 @@ export async function salvarProdutoCatalogo(id: number | null, data: ProdutoCata
 }
 
 export async function arquivarProdutoCatalogo(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Produto inválido.' }
   const result = db.prepare('UPDATE produtos_catalogo SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1')
     .run(id, TENANT_ID)
   if (result.changes !== 1) return { success: false, message: 'Produto não encontrado.' }
-  registrarAuditoria(db, { entidade: 'ProdutoCatalogo', entidadeId: id, acao: 'ARQUIVAR', descricao: 'Ficha arquivada' })
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'ProdutoCatalogo', entidadeId: id, acao: 'ARQUIVAR', descricao: 'Ficha arquivada' })
   revalidatePath('/produtos')
   return { success: true, message: 'Produto arquivado; vendas e versões anteriores foram preservadas.' }
 }
 
 export async function restaurarVersaoProduto(produtoId: number, versaoId: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(produtoId) || produtoId <= 0 || !Number.isSafeInteger(versaoId) || versaoId <= 0) {
     return { success: false, message: 'Produto ou versão inválida.' }
   }
@@ -327,7 +338,7 @@ export async function restaurarVersaoProduto(produtoId: number, versaoId: number
       db.prepare(`INSERT INTO produto_versao_itens (versao_id, tipo_item, item_id, quantidade_por_unidade)
         SELECT ?, tipo_item, item_id, quantidade_por_unidade FROM produto_versao_itens WHERE versao_id = ?`
       ).run(Number(nova.lastInsertRowid), origem.id)
-      registrarAuditoria(db, { entidade: 'ProdutoCatalogo', entidadeId: produtoId, acao: 'RESTAURAR_VERSAO',
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'ProdutoCatalogo', entidadeId: produtoId, acao: 'RESTAURAR_VERSAO',
         descricao: `Versão ${origemVersao} restaurada como versão ${novaVersao}` })
     })
     restaurar.immediate()

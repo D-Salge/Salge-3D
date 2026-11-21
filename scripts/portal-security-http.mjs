@@ -504,6 +504,62 @@ async function executarTestesBambu(baseUrl, db, dados, actions) {
   assert.deepEqual(db.prepare('SELECT * FROM impressoras_bambu').all(),before)
 }
 
+async function executarTestesPermissoesActions(baseUrl, db, dados, actions) {
+  const conta = db.prepare('SELECT id, saldo_inicial FROM contas_financeiras WHERE tenant_id = ? LIMIT 1').get(dados.tenantA)
+  assert.ok(conta)
+  const enviarFormulario = async (token, saldo) => {
+    // Exercise React's multipart action protocol. There is deliberately no
+    // Next-Action header: the action itself must enforce the writable role.
+    const form = new FormData()
+    form.set('$ACTION_REF_0', '')
+    form.set('$ACTION_0:0', JSON.stringify({ id: actions.atualizarSaldo, bound: '$@1' }))
+    form.set('$ACTION_0:1', JSON.stringify([conta.id, saldo]))
+    const res = await fetch(`${baseUrl}/financeiro`, {
+      method: 'POST', redirect: 'manual', body: form,
+      headers: { Origin: baseUrl, ...(token ? { Cookie: `salge_session=${token}` } : {}) },
+    })
+    await res.text()
+    return res.status
+  }
+  const antes = db.prepare('SELECT COUNT(*) AS total FROM auditoria').get().total
+  await enviarFormulario(dados.sessoes.visualizadorA, 888)
+  assert.equal(db.prepare('SELECT saldo_inicial FROM contas_financeiras WHERE id = ?').get(conta.id).saldo_inicial, conta.saldo_inicial)
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM auditoria').get().total, antes)
+  const anonimo = await enviarFormulario(null, 999)
+  assert.ok([307, 401].includes(anonimo))
+  assert.equal(db.prepare('SELECT saldo_inicial FROM contas_financeiras WHERE id = ?').get(conta.id).saldo_inicial, conta.saldo_inicial)
+
+  // A positive control proves the form payload is valid and was not merely
+  // ignored by the framework. The operator's real ID must reach the audit.
+  assert.equal(await enviarFormulario(dados.sessoes.operadorA, 123.45), 200)
+  assert.equal(db.prepare('SELECT saldo_inicial FROM contas_financeiras WHERE id = ?').get(conta.id).saldo_inicial, 123.45)
+  assert.deepEqual(db.prepare(`SELECT tenant_id, usuario_id FROM auditoria
+    WHERE entidade = 'ContaFinanceira' AND entidade_id = ? ORDER BY id DESC LIMIT 1`).get(conta.id), {
+    tenant_id: dados.tenantA, usuario_id: dados.operadorA,
+  })
+
+  const marcadorA = 'MATERIAL_EMPRESA_A_CONFIDENCIAL'
+  db.prepare('UPDATE filamentos SET cor = ? WHERE id = ?').run(marcadorA, dados.filamentoA)
+  const listaB = await fetch(`${baseUrl}/filamentos`, { headers: { Cookie: `salge_session=${dados.sessoes.adminB}` } })
+  assert.equal(listaB.status, 200)
+  assert.doesNotMatch(await listaB.text(), new RegExp(marcadorA))
+  const listaA = await fetch(`${baseUrl}/filamentos`, { headers: { Cookie: `salge_session=${dados.sessoes.adminA}` } })
+  assert.match(await listaA.text(), new RegExp(marcadorA))
+
+  const configA = db.prepare('SELECT nome FROM tenants WHERE id = ?').get(dados.tenantA).nome
+  const configB = db.prepare('SELECT * FROM tenants WHERE id = ?').get(dados.tenantB)
+  const configRes = await fetch(`${baseUrl}/configuracoes`, {
+    method: 'POST', headers: {
+      Accept: 'text/x-component', 'Content-Type': 'text/plain;charset=UTF-8',
+      'Next-Action': actions.salvarConfiguracoes, Cookie: `salge_session=${dados.sessoes.adminB}`,
+    }, body: JSON.stringify([{ ...configB, nome: 'Empresa B atualizada por HTTP' }]),
+  })
+  assert.equal(configRes.status, 200)
+  assert.match(await configRes.text(), /Configuracoes salvas com sucesso/)
+  assert.equal(db.prepare('SELECT nome FROM tenants WHERE id = ?').get(dados.tenantA).nome, configA)
+  assert.equal(db.prepare('SELECT nome FROM tenants WHERE id = ?').get(dados.tenantB).nome, 'Empresa B atualizada por HTTP')
+}
+
 let temporario
 let servidor
 let db
@@ -532,6 +588,8 @@ try {
     criarPedido: idDaAction(manifesto, 'criarPedido', 'pedidos.ts'),
     atualizarOrcamento: idDaAction(manifesto, 'atualizarOrcamento', 'pedidos.ts'),
     salvarBambu: idDaAction(manifesto, 'salvarConexaoBambu', 'bambu.ts'),
+    atualizarSaldo: idDaAction(manifesto, 'atualizarSaldoInicial', 'contas-financeiras.ts'),
+    salvarConfiguracoes: idDaAction(manifesto, 'salvarConfiguracoes', 'configuracoes.ts'),
   }
 
   const porta = await portaLivre()
@@ -556,7 +614,8 @@ try {
   await executarTestesHttp(baseUrl, db, dados, actions)
   await executarTestesPlates(baseUrl, db, dados, actions)
   await executarTestesBambu(baseUrl, db, dados, actions)
-  console.log('OK: autorização, isolamento entre empresas, portal público e orçamento por plates validados por HTTP.')
+  await executarTestesPermissoesActions(baseUrl, db, dados, actions)
+  console.log('OK: autorização (incluindo formulário multipart), autoria, isolamento entre empresas, portal público e orçamento por plates validados por HTTP.')
 } finally {
   if (db) db.close()
   await encerrarServidor(servidor)

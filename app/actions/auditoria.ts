@@ -3,8 +3,6 @@
 import db from '@/lib/db'
 import { exigirPerfil } from '@/lib/session'
 
-const TENANT_ID = 1
-
 export interface EventoAuditoria {
   id: number
   entidade: string
@@ -17,7 +15,9 @@ export interface EventoAuditoria {
 }
 
 export async function getEventosAuditoria(): Promise<EventoAuditoria[]> {
-  await exigirPerfil(['admin'])
+  const sessao = await exigirPerfil(['admin'])
+  const TENANT_ID = sessao.tenantId
+
   return db.prepare(`
     SELECT a.id, a.entidade, a.entidade_id, a.acao, a.descricao,
       a.dados_json, a.criado_em, u.nome AS usuario_nome

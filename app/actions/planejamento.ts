@@ -1,12 +1,10 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { planejarFilaProducao } from '@/lib/producao.mjs'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface BloqueioImpressoraPlanejamento {
   id: number
@@ -63,7 +61,7 @@ export interface PlanejamentoProducao {
   semImpressora: PedidoSemImpressora[]
 }
 
-function calcularPlanejamento(): PlanejamentoProducao {
+function calcularPlanejamento(TENANT_ID: number): PlanejamentoProducao {
   const impressoras = db.prepare(`
     SELECT id, nome, modelo, status, bico_atual, intervalo_entre_trabalhos_minutos FROM impressoras
     WHERE tenant_id = ? AND ativo = 1 AND status IN ('Disponivel', 'Em uso')
@@ -96,12 +94,18 @@ function calcularPlanejamento(): PlanejamentoProducao {
 }
 
 export async function getPlanejamentoProducao(): Promise<PlanejamentoProducao> {
-  return calcularPlanejamento()
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
+  return calcularPlanejamento(TENANT_ID)
 }
 
 export async function aplicarPlanejamentoProducao(): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
-    const plano = calcularPlanejamento()
+    const plano = calcularPlanejamento(TENANT_ID)
     const aplicar = db.transaction(() => {
       const atualizar = db.prepare(`
         UPDATE pedidos SET inicio_previsto = ?, fim_previsto = ?
@@ -117,7 +121,7 @@ export async function aplicarPlanejamentoProducao(): Promise<{ success: boolean;
             TENANT_ID,
             impressora.id,
           ).changes !== 1) throw new Error('PEDIDO_ALTERADO')
-          registrarAuditoria(db, {
+          registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
             entidade: 'Pedido', entidadeId: pedido.id, acao: 'PLANEJAR_PRODUCAO',
             descricao: `${impressora.nome}: ${pedido.inicio_previsto_calculado} → ${pedido.fim_previsto_calculado}`,
           })
@@ -141,6 +145,9 @@ export async function atualizarPrioridadeProducao(
   pedidoId: number,
   prioridade: 'Normal' | 'Alta' | 'Urgente',
 ): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0 || !['Normal', 'Alta', 'Urgente'].includes(prioridade)) {
     return { success: false, message: 'Pedido ou prioridade inválida.' }
   }
@@ -149,7 +156,7 @@ export async function atualizarPrioridadeProducao(
       AND status IN ('Fila', 'Imprimindo', 'Acabamento')`
   ).run(prioridade, pedidoId, TENANT_ID)
   if (result.changes !== 1) return { success: false, message: 'Pedido ativo não encontrado.' }
-  registrarAuditoria(db, { entidade: 'Pedido', entidadeId: pedidoId, acao: 'PRIORIDADE_PRODUCAO', descricao: prioridade })
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Pedido', entidadeId: pedidoId, acao: 'PRIORIDADE_PRODUCAO', descricao: prioridade })
   revalidatePath('/producao')
   revalidatePath(`/pedidos/${pedidoId}`)
   return { success: true, message: `Prioridade alterada para ${prioridade}.` }
@@ -159,6 +166,9 @@ export async function moverPedidoNaFila(
   pedidoId: number,
   direcao: 'subir' | 'descer',
 ): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0 || !['subir', 'descer'].includes(direcao)) {
     return { success: false, message: 'Movimento inválido.' }
   }
@@ -182,7 +192,7 @@ export async function moverPedidoNaFila(
       db.prepare('UPDATE pedidos SET ordem_fila = ? WHERE id = ? AND tenant_id = ?').run(outro.ordem_fila, atual.id, TENANT_ID)
       db.prepare('UPDATE pedidos SET ordem_fila = ? WHERE id = ? AND tenant_id = ?').run(atual.ordem_fila, outro.id, TENANT_ID)
       mudou = true
-      registrarAuditoria(db, { entidade: 'Pedido', entidadeId: pedidoId, acao: 'REORDENAR_FILA', descricao: direcao })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Pedido', entidadeId: pedidoId, acao: 'REORDENAR_FILA', descricao: direcao })
     })
     mover.immediate()
     revalidatePath('/producao')
@@ -200,6 +210,10 @@ export async function salvarBloqueioImpressora(data: {
   fimEm: string
   motivo: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   const inicio = new Date(data.inicioEm)
   const fim = new Date(data.fimEm)
   if (!Number.isSafeInteger(data.impressoraId) || data.impressoraId <= 0 ||
@@ -219,24 +233,30 @@ export async function salvarBloqueioImpressora(data: {
   const result = db.prepare(`INSERT INTO bloqueios_impressora
     (tenant_id, usuario_id, impressora_id, inicio_em, fim_em, motivo) VALUES (?, ?, ?, ?, ?, ?)`
   ).run(TENANT_ID, USUARIO_ID, data.impressoraId, inicio.toISOString(), fim.toISOString(), data.motivo.trim())
-  registrarAuditoria(db, { entidade: 'BloqueioImpressora', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'BloqueioImpressora', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
     descricao: data.motivo.trim(), detalhes: { impressoraId: data.impressoraId, inicio: inicio.toISOString(), fim: fim.toISOString() } })
   revalidatePath('/producao')
   return { success: true, message: 'Bloqueio incluído no planejamento.' }
 }
 
 export async function removerBloqueioImpressora(id: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Bloqueio inválido.' }
   const result = db.prepare('DELETE FROM bloqueios_impressora WHERE id = ? AND tenant_id = ?').run(id, TENANT_ID)
   if (result.changes !== 1) return { success: false, message: 'Bloqueio não encontrado.' }
-  registrarAuditoria(db, { entidade: 'BloqueioImpressora', entidadeId: id, acao: 'REMOVER', descricao: 'Bloqueio removido' })
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'BloqueioImpressora', entidadeId: id, acao: 'REMOVER', descricao: 'Bloqueio removido' })
   revalidatePath('/producao')
   return { success: true, message: 'Bloqueio removido.' }
 }
 
 export async function aplicarAtribuicoesSugeridas(): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
-    const plano = calcularPlanejamento()
+    const plano = calcularPlanejamento(TENANT_ID)
     const sugestoes = plano.semImpressora.filter((pedido) => pedido.impressora_sugerida_id)
     if (sugestoes.length === 0) return { success: false, message: 'Não há pedidos com atribuição sugerida.' }
     let aplicadas = 0
@@ -249,7 +269,7 @@ export async function aplicarAtribuicoesSugeridas(): Promise<{ success: boolean;
           pedido.fim_previsto_sugerido, pedido.id, TENANT_ID)
         if (result.changes === 1) {
           aplicadas++
-          registrarAuditoria(db, { entidade: 'Pedido', entidadeId: pedido.id, acao: 'ATRIBUICAO_AUTOMATICA',
+          registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Pedido', entidadeId: pedido.id, acao: 'ATRIBUICAO_AUTOMATICA',
             descricao: `${pedido.impressora_sugerida_nome}: ${pedido.inicio_previsto_sugerido} → ${pedido.fim_previsto_sugerido}` })
         }
       }

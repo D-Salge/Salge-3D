@@ -1,10 +1,8 @@
-﻿'use server'
+'use server'
 
 import db from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { exigirPerfil } from '@/lib/session'
-
-const TENANT_ID = 1
+import { exigirPerfil, exigirSessao } from '@/lib/session'
 
 export interface ConfiguracoesTenant {
   nome: string
@@ -35,6 +33,9 @@ export interface ActionResult {
 }
 
 export async function getConfiguracoes(): Promise<ConfiguracoesTenant> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT nome, meta_mensal, meta_lucro_mensal, meta_pedidos_mensal,
@@ -51,8 +52,10 @@ export async function getConfiguracoes(): Promise<ConfiguracoesTenant> {
 }
 
 export async function salvarConfiguracoes(data: ConfiguracoesTenant): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin'])
+  const TENANT_ID = sessao.tenantId
+
   try {
-    await exigirPerfil(['admin'])
     const nonNegative = [
       data.meta_mensal, data.meta_lucro_mensal, data.meta_pedidos_mensal,
       data.dias_cliente_inativo, data.dias_followup_orcamento, data.dias_pos_venda,

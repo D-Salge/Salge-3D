@@ -1,10 +1,9 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao } from '@/lib/session'
 import { projetarFluxoCaixa } from '@/lib/fluxo-caixa.mjs'
 import { listarCompetencias, vencimentoDaRecorrencia } from '@/lib/recorrencias.mjs'
-
-const TENANT_ID = 1
 
 export interface PeriodoFluxoCaixa {
   chave: string
@@ -21,6 +20,9 @@ export interface ProjecaoFluxoCaixa {
 }
 
 export async function getProjecaoFluxoCaixa(): Promise<ProjecaoFluxoCaixa> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const hoje = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())

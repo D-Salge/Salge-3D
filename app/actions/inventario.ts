@@ -1,12 +1,10 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { codigoEstoque } from '@/lib/barcode.mjs'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface ItemInventario {
   id: number
@@ -38,6 +36,9 @@ export interface EtiquetaEstoque {
 }
 
 export async function getInventario(): Promise<{ atual: InventarioAtual | null; etiquetas: EtiquetaEstoque[] }> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const cabecalho = db.prepare(`
     SELECT id, codigo, descricao, status, iniciado_em FROM inventarios
     WHERE tenant_id = ? AND status = 'Em contagem' ORDER BY id DESC LIMIT 1
@@ -72,6 +73,10 @@ export async function getInventario(): Promise<{ atual: InventarioAtual | null; 
 }
 
 export async function iniciarInventario(descricao: string): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (descricao.trim().length > 200) return { success: false, message: 'Descrição muito longa.' }
     const criar = db.transaction(() => {
@@ -91,7 +96,7 @@ export async function iniciarInventario(descricao: string): Promise<{ success: b
       const insumos = db.prepare(`SELECT id, estoque_atual AS saldo FROM insumos WHERE tenant_id = ? AND ativo = 1`).all(TENANT_ID) as Array<{ id: number; saldo: number }>
       for (const item of filamentos) inserir.run(inventarioId, 'Filamento', item.id, codigoEstoque('Filamento', item.id), item.saldo)
       for (const item of insumos) inserir.run(inventarioId, 'Insumo', item.id, codigoEstoque('Insumo', item.id), item.saldo)
-      registrarAuditoria(db, { entidade: 'Inventario', entidadeId: inventarioId, acao: 'INICIAR', descricao: `${codigo} · ${filamentos.length + insumos.length} item(ns)` })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Inventario', entidadeId: inventarioId, acao: 'INICIAR', descricao: `${codigo} · ${filamentos.length + insumos.length} item(ns)` })
     })
     try { criar.immediate() } catch (error) {
       if (error instanceof Error && error.message === 'OPEN') return { success: false, message: 'Conclua ou cancele o inventário em andamento.' }
@@ -106,6 +111,9 @@ export async function iniciarInventario(descricao: string): Promise<{ success: b
 }
 
 export async function registrarContagem(inventarioId: number, codigoItem: string, saldoContado: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(inventarioId) || inventarioId <= 0 || !Number.isFinite(saldoContado) || saldoContado < 0) {
     return { success: false, message: 'Código ou contagem inválida.' }
   }
@@ -119,7 +127,7 @@ export async function registrarContagem(inventarioId: number, codigoItem: string
   return { success: true, message: `${codigoItem.toUpperCase()} contado.` }
 }
 
-function ajustarLotesFilamento(inventarioId: number, itemId: number, saldoAtual: number, saldoNovo: number) {
+function ajustarLotesFilamento(inventarioId: number, itemId: number, saldoAtual: number, saldoNovo: number, TENANT_ID: number) {
   const diferenca = Math.round((saldoNovo - saldoAtual) * 1000) / 1000
   if (diferenca > 0) {
     db.prepare(`
@@ -145,6 +153,10 @@ function ajustarLotesFilamento(inventarioId: number, itemId: number, saldoAtual:
 }
 
 export async function concluirInventario(inventarioId: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(inventarioId) || inventarioId <= 0) return { success: false, message: 'Inventário inválido.' }
     let ajustes = 0
@@ -162,7 +174,7 @@ export async function concluirInventario(inventarioId: number): Promise<{ succes
         const atual = db.prepare(`SELECT ${item.tipo_item === 'Filamento' ? 'COALESCE(estoque_gramas, peso_rolo_gramas)' : 'estoque_atual'} AS saldo FROM ${tabela} WHERE id = ? AND tenant_id = ?`)
           .get(item.item_id, TENANT_ID) as { saldo: number } | undefined
         if (!atual) throw new Error('ITEM_NOT_FOUND')
-        if (item.tipo_item === 'Filamento') ajustarLotesFilamento(inventarioId, item.item_id, atual.saldo, item.saldo_contado)
+        if (item.tipo_item === 'Filamento') ajustarLotesFilamento(inventarioId, item.item_id, atual.saldo, item.saldo_contado, TENANT_ID)
         db.prepare(`UPDATE ${tabela} SET ${campo} = ? WHERE id = ? AND tenant_id = ?`).run(item.saldo_contado, item.item_id, TENANT_ID)
         db.prepare(`
           INSERT INTO movimentos_estoque (
@@ -175,7 +187,7 @@ export async function concluirInventario(inventarioId: number): Promise<{ succes
         ajustes += 1
       }
       db.prepare(`UPDATE inventarios SET status = 'Concluído', concluido_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?`).run(inventarioId)
-      registrarAuditoria(db, { entidade: 'Inventario', entidadeId: inventarioId, acao: 'CONCLUIR', descricao: `${ajustes} ajuste(s) de estoque` })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Inventario', entidadeId: inventarioId, acao: 'CONCLUIR', descricao: `${ajustes} ajuste(s) de estoque` })
     })
     try { concluir.immediate() } catch (error) {
       const code = error instanceof Error ? error.message : ''
@@ -196,13 +208,16 @@ export async function concluirInventario(inventarioId: number): Promise<{ succes
 }
 
 export async function cancelarInventario(inventarioId: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(inventarioId) || inventarioId <= 0) return { success: false, message: 'Inventário inválido.' }
   const result = db.prepare(`
     UPDATE inventarios SET status = 'Cancelado'
     WHERE id = ? AND tenant_id = ? AND status = 'Em contagem'
   `).run(inventarioId, TENANT_ID)
   if (result.changes !== 1) return { success: false, message: 'Inventário em andamento não encontrado.' }
-  registrarAuditoria(db, { entidade: 'Inventario', entidadeId: inventarioId, acao: 'CANCELAR', descricao: 'Contagem cancelada sem alterar o estoque' })
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Inventario', entidadeId: inventarioId, acao: 'CANCELAR', descricao: 'Contagem cancelada sem alterar o estoque' })
   revalidatePath('/estoque/inventario')
   return { success: true, message: 'Inventário cancelado sem alterar o estoque.' }
 }

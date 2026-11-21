@@ -1,9 +1,8 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
 
 export interface FilamentoCompleto {
   id: number
@@ -23,6 +22,9 @@ export interface ActionResult {
 }
 
 export async function getFilamentosLista(): Promise<FilamentoCompleto[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT id, material, cor, peso_rolo_gramas, preco_rolo, estoque_gramas,
@@ -38,6 +40,9 @@ export async function salvarFilamento(
   id: number | null,
   data: Omit<FilamentoCompleto, 'id'>
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!data.material || !data.cor) return { success: false, message: 'Material e cor são obrigatórios.' }
     const estoque = data.estoque_gramas ?? data.peso_rolo_gramas
@@ -74,9 +79,9 @@ export async function salvarFilamento(
           INSERT INTO filamentos (
             tenant_id, usuario_id, material, cor, peso_rolo_gramas, preco_rolo,
             estoque_gramas, estoque_minimo_gramas, marca, fornecedor
-          ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-          TENANT_ID, data.material.trim(), data.cor.trim(), data.peso_rolo_gramas,
+          TENANT_ID, sessao.usuarioId, data.material.trim(), data.cor.trim(), data.peso_rolo_gramas,
           data.preco_rolo, novoSaldo, data.estoque_minimo_gramas,
           data.marca?.trim() || null, data.fornecedor?.trim() || null,
         )
@@ -116,9 +121,9 @@ export async function salvarFilamento(
           INSERT INTO movimentos_estoque (
             tenant_id, usuario_id, tipo_item, item_id, tipo, quantidade,
             saldo_anterior, saldo_posterior, motivo
-          ) VALUES (?, 1, 'Filamento', ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, 'Filamento', ?, ?, ?, ?, ?, ?)
         `).run(
-          TENANT_ID, filamentoId, id ? 'Ajuste' : 'Entrada',
+          TENANT_ID, sessao.usuarioId, filamentoId, id ? 'Ajuste' : 'Entrada',
           Math.abs(novoSaldo - saldoAnterior), saldoAnterior, novoSaldo,
           id ? 'Saldo atualizado no cadastro' : 'Estoque inicial',
         )
@@ -142,6 +147,9 @@ export async function salvarFilamento(
 }
 
 export async function deletarFilamento(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     const res = db.prepare('UPDATE filamentos SET ativo = 0 WHERE id = ? AND tenant_id = ? AND ativo = 1').run(id, TENANT_ID)
     if (res.changes === 0) return { success: false, message: 'Filamento não encontrado.' }

@@ -4,11 +4,8 @@ import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { atualizarLoteProducaoNoBanco, mensagemErroInicioProducao } from '@/lib/inicio-producao.mjs'
 import { dividirQuantidadeEmPlacas, validarQuantidadeLote } from '@/lib/lotes-producao.mjs'
-import { exigirPerfil } from '@/lib/session'
+import { exigirPerfil, exigirSessao } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
-const USUARIO_ID = 1
 
 export interface LoteProducao {
   id: number
@@ -45,6 +42,9 @@ export interface PedidoParaLote {
 }
 
 export async function getLotesProducao(): Promise<{ lotes: LoteProducao[]; pedidos: PedidoParaLote[] }> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const lotes = db.prepare(`
     SELECT l.id, l.pedido_id, p.numero_orcamento, p.nome_da_peca, c.nome AS cliente_nome,
       p.quantidade AS quantidade_pedido, l.codigo, l.impressora_id, imp.nome AS impressora_nome,
@@ -81,6 +81,10 @@ export async function getLotesProducao(): Promise<{ lotes: LoteProducao[]; pedid
 }
 
 export async function criarLotesAutomaticos(pedidoId: number): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return { success: false, message: 'Pedido inválido.' }
     let criados = 0
@@ -142,7 +146,7 @@ export async function criarLotesAutomaticos(pedidoId: number): Promise<{ success
           referencia, `Gerado automaticamente com capacidade de ${capacidade} unidade(s) por placa`)
       })
       criados = placas.length
-      registrarAuditoria(db, { entidade: 'Pedido', entidadeId: pedidoId, acao: 'GERAR_PLACAS',
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Pedido', entidadeId: pedidoId, acao: 'GERAR_PLACAS',
         descricao: `${criados} placa(s) · capacidade ${capacidade}` })
     })
     try { criar.immediate() } catch (error) {
@@ -170,6 +174,10 @@ export async function criarLoteProducao(data: {
   placaReferencia: string
   observacoes: string
 }): Promise<{ success: boolean; message: string }> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0 ||
         !Number.isFinite(data.quantidade) || data.quantidade <= 0) {
@@ -224,7 +232,7 @@ export async function criarLoteProducao(data: {
         TENANT_ID, USUARIO_ID, data.pedidoId, data.impressoraId, codigo,
         data.quantidade, data.placaReferencia.trim() || null, data.observacoes.trim() || null,
       )
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'LoteProducao', entidadeId: Number(result.lastInsertRowid), acao: 'CRIAR',
         descricao: `${codigo} · ${data.quantidade} unidade(s)`,
       })

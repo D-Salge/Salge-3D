@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 /**
  * app/actions/recebimentos.ts  -  v1
@@ -6,13 +6,12 @@
  */
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { distribuirRecebimento } from '@/lib/financeiro.mjs'
 import { registrarReceitaFiscalDeRecebimento } from '@/lib/receitas-fiscais.mjs'
 import { percentualDoPedido } from '@/lib/sinal.mjs'
 import { revalidatePath } from 'next/cache'
-
-const TENANT_ID = 1
 
 // --- Tipos publicos ---
 
@@ -62,6 +61,9 @@ export interface ActionResult {
 // --- Queries de leitura ---
 
 export async function getRecebimentosPorPedido(pedidoId: number): Promise<Recebimento[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `SELECT r.id, r.pedido_id, r.valor, r.forma_pagamento, r.data_recebimento, r.observacao,
@@ -77,6 +79,9 @@ export async function getRecebimentosPorPedido(pedidoId: number): Promise<Recebi
 }
 
 export async function getContextoRecebimentoPedido(pedidoId: number): Promise<ContextoRecebimentoPedido | null> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) return null
   const contexto = db.prepare(`
     SELECT p.valor_total_cobrado AS valor_total,
@@ -95,6 +100,9 @@ export async function getContextoRecebimentoPedido(pedidoId: number): Promise<Co
 }
 
 export async function getPedidosComSaldoPendente(): Promise<RecebimentoResumo[]> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   return db
     .prepare(
       `WITH recebidos AS (
@@ -149,6 +157,9 @@ export async function getResumoRecebimentos(): Promise<{
   totalVencido: number
   receitaCompetenciaMes: number
 }> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const mesRow = db
     .prepare(
       `SELECT COALESCE(SUM(valor), 0) AS total
@@ -231,6 +242,9 @@ export async function registrarRecebimento(data: {
   conta_financeira_id?: number | null
   tipo_recebimento?: 'Sinal' | 'Parcial' | 'Quitacao'
 }): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     if (!Number.isSafeInteger(data.pedido_id) || data.pedido_id <= 0) {
       return { success: false, message: 'Pedido invalido.' }
@@ -317,7 +331,7 @@ export async function registrarRecebimento(data: {
       const recebimentoId = Number(result.lastInsertRowid)
       registrarReceitaFiscalDeRecebimento(db, {
         tenantId: TENANT_ID,
-        usuarioId: pedido.usuario_id,
+        usuarioId: sessao.usuarioId,
         recebimentoId,
         pedidoId: data.pedido_id,
       })
@@ -330,7 +344,7 @@ export async function registrarRecebimento(data: {
       for (const item of distribuicao.alocacoes) {
         alocar.run(recebimentoId, item.parcelaId, item.valor)
       }
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Recebimento',
         entidadeId: recebimentoId,
         acao: 'CRIAR',
@@ -377,6 +391,9 @@ export async function registrarRecebimento(data: {
 }
 
 export async function deletarRecebimento(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   try {
     const estornar = db.transaction(() => {
       const res = db.prepare(`UPDATE recebimentos
@@ -389,7 +406,7 @@ export async function deletarRecebimento(id: number): Promise<ActionResult> {
         SET cancelada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         WHERE recebimento_id = ? AND tenant_id = ? AND cancelada_em IS NULL`
       ).run(id, TENANT_ID)
-      registrarAuditoria(db, {
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId,
         entidade: 'Recebimento', entidadeId: id, acao: 'ESTORNAR',
         descricao: 'Recebimento estornado pelo usuário',
       })

@@ -1,14 +1,13 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { calcularTotalCompra, precoUnitarioEstoque, ratearCompraPorCategoria } from '@/lib/compras.mjs'
 import { gerarParcelas } from '@/lib/financeiro.mjs'
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 
-const TENANT_ID = 1
-const USUARIO_ID = 1
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export type TipoItemCompra = 'Filamento' | 'Insumo'
@@ -116,6 +115,9 @@ function validarItem(item: ItemCompraInput) {
 }
 
 export async function getComprasDados(): Promise<ComprasDados> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const fornecedores = db.prepare(`
     SELECT id, nome, documento, telefone, email, site, observacoes
     FROM fornecedores WHERE tenant_id = ? AND ativo = 1 ORDER BY nome
@@ -199,6 +201,10 @@ export async function salvarFornecedor(
   id: number | null,
   data: Omit<FornecedorCompra, 'id'>,
 ): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     const nome = data.nome.trim()
     if (!nome || nome.length > 120) return { success: false, message: 'Informe um nome válido para o fornecedor.' }
@@ -219,7 +225,7 @@ export async function salvarFornecedor(
           data.site?.trim() || null, data.observacoes?.trim() || null, id, TENANT_ID)
       if (result.changes !== 1) return { success: false, message: 'Fornecedor não encontrado.' }
     }
-    registrarAuditoria(db, { entidade: 'Fornecedor', entidadeId: fornecedorId, acao: id ? 'ATUALIZAR' : 'CRIAR', descricao: nome })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Fornecedor', entidadeId: fornecedorId, acao: id ? 'ATUALIZAR' : 'CRIAR', descricao: nome })
     revalidatePath('/compras')
     return { success: true, message: id ? 'Fornecedor atualizado.' : 'Fornecedor cadastrado.' }
   } catch (error) {
@@ -232,6 +238,9 @@ export async function salvarFornecedor(
 }
 
 export async function arquivarFornecedor(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Fornecedor inválido.' }
   const aberto = db.prepare(`SELECT 1 FROM compras WHERE tenant_id = ? AND fornecedor_id = ? AND status = 'Pedido' LIMIT 1`)
     .get(TENANT_ID, id)
@@ -243,6 +252,10 @@ export async function arquivarFornecedor(id: number): Promise<ActionResult> {
 }
 
 export async function criarCompra(data: CompraInput): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(data.fornecedorId) || data.fornecedorId <= 0) return { success: false, message: 'Selecione um fornecedor.' }
     if (!DATA_RE.test(data.pedidoEm) || !DATA_RE.test(data.vencimentoEm) ||
@@ -277,7 +290,7 @@ export async function criarCompra(data: CompraInput): Promise<ActionResult> {
         (compra_id, tipo_item, item_id, quantidade_volumes, quantidade_estoque, valor_total)
         VALUES (?, ?, ?, ?, ?, ?)`)
       for (const item of data.itens) inserirItem.run(compraId, item.tipoItem, item.itemId, item.quantidadeVolumes, item.quantidadeEstoque, item.valorTotal)
-      registrarAuditoria(db, { entidade: 'Compra', entidadeId: compraId, acao: 'CRIAR', descricao: numero,
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Compra', entidadeId: compraId, acao: 'CRIAR', descricao: numero,
         detalhes: { fornecedorId: data.fornecedorId, itens: data.itens.length } })
     })
     criar.immediate()
@@ -293,6 +306,10 @@ export async function criarCompra(data: CompraInput): Promise<ActionResult> {
 }
 
 export async function receberCompra(id: number, recebidoEm: string): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(id) || id <= 0 || !DATA_RE.test(recebidoEm)) return { success: false, message: 'Compra ou data de recebimento inválida.' }
     const receber = db.transaction(() => {
@@ -364,7 +381,7 @@ export async function receberCompra(id: number, recebidoEm: string): Promise<Act
       }
       db.prepare(`UPDATE compras SET status = 'Recebido', recebido_em = ? WHERE id = ? AND tenant_id = ?`)
         .run(recebidoEm, id, TENANT_ID)
-      registrarAuditoria(db, { entidade: 'Compra', entidadeId: id, acao: 'RECEBER', descricao: compra.numero,
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Compra', entidadeId: id, acao: 'RECEBER', descricao: compra.numero,
         detalhes: { recebidoEm, itens: itens.length, despesas: rateio } })
     })
     receber.immediate()
@@ -382,11 +399,14 @@ export async function receberCompra(id: number, recebidoEm: string): Promise<Act
 }
 
 export async function cancelarCompra(id: number): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+
   if (!Number.isSafeInteger(id) || id <= 0) return { success: false, message: 'Compra inválida.' }
   const result = db.prepare(`UPDATE compras SET status = 'Cancelado' WHERE id = ? AND tenant_id = ? AND status = 'Pedido'`)
     .run(id, TENANT_ID)
   if (result.changes !== 1) return { success: false, message: 'Somente compras abertas podem ser canceladas.' }
-  registrarAuditoria(db, { entidade: 'Compra', entidadeId: id, acao: 'CANCELAR', descricao: 'Pedido de compra cancelado' })
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Compra', entidadeId: id, acao: 'CANCELAR', descricao: 'Pedido de compra cancelado' })
   revalidarCompras()
   return { success: true, message: 'Compra cancelada sem alterar o estoque.' }
 }

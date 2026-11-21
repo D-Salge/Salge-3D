@@ -2,7 +2,7 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { exigirSessao } from '@/lib/session'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
 export interface ContaFinanceira {
@@ -73,7 +73,7 @@ export async function getTransferenciasFinanceiras(): Promise<TransferenciaFinan
 
 export async function atualizarSaldoInicial(contaId: number, saldoInicial: number) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (!Number.isSafeInteger(contaId) || contaId <= 0 || !Number.isFinite(saldoInicial) ||
         Math.abs(saldoInicial) > 100_000_000) {
       return { success: false, message: 'Saldo inicial inválido.' }
@@ -102,7 +102,7 @@ export async function registrarTransferencia(data: {
   descricao?: string
 }) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     if (![data.contaOrigemId, data.contaDestinoId].every((id) => Number.isSafeInteger(id) && id > 0) ||
         data.contaOrigemId === data.contaDestinoId) {
       return { success: false, message: 'Escolha duas contas diferentes.' }
@@ -158,7 +158,7 @@ export async function registrarTransferencia(data: {
 
 export async function estornarTransferencia(id: number) {
   try {
-    const sessao = await exigirSessao()
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const estornar = db.transaction(() => {
       const result = db.prepare(`UPDATE transferencias_financeiras
         SET estornada_em = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')

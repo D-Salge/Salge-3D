@@ -1,12 +1,11 @@
 'use server'
 
 import db from '@/lib/db'
+import { exigirSessao, exigirPerfil } from '@/lib/session'
 import { registrarAuditoria } from '@/lib/auditoria'
 import { ACOES_OCORRENCIA, determinarStatusExpedicao, normalizarCodigoRastreio, resumirAtendimento, TIPOS_OCORRENCIA } from '@/lib/atendimento.mjs'
 import { revalidatePath } from 'next/cache'
 
-const TENANT_ID = 1
-const USUARIO_ID = 1
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export interface OcorrenciaQualidade {
@@ -69,6 +68,9 @@ function revalidar(pedidoId?: number) {
 }
 
 export async function getAtendimentoDados(pedidoId?: number): Promise<AtendimentoDados> {
+  const sessao = await exigirSessao()
+  const TENANT_ID = sessao.tenantId
+
   const filtro = pedidoId ? ' AND p.id = ?' : ''
   const parametros = pedidoId ? [TENANT_ID, pedidoId] : [TENANT_ID]
   const ocorrencias = db.prepare(`
@@ -107,6 +109,10 @@ export async function registrarOcorrenciaQualidade(data: {
   pedidoId: number; tipo: string; acao: string; quantidade: number; custoEstimado: number;
   descricao: string; prazoEm: string | null
 }): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     if (!Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0 || !TIPOS_OCORRENCIA.includes(data.tipo) || !ACOES_OCORRENCIA.includes(data.acao)) {
       return { success: false, message: 'Pedido, tipo ou ação inválida.' }
@@ -145,7 +151,7 @@ export async function registrarOcorrenciaQualidade(data: {
       db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
         VALUES (?, ?, ?, 'Ocorrência de qualidade', ?)`)
         .run(TENANT_ID, data.pedidoId, USUARIO_ID, `${data.tipo} · ${data.acao} · ${data.quantidade} unidade(s)`)
-      registrarAuditoria(db, { entidade: 'OcorrenciaQualidade', entidadeId: id, acao: 'CRIAR', descricao: data.descricao.trim() })
+      registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'OcorrenciaQualidade', entidadeId: id, acao: 'CRIAR', descricao: data.descricao.trim() })
     })
     criar.immediate()
     revalidar(data.pedidoId)
@@ -157,6 +163,10 @@ export async function registrarOcorrenciaQualidade(data: {
 }
 
 export async function resolverOcorrenciaQualidade(id: number, pedidoId: number, resolucao: string): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   if (!Number.isSafeInteger(id) || id <= 0 || !Number.isSafeInteger(pedidoId) || pedidoId <= 0 || !resolucao.trim() || resolucao.length > 2000) {
     return { success: false, message: 'Informe uma resolução válida.' }
   }
@@ -173,7 +183,7 @@ export async function resolverOcorrenciaQualidade(id: number, pedidoId: number, 
     db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
       VALUES (?, ?, ?, 'Ocorrência resolvida', ?)`)
       .run(TENANT_ID, pedidoId, USUARIO_ID, resolucao.trim())
-    registrarAuditoria(db, { entidade: 'OcorrenciaQualidade', entidadeId: id, acao: 'RESOLVER', descricao: resolucao.trim() })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'OcorrenciaQualidade', entidadeId: id, acao: 'RESOLVER', descricao: resolucao.trim() })
     resolvida = true
   })
   resolver.immediate()
@@ -187,6 +197,10 @@ export async function registrarExpedicao(data: {
   urlRastreio: string; postadoEm: string | null; previsaoEntrega: string | null;
   custo: number; observacoes: string
 }): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   try {
     const modalidades = ['Retirada', 'Entrega local', 'Transportadora', 'Correios', 'Outro']
     if (!Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0 || !modalidades.includes(data.modalidade)) {
@@ -218,7 +232,7 @@ export async function registrarExpedicao(data: {
     db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
       VALUES (?, ?, ?, 'Expedição registrada', ?)`)
       .run(TENANT_ID, data.pedidoId, USUARIO_ID, `${data.modalidade}${data.codigoRastreio ? ` · ${normalizarCodigoRastreio(data.codigoRastreio)}` : ''}`)
-    registrarAuditoria(db, { entidade: 'Expedicao', entidadeId: id, acao: 'CRIAR', descricao: `${data.modalidade} · pedido ${data.pedidoId}` })
+    registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Expedicao', entidadeId: id, acao: 'CRIAR', descricao: `${data.modalidade} · pedido ${data.pedidoId}` })
     revalidar(data.pedidoId)
     return { success: true, message: data.postadoEm ? 'Expedição registrada em trânsito.' : 'Expedição criada para preparação.' }
   } catch (error) {
@@ -228,6 +242,10 @@ export async function registrarExpedicao(data: {
 }
 
 export async function marcarExpedicaoEntregue(id: number, pedidoId: number, entregueEm: string): Promise<ActionResult> {
+  const sessao = await exigirPerfil(['admin', 'operador'])
+  const TENANT_ID = sessao.tenantId
+  const USUARIO_ID = sessao.usuarioId
+
   if (!Number.isSafeInteger(id) || id <= 0 || !Number.isSafeInteger(pedidoId) || pedidoId <= 0 || !DATA_RE.test(entregueEm)) {
     return { success: false, message: 'Expedição ou data inválida.' }
   }
@@ -238,7 +256,7 @@ export async function marcarExpedicaoEntregue(id: number, pedidoId: number, entr
   db.prepare(`INSERT INTO historico_pedidos (tenant_id, pedido_id, usuario_id, evento, descricao)
     VALUES (?, ?, ?, 'Expedição entregue', ?)`)
     .run(TENANT_ID, pedidoId, USUARIO_ID, `Entrega confirmada em ${entregueEm}`)
-  registrarAuditoria(db, { entidade: 'Expedicao', entidadeId: id, acao: 'ENTREGAR', descricao: entregueEm })
+  registrarAuditoria(db, { tenantId: sessao.tenantId, usuarioId: sessao.usuarioId, entidade: 'Expedicao', entidadeId: id, acao: 'ENTREGAR', descricao: entregueEm })
   revalidar(pedidoId)
   return { success: true, message: 'Entrega da expedição confirmada.' }
 }

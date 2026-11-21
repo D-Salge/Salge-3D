@@ -2,15 +2,14 @@
 
 import db from '@/lib/db'
 import { registrarAuditoria } from '@/lib/auditoria'
-import { exigirSessao } from '@/lib/session'
+import { exigirPerfil } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
 type ActionResult = { success: boolean; message: string }
 
 export async function ativarVersaoArquivo(id: number, pedidoId: number): Promise<ActionResult> {
   try {
-    const sessao = await exigirSessao()
-    if (sessao.perfil === 'visualizador') return { success: false, message: 'Perfil somente leitura.' }
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const arquivo = db.prepare(`SELECT ap.id, ap.produto_id, ap.nome_chave, ap.nome_logico, ap.versao
       FROM arquivos_producao ap
       JOIN pedidos p ON p.id = ? AND p.tenant_id = ap.tenant_id
@@ -41,8 +40,7 @@ export async function ativarVersaoArquivo(id: number, pedidoId: number): Promise
 
 export async function removerArquivoProducao(id: number, pedidoId: number): Promise<ActionResult> {
   try {
-    const sessao = await exigirSessao()
-    if (sessao.perfil !== 'admin') return { success: false, message: 'Somente o administrador pode excluir arquivos armazenados.' }
+    const sessao = await exigirPerfil(['admin'])
     const arquivo = db.prepare(`SELECT ap.nome_logico, ap.nome_chave, ap.versao, ap.ativo,
         ap.pedido_id, ap.produto_id
       FROM arquivos_producao ap
@@ -89,8 +87,7 @@ export async function salvarChecklistProduto(data: {
   qualidade: string[]
 }): Promise<ActionResult> {
   try {
-    const sessao = await exigirSessao()
-    if (sessao.perfil === 'visualizador') return { success: false, message: 'Perfil somente leitura.' }
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const limpar = (itens: string[]) => itens.map((item) => item.trim()).filter(Boolean)
     const producao = limpar(data.producao)
     const qualidade = limpar(data.qualidade)
@@ -129,8 +126,7 @@ export async function atualizarChecklistPedido(data: {
   concluido: boolean
 }): Promise<ActionResult> {
   try {
-    const sessao = await exigirSessao()
-    if (sessao.perfil === 'visualizador') return { success: false, message: 'Perfil somente leitura.' }
+    const sessao = await exigirPerfil(['admin', 'operador'])
     const item = db.prepare(`SELECT pci.id, pci.texto, pci.etapa
       FROM produto_checklist_itens pci JOIN pedidos p ON p.produto_id = pci.produto_id
       WHERE pci.id = ? AND pci.tenant_id = ? AND pci.ativo = 1
