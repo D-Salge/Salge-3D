@@ -7,7 +7,7 @@ import { DashboardOverview } from "@/app/components/DashboardOverview";
 import { exigirSessao } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "Visão Geral · Salge 3D",
+  title: "Visão Geral",
   description: "Resumo de pedidos, recebimentos e produção.",
 };
 

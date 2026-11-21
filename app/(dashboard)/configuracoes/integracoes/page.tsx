@@ -3,7 +3,7 @@ import { getDiagnosticoSistema } from '@/app/actions/integracoes'
 import { getEnviosWhatsAppOficial } from '@/app/actions/whatsapp'
 import { IntegracoesPage } from '@/app/components/IntegracoesPage'
 
-export const metadata: Metadata = { title: 'Integrações e hospedagem · Salge 3D' }
+export const metadata: Metadata = { title: 'Integrações e hospedagem' }
 
 export default async function Page() {
   const [diagnostico, envios] = await Promise.all([getDiagnosticoSistema(), getEnviosWhatsAppOficial()])

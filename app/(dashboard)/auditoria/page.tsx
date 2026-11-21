@@ -3,7 +3,7 @@ import { ShieldCheck } from 'lucide-react'
 import { getEventosAuditoria } from '@/app/actions/auditoria'
 import { exigirPerfil } from '@/lib/session'
 
-export const metadata: Metadata = { title: 'Auditoria · Salge 3D' }
+export const metadata: Metadata = { title: 'Auditoria' }
 
 export default async function AuditoriaPage() {
   await exigirPerfil(['admin'])

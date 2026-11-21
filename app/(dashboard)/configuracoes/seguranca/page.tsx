@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { getBackups } from '@/app/actions/backups'
 import { BackupsPage } from '@/app/components/BackupsPage'
 
-export const metadata: Metadata = { title: 'Segurança e backups · Salge 3D' }
+export const metadata: Metadata = { title: 'Segurança e backups' }
 
 export default async function Page() {
   const backups = await getBackups()

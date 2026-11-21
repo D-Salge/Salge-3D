@@ -5,7 +5,7 @@ import { getResumoEstoque } from '@/app/actions/estoque'
 import { LotesFilamento } from '@/app/components/LotesFilamento'
 import { ListaComprasEstoque } from '@/app/components/ListaComprasEstoque'
 
-export const metadata: Metadata = { title: 'Movimentações de Estoque · Salge 3D' }
+export const metadata: Metadata = { title: 'Movimentações de Estoque' }
 
 function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

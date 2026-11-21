@@ -38,17 +38,6 @@ export function BuscaGlobal() {
   const buscaAtual = useRef(0)
 
   useEffect(() => {
-    const atalho = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setAberta((valor) => !valor)
-      }
-    }
-    window.addEventListener('keydown', atalho)
-    return () => window.removeEventListener('keydown', atalho)
-  }, [])
-
-  useEffect(() => {
     if (!aberta) return
     const overflowAnterior = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -102,7 +91,6 @@ export function BuscaGlobal() {
       <button type="button" onClick={() => setAberta(true)} aria-label="Buscar no ERP" className="flex h-9 items-center gap-2 rounded-lg border border-border bg-subtle px-2.5 text-muted-foreground transition hover:border-border hover:text-secondary-foreground sm:min-w-44 sm:px-3">
         <Search size={14} />
         <span className="hidden flex-1 text-left text-xs sm:block">Buscar no ERP</span>
-        <kbd className="hidden rounded border border-border bg-black/20 px-1.5 py-0.5 font-sans text-[9px] text-muted-foreground md:block">Ctrl K</kbd>
       </button>
 
       {aberta && (

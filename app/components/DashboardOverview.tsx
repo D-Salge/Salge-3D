@@ -93,7 +93,7 @@ export function DashboardOverview({
             icon: <ReceiptText size={16} />,
           },
           {
-            label: "Filamento disponível",
+            label: "Estoque físico de filamento",
             value: `${(visual.filamentoGramas / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} kg`,
             sub: stats.estoqueBaixo
               ? `${stats.estoqueBaixo} ${stats.estoqueBaixo === 1 ? "item precisa" : "itens precisam"} de reposição`

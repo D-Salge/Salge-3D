@@ -4,7 +4,7 @@ import { ConfiguracoesForm } from '@/app/components/ConfiguracoesForm'
 import { exigirPerfil } from '@/lib/session'
 
 export const metadata: Metadata = {
-  title: 'Configurações · Salge 3D',
+  title: 'Configurações',
   description: 'Configurações do sistema.',
 }
 

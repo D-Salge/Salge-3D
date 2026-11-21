@@ -4,7 +4,7 @@ import { getFilamentosParaConsumo, getImpressoras, getPedidoDetalhes } from '@/a
 import { PedidoDetalhesPage } from '@/app/components/PedidoDetalhesPage'
 import { configuracaoMercadoPago } from '@/lib/mercado-pago.mjs'
 
-export const metadata: Metadata = { title: 'Detalhes do pedido · Salge 3D' }
+export const metadata: Metadata = { title: 'Detalhes do pedido' }
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

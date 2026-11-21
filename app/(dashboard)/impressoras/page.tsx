@@ -8,7 +8,7 @@ import { ImpressorasPage } from '@/app/components/ImpressorasPage'
 import { getBambuSetup } from '@/app/actions/bambu'
 import { BambuMonitor } from '@/app/components/BambuMonitor'
 
-export const metadata: Metadata = { title: 'Impressoras · Salge 3D' }
+export const metadata: Metadata = { title: 'Impressoras' }
 
 export default async function Page() {
   const [impressoras, indicadores, manutencoes, bambuSetup] = await Promise.all([

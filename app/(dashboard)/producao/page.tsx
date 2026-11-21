@@ -17,7 +17,7 @@ import { BambuMonitor } from '@/app/components/BambuMonitor'
 import { getBambuSetup } from '@/app/actions/bambu'
 
 export const metadata: Metadata = {
-  title: 'Produção · Salge 3D',
+  title: 'Produção',
   description: 'Acompanhamento da fila de produção em Kanban.',
 }
 

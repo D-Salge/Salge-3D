@@ -5,7 +5,7 @@ import { getConciliacaoBancaria } from '@/app/actions/conciliacao'
 import { getContasFinanceiras } from '@/app/actions/contas-financeiras'
 import { ConciliacaoBancaria } from '@/app/components/ConciliacaoBancaria'
 
-export const metadata: Metadata = { title: 'Conciliação bancária · Salge 3D' }
+export const metadata: Metadata = { title: 'Conciliação bancária' }
 
 export default async function Page() {
   const [dados, contas] = await Promise.all([getConciliacaoBancaria(), getContasFinanceiras()])

@@ -254,7 +254,7 @@ function Meta({
     <div className="studio-sidebar-goal">
       <div className="rounded-2xl border border-border bg-subtle p-4">
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Recebido no mês</span>
+          <span className="text-xs text-muted-foreground">Faturamento no mês</span>
           <TrendingUp size={15} className="text-muted-foreground" />
         </div>
         <p className="text-sm font-medium">Meta do mês</p>

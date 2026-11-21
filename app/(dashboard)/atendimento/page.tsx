@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getAtendimentoDados } from '@/app/actions/atendimento'
 import { AtendimentoPage } from '@/app/components/AtendimentoPage'
 
-export const metadata: Metadata = { title: 'Qualidade e expedição · Salge 3D' }
+export const metadata: Metadata = { title: 'Qualidade e expedição' }
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pedido?: string }> }) {
   const params = await searchParams

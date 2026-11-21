@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { executarTestesInterfaceHttp } from './ui-smoke-http.mjs'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -611,6 +612,7 @@ try {
 
   db = new Database(caminhoBanco)
   db.pragma('foreign_keys = ON')
+  await executarTestesInterfaceHttp(baseUrl, dados.sessoes.adminA)
   await executarTestesHttp(baseUrl, db, dados, actions)
   await executarTestesPlates(baseUrl, db, dados, actions)
   await executarTestesBambu(baseUrl, db, dados, actions)
