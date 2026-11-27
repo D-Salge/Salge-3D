@@ -42,8 +42,8 @@ function carregarTs(caminho, dependencias = {}) {
   return ambiente.exports
 }
 const auditoria = carregarTs('../lib/auditoria.ts')
-function actionOrcamento(db, sessao = contexto) {
-  return carregarTs('../app/actions/operacao.ts', {
+function carregarAcoes(caminho, db, sessao = contexto) {
+  return carregarTs(caminho, {
     '@/lib/db': { default: db },
     '@/lib/session': { exigirPerfil: async perfis => {
       if (!sessao) throw new Error('UNAUTHORIZED')
@@ -52,7 +52,11 @@ function actionOrcamento(db, sessao = contexto) {
     } },
     '@/lib/auditoria': auditoria,
     'next/cache': { revalidatePath() {} },
-  }).atualizarStatusOrcamento
+  })
+}
+
+function actionOrcamento(db, sessao = contexto) {
+  return carregarAcoes('../app/actions/operacao.ts', db, sessao).atualizarStatusOrcamento
 }
 
 function snapshotOrcamento(db, pedidoId) {
@@ -148,6 +152,47 @@ function estornarEntregaNoTeste(db, pedidoId, entregaId, operacaoId) {
     return resultado
   }).immediate()
 }
+
+test('compra de dois rolos de 1 kg por R$ 200 custa R$ 10 ao consumir 100 g', async t => {
+  const { db, produtoId, versaoId } = ambiente(t)
+  const filamentoId = criarFilamento(db, 'Verde', 0, 75)
+  const lerHistorico = db.prepare('SELECT * FROM lotes_filamento WHERE codigo = ? AND filamento_id = ?')
+  const historico = lerHistorico.get('MAT-Verde', filamentoId)
+  const fornecedorId = Number(db.prepare("INSERT INTO fornecedores (tenant_id, usuario_id, nome) VALUES (1, 1, 'Fornecedor de teste')").run().lastInsertRowid)
+  const compras = carregarAcoes('../app/actions/compras.ts', db)
+  const data = '2026-11-27'
+  const criada = await compras.criarCompra({
+    fornecedorId, pedidoEm: data, previsaoEntrega: null, vencimentoEm: data, pagoEm: null,
+    frete: 0, desconto: 0, formaPagamento: 'Pix', parcelas: 1, observacoes: '',
+    itens: [{ tipoItem: 'Filamento', itemId: filamentoId, quantidadeVolumes: 2, quantidadeEstoque: 2000, valorTotal: 200 }],
+  })
+  assert.equal(criada.success, true, criada.message)
+  const compra = db.prepare('SELECT id FROM compras WHERE fornecedor_id = ?').get(fornecedorId)
+  const recebida = await compras.receberCompra(compra.id, data)
+  assert.equal(recebida.success, true, recebida.message)
+
+  const { ordemId } = criarOrdemProducaoEstoqueNoBanco(db, contexto, {
+    produtoId, produtoVersaoId: versaoId, quantidadePlanejada: 1, quantidadePorPlate: 1,
+    execucoesPlanejadas: 1, impressoraId: 1, tempoEstimadoExecucaoHoras: 1,
+    identificacaoLote: 'FAB-DOIS-ROLOS', arquivosReferencia: '', observacoes: '',
+    filamentos: [{ filamentoId, gramasPrevistas: 100 }], insumos: [],
+  })
+  atualizarStatusOrdemProducaoEstoqueNoBanco(db, contexto, ordemId, 'Em produção')
+  atualizarStatusOrdemProducaoEstoqueNoBanco(db, contexto, ordemId, 'Conferência')
+  concluirOrdemProducaoEstoqueNoBanco(db, contexto, {
+    ordemId, operacaoId: 'consumo-dois-rolos', quantidadeFabricada: 1, quantidadeAprovada: 1,
+    quantidadeReprovada: 0, tempoRealHoras: 1, horasTrabalhoReal: 0, falhas: 0,
+    custosAdicionais: 0, desperdiciosObservacoes: '', filamentos: [{ filamentoId, gramasReais: 100 }], insumos: [],
+  })
+
+  assert.equal(db.prepare('SELECT custo_real FROM ordem_producao_estoque_filamentos WHERE ordem_id = ? AND filamento_id = ?')
+    .get(ordemId, filamentoId).custo_real, 10)
+  assert.deepEqual(db.prepare('SELECT peso_inicial_gramas, saldo_gramas, preco_compra FROM lotes_filamento WHERE filamento_id = ? AND id <> ?')
+    .get(filamentoId, historico.id), { peso_inicial_gramas: 2000, saldo_gramas: 1900, preco_compra: 200 })
+  assert.deepEqual(db.prepare('SELECT preco_rolo, estoque_gramas FROM filamentos WHERE id = ?')
+    .get(filamentoId), { preco_rolo: 100, estoque_gramas: 1900 })
+  assert.deepEqual(lerHistorico.get('MAT-Verde', filamentoId), historico)
+})
 
 test('ordem interna nasce sem venda, cliente ou efeitos financeiros', t => {
   const f = ambiente(t)
