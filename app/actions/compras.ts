@@ -336,7 +336,7 @@ export async function receberCompra(id: number, recebidoEm: string): Promise<Act
             tenant_id, filamento_id, codigo, peso_inicial_gramas, saldo_gramas, preco_compra, aberto_em
           ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
             .run(TENANT_ID, item.item_id, `${compra.numero}-FIL-${item.item_id}`, item.quantidade_estoque,
-              item.quantidade_estoque, precoRolo, recebidoEm)
+              item.quantidade_estoque, item.valor_total, recebidoEm)
           db.prepare('UPDATE filamentos SET estoque_gramas = ?, preco_rolo = ?, fornecedor = ? WHERE id = ? AND tenant_id = ?')
             .run(saldoPosterior, precoRolo, compra.fornecedor_nome, item.item_id, TENANT_ID)
           db.prepare(`INSERT INTO movimentos_estoque (
