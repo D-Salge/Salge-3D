@@ -92,6 +92,7 @@ export async function registrarEntregaParcial(data: {
   entregueEm: string
   observacao: string
   registrarPagamento: boolean
+  contaFinanceiraId?: number
   valorRecebido: number
   formaPagamento: string
 }): Promise<{ success: boolean; message: string; entregaId?: number }> {
@@ -107,6 +108,7 @@ export async function registrarEntregaParcial(data: {
       if (message === 'INVALID_DATE') return { success: false, message: 'Data de entrega inválida.' }
       if (message === 'INVALID_NOTE') return { success: false, message: 'A observação deve ter no máximo 500 caracteres.' }
       if (message === 'INVALID_PAYMENT_METHOD') return { success: false, message: 'Forma de pagamento inválida.' }
+      if (message === 'INVALID_ACCOUNT') return { success: false, message: 'Selecione uma conta de entrada ativa da sua empresa.' }
       if (message === 'INVALID_PAYMENT_VALUE') return { success: false, message: 'Informe um valor recebido maior que zero.' }
       if (message === 'NOT_FOUND') return { success: false, message: 'Pedido não encontrado.' }
       if (message === 'INVALID_STATUS') return { success: false, message: 'A entrega exige um pedido aprovado e não cancelado.' }

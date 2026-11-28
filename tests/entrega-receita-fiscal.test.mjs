@@ -78,6 +78,9 @@ test('entrega parcial com pagamento grava recebimento, alocação e receita fisc
   const f = criarBase(t)
   const resultado = registrarEntregaParcialNoBanco(f.db, f.contexto, f.dados)
   assert.equal(resultado.resultado, 'CREATED')
+  const conta = f.db.prepare(`SELECT cf.padrao_recebimento FROM recebimentos r
+    JOIN contas_financeiras cf ON cf.id = r.conta_financeira_id WHERE r.pedido_id = ?`).get(f.pedidoId)
+  assert.equal(conta.padrao_recebimento, 1)
   assert.deepEqual(f.estado(), {
     entregas: 1, recebimentos: 1, alocacoes: 1, receitas: 1,
     historico: 1, auditoria: 2, quantidadeProduzida: 2,
@@ -109,6 +112,37 @@ test('entrega sem pagamento não cria recebimento, alocação ou receita', (t) =
     entregas: 1, recebimentos: 0, alocacoes: 0, receitas: 0,
     historico: 1, auditoria: 1, quantidadeProduzida: 2,
   })
+})
+
+test('pagamento da entrega entra na conta escolhida e o reenvio preserva o destino', (t) => {
+  const f = criarBase(t)
+  const conta = f.db.prepare('SELECT id FROM contas_financeiras WHERE tenant_id = 1 AND padrao_recebimento = 0').get()
+  const padrao = f.db.prepare('SELECT id FROM contas_financeiras WHERE tenant_id = 1 AND padrao_recebimento = 1').get()
+  const dados = { ...f.dados, contaFinanceiraId: conta.id }
+  const primeira = registrarEntregaParcialNoBanco(f.db, f.contexto, dados)
+  const pagamentos = f.db.prepare('SELECT conta_financeira_id, valor FROM recebimentos WHERE pedido_id = ?')
+  assert.deepEqual(pagamentos.all(f.pedidoId), [{ conta_financeira_id: conta.id, valor: 20 }])
+  f.db.prepare('UPDATE contas_financeiras SET ativa = 0 WHERE id = ?').run(conta.id)
+  assert.deepEqual(registrarEntregaParcialNoBanco(f.db, f.contexto, dados), {
+    resultado: 'UNCHANGED', entregaId: primeira.entregaId,
+  })
+  assert.throws(() => registrarEntregaParcialNoBanco(f.db, f.contexto, {
+    ...dados, contaFinanceiraId: padrao.id,
+  }), /OPERATION_CONFLICT/)
+  assert.deepEqual(pagamentos.all(f.pedidoId), [{ conta_financeira_id: conta.id, valor: 20 }])
+})
+
+test('conta inválida, inativa ou de outra empresa impede a entrega com pagamento', (t) => {
+  const f = criarBase(t)
+  const inativa = f.db.prepare('SELECT id FROM contas_financeiras WHERE tenant_id = 1 AND padrao_recebimento = 0').get()
+  f.db.prepare('UPDATE contas_financeiras SET ativa = 0 WHERE id = ?').run(inativa.id)
+  const externa = f.db.prepare(`INSERT INTO contas_financeiras (tenant_id, usuario_id, nome, instituicao)
+    VALUES (?, ?, 'Conta externa', 'Teste')`).run(f.outroTenantId, f.outroUsuarioId)
+  const antes = f.estado()
+  for (const contaFinanceiraId of [0, '1', null, 999999, inativa.id, Number(externa.lastInsertRowid)]) {
+    assert.throws(() => registrarEntregaParcialNoBanco(f.db, f.contexto, { ...f.dados, contaFinanceiraId }), /INVALID_ACCOUNT/)
+    assert.deepEqual(f.estado(), antes)
+  }
 })
 
 test('falha ao gravar a receita fiscal desfaz toda a entrega', (t) => {

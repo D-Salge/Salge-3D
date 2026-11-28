@@ -19,6 +19,7 @@ import { atualizarStatusPedido, excluirPedido } from '@/app/actions/pedidos'
 import { salvarModeloOrcamento } from '@/app/actions/modelos-orcamento'
 import { WhatsAppModal } from './WhatsAppModal'
 import { EntregasPedido } from './EntregasPedido'
+import type { ContaDeEntrada } from '@/app/actions/contas-financeiras'
 import { PortalPedido } from './PortalPedido'
 import { AnaliseDesviosPedido } from './AnaliseDesviosPedido'
 import { ArquivosProducaoPedido } from './ArquivosProducaoPedido'
@@ -30,7 +31,13 @@ function fmtBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPagoTeste }: { pedido: PedidoDetalhes; impressoras: Impressora[]; filamentos: FilamentoParaConsumo[]; mercadoPagoTeste: boolean }) {
+export function PedidoDetalhesPage({ pedido, impressoras, filamentos, contasDeEntrada, mercadoPagoTeste }: {
+  pedido: PedidoDetalhes
+  impressoras: Impressora[]
+  filamentos: FilamentoParaConsumo[]
+  contasDeEntrada: ContaDeEntrada[]
+  mercadoPagoTeste: boolean
+}) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const [mensagem, setMensagem] = useState('')
@@ -196,7 +203,7 @@ export function PedidoDetalhesPage({ pedido, impressoras, filamentos, mercadoPag
 
           {pedido.orcamento_status === 'Aprovado' && pedido.status !== 'Cancelado' && <section className="rounded-2xl border border-border bg-card p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{pedido.atendimento_tipo === 'Estoque' ? 'Atendimento com estoque' : 'Andamento da produção'}</h2><p className="mt-1 text-xs text-muted-foreground">{pedido.atendimento_tipo === 'Estoque' ? 'Unidades prontas reservadas; confirme a saída ao registrar a entrega.' : `Status atual: ${pedido.status}`}</p></div><div className="flex flex-wrap gap-2">{pedido.atendimento_tipo === 'Encomenda' && pedido.status === 'Fila' && <button onClick={() => mudarProducao('Imprimindo')} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-info">Iniciar impressão</button>}{pedido.atendimento_tipo === 'Encomenda' && pedido.status === 'Imprimindo' && <button onClick={() => mudarProducao('Acabamento')} className="rounded-lg bg-violet-500/15 px-3 py-2 text-xs text-accent">Enviar ao acabamento</button>}{pedido.atendimento_tipo === 'Encomenda' && pedido.status === 'Acabamento' && <a href="#fechamento" className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-accent-foreground">Revisar e finalizar</a>}<button onClick={() => mudarProducao('Cancelado')} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-destructive">Cancelar pedido</button></div></div></section>}
 
-          {pedido.orcamento_status === 'Aprovado' && <EntregasPedido pedido={pedido} />}
+          {pedido.orcamento_status === 'Aprovado' && <EntregasPedido pedido={pedido} contasDeEntrada={contasDeEntrada} />}
 
           {pedido.orcamento_status === 'Aprovado' && <ChecklistPedido pedidoId={pedido.id} itens={pedido.checklist} />}
 
