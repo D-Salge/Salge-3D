@@ -28,6 +28,15 @@ export interface TransferenciaFinanceira {
   descricao: string | null
 }
 
+export type ContaDeEntrada = Pick<ContaFinanceira, 'id' | 'nome'>
+
+export async function getContasDeEntrada(): Promise<ContaDeEntrada[]> {
+  const sessao = await exigirSessao()
+  return db.prepare(`SELECT id, nome FROM contas_financeiras
+    WHERE tenant_id = ? AND ativa = 1 ORDER BY padrao_recebimento DESC, nome`
+  ).all(sessao.tenantId) as ContaDeEntrada[]
+}
+
 const SALDO_SQL = `
   cf.saldo_inicial
   + COALESCE((SELECT SUM(r.valor) FROM recebimentos r
